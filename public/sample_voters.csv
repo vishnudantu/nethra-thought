@@ -1,0 +1,21 @@
+voter_id,name,age,gender,phone,email,address,mandal,village,booth_number,party_affiliation,support_level,caste,caste_category,religion,notes
+AP12345678,Ravi Kumar Reddy,45,Male,9876543210,ravi.kumar@email.com,"H.No 12-3-45, Main Road",Amalapuram Urban,Amalapuram Town,AM-12,TDP,5,Reddy,OBC,Hindu,Party worker - very active
+AP12345679,Lakshmi Devi,38,Female,9876543211,lakshmi.d@email.com,"D.No 5-2-11, Gandhi Nagar",Amalapuram Urban,Amalapuram Town,AM-12,TDP,4,Kamma,OBC,Hindu,Regular voter
+AP12345680,Suresh Babu,52,Male,9876543212,,H.No 7-8-20 Nagarjuna Nagar,Razole,Razole Town,RZ-14,YSRCP,2,Kapu,OBC,Hindu,Opposition supporter
+AP12345681,Vijaya Lakshmi,34,Female,9876543213,vijaya.l@email.com,D.No 3-1-56 New Colony,Mandapeta,Mandapeta Town,MD-05,TDP,4,Brahmin,General,Hindu,Youth wing member
+AP12345682,Ramesh Rao,61,Male,9876543214,,H.No 9-4-33 Old Town,Mummidivaram,Mummidivaram Town,MM-08,Congress,1,Mala,SC,Hindu,Congress sympathizer
+AP12345683,Anitha Kumari,29,Female,9876543215,anitha.k@email.com,Flat 2B Srinivasa Apartments,Amalapuram Urban,Amalapuram Town,AM-19,TDP,5,Kamma,OBC,Hindu,Women wing leader
+AP12345684,Nagendra Prasad,47,Male,9876543216,,H.No 14-2-88 Padmavathi Nagar,Kothapeta,Kothapeta Town,KP-03,Neutral,3,Yadava,OBC,Hindu,Farmer - undecided
+AP12345685,Sarada Devi,55,Female,9876543217,,D.No 6-3-14 Lakshmipuram,Pithapuram,Pithapuram Town,PP-11,TDP,4,Kapu,OBC,Hindu,Senior citizen - needs transport
+AP12345686,Kiran Kumar,26,Male,9876543218,kiran.k@email.com,H.No 2-1-99 Youth Colony,Amalapuram Urban,Amalapuram Town,AM-12,TDP,5,Reddy,OBC,Hindu,Youth activist
+AP12345687,Padma Rao,43,Female,9876543219,padma.rao@email.com,D.No 8-6-22 Teachers Colony,Ramachandrapuram,Ramachandrapuram Town,RC-07,YSRCP,2,Mala,SC,Hindu,Teacher
+AP12345688,Venkata Rao,58,Male,9876543220,,H.No 11-5-67 Fishermen Colony,Kakinada Rural,Uppada,UP-15,Neutral,3,Mudaliar,OBC,Hindu,Fisherman
+AP12345689,Sujatha Reddy,31,Female,9876543221,sujatha.r@email.com,Flat 4A Green Valley,Amalapuram Urban,Amalapuram Town,AM-13,TDP,4,Reddy,OBC,Hindu,Software engineer
+AP12345690,Murali Krishna,39,Male,9876543222,,D.No 7-9-45 Farmer Nagar,Razole,Razole Village,RZ-06,TDP,3,Kamma,OBC,Hindu,Farmer
+AP12345691,Shaikbasha,48,Male,9876543223,,H.No 3-7-12 Mohalla,Amalapuram Urban,Amalapuram Town,AM-09,YSRCP,2,Sheikh,Minority,Muslim,Muslim community leader
+AP12345692,Srinivas Rao,36,Male,9876543224,srini.rao@email.com,H.No 16-3-78 Business Colony,Mandapeta,Mandapeta Town,MD-06,TDP,5,Komati,General,Hindu,Business owner - donor
+AP12345693,Kamala Devi,67,Female,9876543225,,D.No 5-1-33 Old Village,Mummidivaram,Mummidivaram Village,MM-16,Neutral,3,Balija,OBC,Hindu,Elder - respected community leader
+AP12345694,Pradeep Kumar,23,Male,9876543226,pradeep.k@email.com,H.No 8-2-55 Student Hostel,Amalapuram Urban,Amalapuram Town,AM-20,TDP,4,Brahmin,General,Hindu,Student - first time voter
+AP12345695,Savitri,44,Female,9876543227,,D.No 4-8-19 Near Temple,Kothapeta,Kothapeta Village,KP-04,JSP,2,Madiga,SC,Hindu,JSP supporter
+AP12345696,Gopal Krishnan,53,Male,9876543228,,H.No 12-6-44 Forest Colony,Ramachandrapuram,Ramachandrapuram Town,RC-12,TDP,4,Kamma,OBC,Hindu,Government employee
+AP12345697,Meena Kumari,27,Female,9876543229,meena.k@email.com,Flat 3C Paradise Apts,Amalapuram Urban,Amalapuram Town,AM-11,TDP,5,Reddy,OBC,Hindu,Medical professional - influential

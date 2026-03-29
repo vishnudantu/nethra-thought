@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #060b18;
+  --bg-secondary: #0d1526;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --accent-teal: #00d4aa;
+  --accent-cyan: #00bcd4;
+  --accent-blue: #1e88e5;
+  --accent-amber: #ffa726;
+  --text-primary: #f0f4ff;
+  --text-secondary: #8899bb;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 170, 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 170, 0.5);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-hover {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.glass-card-hover:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(0, 212, 170, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 212, 170, 0.1);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #00d4aa, #00bcd4, #1e88e5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.input-field {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #f0f4ff;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  width: 100%;
+  outline: none;
+}
+
+.input-field:focus {
+  border-color: rgba(0, 212, 170, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+}
+
+.input-field::placeholder {
+  color: rgba(136, 153, 187, 0.6);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #00d4aa, #00bcd4);
+  color: #060b18;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 212, 170, 0.3);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f4ff;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.table-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease;
+}
+
+.table-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+select option {
+  background: #0d1526;
+  color: #f0f4ff;
+}
+
+.sidebar-nav-item {
+  transition: all 0.2s ease;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sidebar-nav-item.active {
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(30, 136, 229, 0.15));
+  border-left: 3px solid #00d4aa;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-overlay > * {
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 92vh !important;
+  }
+
+  .glass-card {
+    border-radius: 16px;
+  }
+
+  table {
+    font-size: 12px;
+  }
+}
+
+/* ── Mobile Responsive Fixes ── */
+@media (max-width: 767px) {
+  /* Prevent horizontal scroll on tables */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Ensure cards don't overflow */
+  .card, [class*="rounded-"] {
+    max-width: 100%;
+    word-break: break-word;
+  }
+
+  /* Fix grid overflow */
+  .grid {
+    min-width: 0;
+  }
+
+  /* Better tap targets */
+  button {
+    min-height: 36px;
+  }
+}

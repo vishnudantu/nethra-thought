@@ -1,0 +1,132 @@
+========================================================
+NETHRA Political Intelligence Suite
+Local Installation Guide
+========================================================
+
+REQUIREMENTS
+------------
+- Node.js 18 or higher  (https://nodejs.org)
+- A free Supabase account (https://supabase.com)
+
+
+STEP 1 — Extract the project
+-----------------------------
+Unzip nethra_political_suite.zip to any folder, e.g.:
+  C:\Projects\nethra\   (Windows)
+  ~/Projects/nethra/    (Mac/Linux)
+
+
+STEP 2 — Create a Supabase project
+------------------------------------
+1. Go to https://supabase.com and sign in / sign up (free)
+2. Click "New Project"
+3. Give it any name, choose a region near you, set a DB password
+4. Wait ~2 minutes for the project to be ready
+5. Go to Project Settings > API
+6. Copy your:
+   - Project URL  (looks like https://xxxx.supabase.co)
+   - anon / public key  (long JWT string)
+
+
+STEP 3 — Import the database
+------------------------------
+1. In your Supabase project, click "SQL Editor" in the left sidebar
+2. Click "New query"
+3. Open the file  nethra_database.sql  (included in this zip)
+4. Copy the entire contents and paste into the SQL Editor
+5. Click "Run" (green button, top right)
+6. You should see "Success. No rows returned" — this is correct
+
+
+STEP 4 — Configure environment variables
+------------------------------------------
+1. In the project folder, open the file  .env
+2. Replace the values with your own Supabase credentials:
+
+   VITE_SUPABASE_URL=https://YOUR-PROJECT-ID.supabase.co
+   VITE_SUPABASE_ANON_KEY=YOUR-ANON-KEY-HERE
+
+   Save the file.
+
+
+STEP 5 — Install dependencies
+-------------------------------
+Open a terminal / command prompt in the project folder and run:
+
+   npm install
+
+This downloads all required packages (~100MB, one-time only).
+
+
+STEP 6 — Start the app
+------------------------
+In the same terminal, run:
+
+   npm run dev
+
+The app will start and show a local URL, typically:
+   http://localhost:5173
+
+Open that URL in your browser.
+
+
+STEP 7 — Login
+---------------
+The app uses Supabase Authentication.
+Create your first user account through the app's login screen,
+or go to Supabase Dashboard > Authentication > Users > Add User.
+
+
+========================================================
+OPTIONAL — Build for production hosting
+========================================================
+To create a static build you can host on any web server:
+
+   npm run build
+
+Output goes to the  dist/  folder.
+Upload those files to any static host (Netlify, Vercel, etc.)
+
+
+========================================================
+TROUBLESHOOTING
+========================================================
+
+"npm not found"
+  Install Node.js from https://nodejs.org (LTS version)
+
+"Cannot connect to Supabase"
+  Double-check your .env values match exactly what is in
+  Supabase Settings > API. No trailing spaces.
+
+"Tables don't exist" errors
+  Re-run the SQL from nethra_database.sql in Supabase SQL Editor.
+  Make sure you ran the entire file, not just part of it.
+
+"RLS policy error"
+  Make sure you are logged in. Most tables require authentication.
+
+Port 5173 already in use
+  Run:  npm run dev -- --port 3000
+  Then open http://localhost:3000
+
+
+========================================================
+INCLUDED FILES
+========================================================
+nethra_political_suite.zip  — Full project source code
+nethra_database.sql         — Complete database schema + sample data
+INSTALL.txt                 — This file
+sample_voters.csv           — CSV template for bulk voter import
+
+
+========================================================
+TECH STACK
+========================================================
+Frontend  : React 18 + TypeScript
+Build     : Vite
+Styling   : Tailwind CSS + Framer Motion
+Database  : Supabase (PostgreSQL)
+Auth      : Supabase Auth (email/password)
+
+========================================================
