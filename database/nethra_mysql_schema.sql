@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS `users` (
   `role`          ENUM('super_admin','politician_admin','staff') NOT NULL DEFAULT 'staff',
   `politician_id` INT UNSIGNED DEFAULT NULL,
   `is_active`     TINYINT(1) NOT NULL DEFAULT 1,
+  `two_factor_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `two_factor_code_hash` VARCHAR(255) DEFAULT NULL,
+  `two_factor_expires` DATETIME DEFAULT NULL,
   `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -375,6 +378,8 @@ CREATE TABLE IF NOT EXISTS `darshan_bookings` (
   `approval_notes`          TEXT DEFAULT NULL,
   `contact_person`          VARCHAR(255) DEFAULT '',
   `contact_phone`           VARCHAR(20) DEFAULT '',
+  `ticket_pickup_point`     VARCHAR(255) DEFAULT '',
+  `shrine_contact_numbers`  VARCHAR(255) DEFAULT '',
   `sms_sent`                TINYINT(1) NOT NULL DEFAULT 0,
   `sms_sent_at`             DATETIME DEFAULT NULL,
   `created_at`              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -409,6 +414,51 @@ CREATE TABLE IF NOT EXISTS `darshan_donations` (
   `payment_mode`  VARCHAR(50) DEFAULT 'Cash',
   `notes`         TEXT DEFAULT NULL,
   `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- OTHER TEMPLE DARSHANS
+-- ======================
+CREATE TABLE IF NOT EXISTS `darshans` (
+  `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `temple_name`   VARCHAR(255) NOT NULL,
+  `darshan_date`  DATE DEFAULT NULL,
+  `status`        VARCHAR(50) DEFAULT 'Requested',
+  `pilgrim_name`  VARCHAR(255) DEFAULT '',
+  `pilgrim_contact` VARCHAR(20) DEFAULT '',
+  `location`      VARCHAR(255) DEFAULT '',
+  `group_size`    INT DEFAULT 1,
+  `notes`         TEXT DEFAULT NULL,
+  `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- NOTIFICATIONS
+-- ======================
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `title`         VARCHAR(255) NOT NULL,
+  `message`       TEXT DEFAULT NULL,
+  `link`          VARCHAR(255) DEFAULT '',
+  `is_read`       TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- WEBSITE CONTENT (CMS)
+-- ======================
+CREATE TABLE IF NOT EXISTS `website_content` (
+  `id`         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `page`       VARCHAR(120) NOT NULL DEFAULT 'home',
+  `section`    VARCHAR(120) NOT NULL,
+  `content`    JSON NOT NULL,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_page_section` (`page`, `section`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ======================
@@ -684,6 +734,7 @@ CREATE TABLE IF NOT EXISTS `sentiment_scores` (
   `channel_breakdown` JSON DEFAULT NULL,
   `issue_breakdown`   JSON DEFAULT NULL,
   `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_sentiment_day` (`politician_id`, `score_date`),
   FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -742,6 +793,348 @@ CREATE TABLE IF NOT EXISTS `api_keys` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ======================
+-- FEATURE MODULES & FLAGS
+-- ======================
+CREATE TABLE IF NOT EXISTS `feature_modules` (
+  `id`          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `module_key`  VARCHAR(120) NOT NULL UNIQUE,
+  `label`       VARCHAR(255) NOT NULL,
+  `category`    VARCHAR(120) DEFAULT '',
+  `description` TEXT DEFAULT NULL,
+  `is_active`   TINYINT(1) NOT NULL DEFAULT 1,
+  `is_future`   TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `feature_flags` (
+  `id`          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `feature_key` VARCHAR(140) NOT NULL UNIQUE,
+  `module_key`  VARCHAR(120) NOT NULL,
+  `label`       VARCHAR(255) NOT NULL,
+  `description` TEXT DEFAULT NULL,
+  `is_active`   TINYINT(1) NOT NULL DEFAULT 1,
+  `is_future`   TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`module_key`) REFERENCES `feature_modules`(`module_key`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- ACCESS CONTROL
+-- ======================
+CREATE TABLE IF NOT EXISTS `politician_module_access` (
+  `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED NOT NULL,
+  `module_key`    VARCHAR(120) NOT NULL,
+  `is_enabled`    TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_politician_module` (`politician_id`, `module_key`),
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `role_module_access` (
+  `id`         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `role`       VARCHAR(40) NOT NULL,
+  `module_key` VARCHAR(120) NOT NULL,
+  `is_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_role_module` (`role`, `module_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `politician_feature_access` (
+  `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED NOT NULL,
+  `feature_key`   VARCHAR(140) NOT NULL,
+  `is_enabled`    TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_politician_feature` (`politician_id`, `feature_key`),
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `role_feature_access` (
+  `id`          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `role`        VARCHAR(40) NOT NULL,
+  `feature_key` VARCHAR(140) NOT NULL,
+  `is_enabled`  TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_role_feature` (`role`, `feature_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- ADMIN REPORTS
+-- ======================
+CREATE TABLE IF NOT EXISTS `admin_reports` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `report_type`    VARCHAR(120) NOT NULL,
+  `title`          VARCHAR(255) NOT NULL,
+  `summary`        TEXT DEFAULT NULL,
+  `content`        LONGTEXT DEFAULT NULL,
+  `created_by`     INT UNSIGNED DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- PROMISES TRACKER
+-- ======================
+CREATE TABLE IF NOT EXISTS `promises` (
+  `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`    INT UNSIGNED DEFAULT NULL,
+  `promise_text`     TEXT NOT NULL,
+  `made_at`          DATETIME DEFAULT NULL,
+  `location`         VARCHAR(255) DEFAULT '',
+  `category`         VARCHAR(120) DEFAULT '',
+  `status`           ENUM('not_started','in_progress','completed','cancelled') NOT NULL DEFAULT 'not_started',
+  `linked_project_id` INT UNSIGNED DEFAULT NULL,
+  `deadline`         DATE DEFAULT NULL,
+  `completion_date`  DATE DEFAULT NULL,
+  `notes`            TEXT DEFAULT NULL,
+  `source`           VARCHAR(120) DEFAULT '',
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`linked_project_id`) REFERENCES `projects`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- CONTENT CALENDAR
+-- ======================
+CREATE TABLE IF NOT EXISTS `content_calendar` (
+  `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `content_id`    INT UNSIGNED DEFAULT NULL,
+  `scheduled_date` DATE DEFAULT NULL,
+  `platform`      VARCHAR(100) DEFAULT 'whatsapp',
+  `status`        VARCHAR(50) DEFAULT 'scheduled',
+  `notes`         TEXT DEFAULT NULL,
+  `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`content_id`) REFERENCES `ai_generated_content`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- WHATSAPP INTELLIGENCE
+-- ======================
+CREATE TABLE IF NOT EXISTS `whatsapp_intelligence` (
+  `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`   INT UNSIGNED DEFAULT NULL,
+  `received_at`     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `sender_phone`    VARCHAR(30) DEFAULT '',
+  `message_type`    VARCHAR(50) DEFAULT 'text',
+  `content`         LONGTEXT DEFAULT NULL,
+  `transcription`   LONGTEXT DEFAULT NULL,
+  `classification`  VARCHAR(120) DEFAULT '',
+  `sentiment`       VARCHAR(50) DEFAULT 'neutral',
+  `urgency_score`   INT DEFAULT 0,
+  `is_viral`        TINYINT(1) DEFAULT 0,
+  `viral_count`     INT DEFAULT 0,
+  `is_misinformation` TINYINT(1) DEFAULT 0,
+  `routed_to`       VARCHAR(120) DEFAULT '',
+  `action_taken`    VARCHAR(255) DEFAULT '',
+  `processed_at`    DATETIME DEFAULT NULL,
+  `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- SMART VISIT PLANNER
+-- ======================
+CREATE TABLE IF NOT EXISTS `visit_plans` (
+  `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`   INT UNSIGNED DEFAULT NULL,
+  `mandal`          VARCHAR(255) DEFAULT '',
+  `village`         VARCHAR(255) DEFAULT '',
+  `priority`        INT DEFAULT 5,
+  `reasoning`       TEXT DEFAULT NULL,
+  `recommended_date` DATE DEFAULT NULL,
+  `status`          VARCHAR(50) DEFAULT 'planned',
+  `last_visit_date` DATE DEFAULT NULL,
+  `notes`           TEXT DEFAULT NULL,
+  `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- BOOTH MANAGEMENT
+-- ======================
+CREATE TABLE IF NOT EXISTS `booths` (
+  `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`    INT UNSIGNED DEFAULT NULL,
+  `booth_number`     VARCHAR(100) DEFAULT '',
+  `booth_name`       VARCHAR(255) DEFAULT '',
+  `location`         VARCHAR(255) DEFAULT '',
+  `mandal`           VARCHAR(255) DEFAULT '',
+  `total_voters`     INT DEFAULT 0,
+  `expected_turnout` INT DEFAULT 0,
+  `agent_name`       VARCHAR(255) DEFAULT '',
+  `historical_vote_percentage` JSON DEFAULT NULL,
+  `coordinates`      JSON DEFAULT NULL,
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- PREDICTIVE CRISIS ALERTS
+-- ======================
+CREATE TABLE IF NOT EXISTS `predictive_alerts` (
+  `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`    INT UNSIGNED DEFAULT NULL,
+  `alert_type`       VARCHAR(120) DEFAULT '',
+  `probability`      DECIMAL(5,2) DEFAULT 0,
+  `description`      TEXT DEFAULT NULL,
+  `recommended_action` TEXT DEFAULT NULL,
+  `timeframe_days`   INT DEFAULT 0,
+  `status`           VARCHAR(50) DEFAULT 'active',
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- AUTONOMOUS AGENT TASKS
+-- ======================
+CREATE TABLE IF NOT EXISTS `agent_tasks` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `agent_type`     VARCHAR(100) DEFAULT '',
+  `task_type`      VARCHAR(120) DEFAULT '',
+  `description`    TEXT DEFAULT NULL,
+  `status`         VARCHAR(50) DEFAULT 'pending',
+  `result`         TEXT DEFAULT NULL,
+  `assigned_to`    VARCHAR(255) DEFAULT '',
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- DEEPFAKE & DISINFORMATION SHIELD
+-- ======================
+CREATE TABLE IF NOT EXISTS `deepfake_incidents` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `platform`       VARCHAR(120) DEFAULT '',
+  `content_url`    TEXT DEFAULT NULL,
+  `detected_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `confidence`     DECIMAL(5,2) DEFAULT 0,
+  `status`         VARCHAR(50) DEFAULT 'open',
+  `response_plan`  TEXT DEFAULT NULL,
+  `notes`          TEXT DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- POLITICAL RELATIONSHIP GRAPH
+-- ======================
+CREATE TABLE IF NOT EXISTS `relationships` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `entity_name`    VARCHAR(255) NOT NULL,
+  `entity_type`    VARCHAR(120) DEFAULT '',
+  `relationship_type` VARCHAR(120) DEFAULT '',
+  `influence_score` INT DEFAULT 0,
+  `alignment`      VARCHAR(50) DEFAULT 'neutral',
+  `last_contact_at` DATE DEFAULT NULL,
+  `notes`          TEXT DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- ECONOMIC INTELLIGENCE
+-- ======================
+CREATE TABLE IF NOT EXISTS `economic_indicators` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `indicator_type` VARCHAR(120) DEFAULT '',
+  `mandal`         VARCHAR(255) DEFAULT '',
+  `value`          DECIMAL(12,2) DEFAULT 0,
+  `unit`           VARCHAR(50) DEFAULT '',
+  `recorded_date`  DATE DEFAULT NULL,
+  `trend`          VARCHAR(50) DEFAULT 'stable',
+  `source`         VARCHAR(255) DEFAULT '',
+  `notes`          TEXT DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- CITIZEN SERVICES REQUESTS
+-- ======================
+CREATE TABLE IF NOT EXISTS `citizen_service_requests` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `requester_name` VARCHAR(255) DEFAULT '',
+  `request_type`   VARCHAR(120) DEFAULT '',
+  `status`         VARCHAR(50) DEFAULT 'open',
+  `description`    TEXT DEFAULT NULL,
+  `source`         VARCHAR(50) DEFAULT 'app',
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- ELECTION COMMAND CENTER UPDATES
+-- ======================
+CREATE TABLE IF NOT EXISTS `election_updates` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `booth_id`       INT UNSIGNED DEFAULT NULL,
+  `update_type`    VARCHAR(120) DEFAULT '',
+  `description`    TEXT DEFAULT NULL,
+  `reported_at`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `status`         VARCHAR(50) DEFAULT 'open',
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`booth_id`) REFERENCES `booths`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- FINANCIAL COMPLIANCE REPORTS
+-- ======================
+CREATE TABLE IF NOT EXISTS `finance_compliance_reports` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `report_type`    VARCHAR(120) DEFAULT '',
+  `summary`        TEXT DEFAULT NULL,
+  `status`         VARCHAR(50) DEFAULT 'draft',
+  `alerts`         JSON DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- PARTY INTEGRATIONS
+-- ======================
+CREATE TABLE IF NOT EXISTS `party_integrations` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `party_name`     VARCHAR(255) DEFAULT '',
+  `integration_type` VARCHAR(120) DEFAULT '',
+  `status`         VARCHAR(50) DEFAULT 'pending',
+  `last_sync_at`   DATETIME DEFAULT NULL,
+  `notes`          TEXT DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- DIGITAL TWIN RUNS
+-- ======================
+CREATE TABLE IF NOT EXISTS `digital_twin_runs` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `scenario_name`  VARCHAR(255) DEFAULT '',
+  `input_summary`  TEXT DEFAULT NULL,
+  `output_summary` LONGTEXT DEFAULT NULL,
+  `status`         VARCHAR(50) DEFAULT 'draft',
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
 -- INDEXES
 -- ======================
 CREATE INDEX idx_grievances_status   ON grievances(status);
@@ -756,6 +1149,26 @@ CREATE INDEX idx_users_email         ON users(email);
 CREATE INDEX idx_sentiment_date      ON sentiment_scores(score_date);
 CREATE INDEX idx_opposition_detected ON opposition_intelligence(detected_at);
 CREATE INDEX idx_voice_created       ON voice_reports(created_at);
+CREATE INDEX idx_feature_module_key  ON feature_modules(module_key);
+CREATE INDEX idx_feature_flag_key    ON feature_flags(feature_key);
+CREATE INDEX idx_admin_reports       ON admin_reports(report_type, created_at);
+CREATE INDEX idx_darshans_date       ON darshans(darshan_date);
+CREATE INDEX idx_notifications_read  ON notifications(is_read, created_at);
+CREATE INDEX idx_website_page        ON website_content(page);
+CREATE INDEX idx_promises_status     ON promises(status);
+CREATE INDEX idx_whatsapp_received   ON whatsapp_intelligence(received_at);
+CREATE INDEX idx_visit_plans_date    ON visit_plans(recommended_date);
+CREATE INDEX idx_booths_mandal       ON booths(mandal);
+CREATE INDEX idx_predictive_type     ON predictive_alerts(alert_type);
+CREATE INDEX idx_agent_status        ON agent_tasks(status);
+CREATE INDEX idx_deepfake_status     ON deepfake_incidents(status);
+CREATE INDEX idx_relationship_entity ON relationships(entity_name);
+CREATE INDEX idx_economic_date       ON economic_indicators(recorded_date);
+CREATE INDEX idx_citizen_service     ON citizen_service_requests(status);
+CREATE INDEX idx_election_updates    ON election_updates(reported_at);
+CREATE INDEX idx_compliance_status   ON finance_compliance_reports(status);
+CREATE INDEX idx_party_integration   ON party_integrations(status);
+CREATE INDEX idx_digital_twin_status ON digital_twin_runs(status);
 
 SET FOREIGN_KEY_CHECKS = 1;
 

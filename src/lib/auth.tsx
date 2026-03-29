@@ -7,6 +7,7 @@ export interface UserRole {
   email?: string;
   role: 'super_admin' | 'politician_admin' | 'staff';
   politician_id: string | null;
+  two_factor_enabled?: boolean;
 }
 
 export interface PoliticianProfile {
@@ -31,10 +32,16 @@ interface AuthContextType {
   activePolitician: PoliticianProfile | null;
   allPoliticians: PoliticianProfile[];
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  moduleAccess: Record<string, boolean>;
+  featureAccess: Record<string, boolean>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; requires2fa?: boolean; email?: string }>;
+  verify2fa: (email: string, code: string) => Promise<{ error: Error | null }>;
   signOut: () => void;
   setActivePolitician: (p: PoliticianProfile) => void;
   refreshPoliticians: () => Promise<void>;
+  refreshAccess: () => Promise<void>;
+  hasModule: (key: string) => boolean;
+  hasFeature: (key: string) => boolean;
   session: { access_token: string } | null;
 }
 
@@ -46,6 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [allPoliticians, setAllPoliticians] = useState<PoliticianProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
+  const [moduleAccess, setModuleAccess] = useState<Record<string, boolean>>({});
+  const [featureAccess, setFeatureAccess] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const stored = localStorage.getItem('nethra_token');
@@ -58,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const storedPol = localStorage.getItem('nethra_active_politician');
           const found = storedPol ? pols.find(p => p.id === storedPol) : null;
           setActivePoliticianState(found || pols[0] || null);
-        }).finally(() => setLoading(false));
+        }).then(() => refreshAccess()).finally(() => setLoading(false));
       }).catch(() => {
         localStorage.removeItem('nethra_token');
         setLoading(false);
@@ -66,16 +75,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function applyLogin(data: { token: string; user: UserRole; politician?: PoliticianProfile | null; allPoliticians?: PoliticianProfile[] }) {
+    localStorage.setItem('nethra_token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setAllPoliticians(data.allPoliticians || []);
+    setActivePoliticianState(data.politician || data.allPoliticians?.[0] || null);
+    await refreshAccess();
+  }
 
   async function signIn(email: string, password: string) {
     try {
-      const data = await api.login(email, password);
-      localStorage.setItem('nethra_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setAllPoliticians(data.allPoliticians || []);
-      setActivePoliticianState(data.politician || data.allPoliticians?.[0] || null);
+      const data = await api.login(email, password) as { requires_2fa?: boolean; email?: string; token?: string; user?: UserRole; politician?: PoliticianProfile; allPoliticians?: PoliticianProfile[] };
+      if (data.requires_2fa) return { error: null, requires2fa: true, email: data.email };
+      if (data.token && data.user) {
+        await applyLogin(data as { token: string; user: UserRole; politician?: PoliticianProfile; allPoliticians?: PoliticianProfile[] });
+      }
+      return { error: null };
+    } catch (e) {
+      return { error: e as Error };
+    }
+  }
+
+  async function verify2fa(email: string, code: string) {
+    try {
+      const data = await api.post('/api/auth/2fa/verify', { email, code }) as { token: string; user: UserRole; politician?: PoliticianProfile; allPoliticians?: PoliticianProfile[] };
+      await applyLogin(data);
       return { error: null };
     } catch (e) {
       return { error: e as Error };
@@ -89,6 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActivePoliticianState(null);
     setAllPoliticians([]);
     setToken(null);
+    setModuleAccess({});
+    setFeatureAccess({});
   }
 
   function setActivePolitician(p: PoliticianProfile) {
@@ -101,10 +131,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAllPoliticians(pols);
   }
 
+  async function refreshAccess() {
+    const current = token || localStorage.getItem('nethra_token');
+    if (!current) return;
+    try {
+      const data = await api.get('/api/access/summary') as {
+        modules: string[];
+        features: string[];
+        moduleAccess?: Record<string, boolean>;
+        featureAccess?: Record<string, boolean>;
+      };
+      if (data?.moduleAccess && Object.keys(data.moduleAccess).length) {
+        setModuleAccess(data.moduleAccess);
+      } else {
+        const fallback = Object.fromEntries((data?.modules || []).map(key => [key, true]));
+        setModuleAccess(fallback);
+      }
+      if (data?.featureAccess && Object.keys(data.featureAccess).length) {
+        setFeatureAccess(data.featureAccess);
+      } else {
+        const fallback = Object.fromEntries((data?.features || []).map(key => [key, true]));
+        setFeatureAccess(fallback);
+      }
+    } catch {
+      setModuleAccess({});
+      setFeatureAccess({});
+    }
+  }
+
+  function hasModule(key: string) {
+    if (user?.role === 'super_admin') return true;
+    if (key in moduleAccess) return !!moduleAccess[key];
+    return true;
+  }
+
+  function hasFeature(key: string) {
+    if (user?.role === 'super_admin') return true;
+    if (key in featureAccess) return !!featureAccess[key];
+    return true;
+  }
+
   return (
     <AuthContext.Provider value={{
       user, userRole: user, activePolitician, allPoliticians, loading,
-      signIn, signOut, setActivePolitician, refreshPoliticians,
+      signIn, verify2fa, signOut, setActivePolitician, refreshPoliticians,
+      refreshAccess, moduleAccess, featureAccess, hasModule, hasFeature,
       session: token ? { access_token: token } : null,
     }}>
       {children}

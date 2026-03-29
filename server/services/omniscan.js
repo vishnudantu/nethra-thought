@@ -1,6 +1,7 @@
 import Parser from 'rss-parser';
 import pool from '../db.js';
 import { getApiKey } from './secretStore.js';
+import { updateSentimentScores } from './sentiment.js';
 
 const parser = new Parser({ timeout: 10000 });
 
@@ -23,6 +24,19 @@ const status = {
   counts: { rss: 0, youtube: 0, twitter: 0, facebook: 0, instagram: 0, whatsapp: 0, skipped: 0 },
   sources: {},
 };
+
+const OPPOSITION_KEYWORDS = (process.env.OPPOSITION_KEYWORDS || '').split(',').map(k => k.trim()).filter(Boolean);
+
+function maybeInsertOpposition(text, politician_id) {
+  if (!OPPOSITION_KEYWORDS.length || !politician_id) return false;
+  const t = text.toLowerCase();
+  const hit = OPPOSITION_KEYWORDS.find(k => t.includes(k.toLowerCase()));
+  if (!hit) return false;
+  return pool.query(
+    'INSERT INTO opposition_intelligence (politician_id, opponent_name, opponent_party, opponent_constituency, activity_type, description, source, detected_at, sentiment_toward_us, threat_level) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [politician_id, hit, '', '', 'Media', text.slice(0, 500), 'OmniScan', new Date(), 'Neutral', 5]
+  );
+}
 
 export function getOmniScanStatus() {
   return status;
@@ -131,6 +145,7 @@ export async function runOmniScan({ trigger = 'cron' } = {}) {
           };
           const inserted = await insertMention(mention);
           if (inserted) status.counts.rss += 1;
+          await maybeInsertOpposition(`${title} ${snippet}`, politician_id);
         }
       } catch (err) {
         status.lastError = `RSS ${source.name}: ${err.message || err}`;
@@ -172,6 +187,7 @@ export async function runOmniScan({ trigger = 'cron' } = {}) {
           };
           const inserted = await insertMention(mention);
           if (inserted) status.counts.youtube += 1;
+          await maybeInsertOpposition(`${title} ${description}`, politician_id);
         }
       }
     }
@@ -203,11 +219,13 @@ export async function runOmniScan({ trigger = 'cron' } = {}) {
           };
           const inserted = await insertMention(mention);
           if (inserted) status.counts.twitter += 1;
+          await maybeInsertOpposition(text, politician_id);
         }
       }
     }
 
     status.lastRun = new Date().toISOString();
+    await updateSentimentScores();
   } catch (err) {
     status.lastError = err?.message || String(err);
   } finally {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Users, Search, X, Star, Upload, Download, UserCheck, AlertCircle, CreditCard as Edit2, Trash2, CheckCircle, BarChart2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { api } from '../lib/api';
 import type { Voter } from '../lib/types';
 
@@ -196,75 +197,108 @@ function CSVImportModal({ onClose, onImport }: { onClose: () => void; onImport: 
     });
   }
 
+  function normalizeRow(row: Record<string, string>) {
+    const normalized: Record<string, string> = {};
+    Object.entries(row).forEach(([key, value]) => {
+      normalized[key.toLowerCase().trim()] = value;
+    });
+    const map = {
+      voter_id: ['voter_id', 'voterid', 'epic', 'epic_no', 'id'],
+      name: ['name', 'full_name', 'voter_name'],
+      age: ['age', 'age_years'],
+      gender: ['gender', 'sex'],
+      phone: ['phone', 'mobile', 'contact'],
+      email: ['email', 'mail'],
+      address: ['address', 'house_address'],
+      mandal: ['mandal', 'mandal_name'],
+      village: ['village', 'village_name'],
+      booth_number: ['booth_number', 'booth', 'booth_no'],
+      party_affiliation: ['party_affiliation', 'party', 'party_name'],
+      support_level: ['support_level', 'support', 'support_score'],
+      notes: ['notes', 'remarks'],
+      caste: ['caste', 'community'],
+      caste_category: ['caste_category', 'category'],
+      religion: ['religion'],
+    };
+    const output: Record<string, string> = {};
+    Object.entries(map).forEach(([target, keys]) => {
+      const match = keys.find(k => normalized[k] !== undefined);
+      if (match) output[target] = normalized[match];
+    });
+    return output;
+  }
+
+  async function parseRowsFromFile(file: File): Promise<Record<string, string>[]> {
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.csv')) {
+      const text = await file.text();
+      return parseCSV(text).map(normalizeRow);
+    }
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, string>[];
+    return rows.map(normalizeRow);
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const rows = parseCSV(text);
-      setPreview(rows.slice(0, 5));
-    };
-    reader.readAsText(f);
+    parseRowsFromFile(f).then(rows => setPreview(rows.slice(0, 5)));
   }
 
   async function handleImport() {
     if (!file) return;
     setImporting(true);
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const text = ev.target?.result as string;
-      const rows = parseCSV(text);
-      let success = 0, failed = 0;
-      const errors: string[] = [];
+    const rows = await parseRowsFromFile(file);
+    let success = 0, failed = 0;
+    const errors: string[] = [];
 
-      for (const row of rows) {
-        if (!row.name || !row.voter_id) {
-          failed++;
-          errors.push(`Row skipped: missing name or voter_id`);
-          continue;
-        }
-        const voterData = {
-          voter_id: row.voter_id,
-          name: row.name,
-          age: parseInt(row.age) || 30,
-          gender: row.gender || 'Male',
-          phone: row.phone || '',
-          email: row.email || '',
-          address: row.address || '',
-          mandal: row.mandal || '',
-          village: row.village || '',
-          booth_number: row.booth_number || '',
-          party_affiliation: row.party_affiliation || 'Unknown',
-          support_level: parseInt(row.support_level) || 3,
-          notes: row.notes || '',
-          caste: row.caste || '',
-          caste_category: row.caste_category || 'General',
-          religion: row.religion || '',
-          is_active: true,
-          tags: [],
-        };
-        try {
-          // Try update first, fall back to create (upsert by voter_id)
-          const existing = await api.list('voters', { search: voterData.voter_id }) as Voter[];
-          const match = existing.find(v => v.voter_id === voterData.voter_id);
-          if (match) { await api.update('voters', match.id, voterData); }
-          else { await api.create('voters', voterData); }
-          success++;
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          failed++;
-          errors.push(`Failed to import ${row.name}: ${message}`);
-        }
+    for (const rowRaw of rows) {
+      const row = normalizeRow(rowRaw);
+      if (!row.name || !row.voter_id) {
+        failed++;
+        errors.push(`Row skipped: missing name or voter_id`);
+        continue;
       }
+      const voterData = {
+        voter_id: row.voter_id,
+        name: row.name,
+        age: parseInt(row.age) || 30,
+        gender: row.gender || 'Male',
+        phone: row.phone || '',
+        email: row.email || '',
+        address: row.address || '',
+        mandal: row.mandal || '',
+        village: row.village || '',
+        booth_number: row.booth_number || '',
+        party_affiliation: row.party_affiliation || 'Unknown',
+        support_level: parseInt(row.support_level) || 3,
+        notes: row.notes || '',
+        caste: row.caste || '',
+        caste_category: row.caste_category || 'General',
+        religion: row.religion || '',
+        is_active: true,
+        tags: [],
+      };
+      try {
+        const existing = await api.list('voters', { search: voterData.voter_id }) as Voter[];
+        const match = existing.find(v => v.voter_id === voterData.voter_id);
+        if (match) { await api.update('voters', match.id, voterData); }
+        else { await api.create('voters', voterData); }
+        success++;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        failed++;
+        errors.push(`Failed to import ${row.name}: ${message}`);
+      }
+    }
 
-      const r: ImportResult = { success, failed, errors };
-      setResult(r);
-      setImporting(false);
-      onImport(r);
-    };
-    reader.readAsText(file);
+    const r: ImportResult = { success, failed, errors };
+    setResult(r);
+    setImporting(false);
+    onImport(r);
   }
 
   function downloadSample() {
@@ -289,7 +323,7 @@ function CSVImportModal({ onClose, onImport }: { onClose: () => void; onImport: 
         <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div>
             <h2 className="font-bold text-xl" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>Import Voters from CSV</h2>
-            <p style={{ fontSize: 13, color: '#8899bb', marginTop: 2 }}>Bulk import voter data from a CSV file</p>
+            <p style={{ fontSize: 13, color: '#8899bb', marginTop: 2 }}>Bulk import voter data from CSV or Excel</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}>
             <X size={16} style={{ color: '#8899bb' }} />
@@ -334,10 +368,10 @@ function CSVImportModal({ onClose, onImport }: { onClose: () => void; onImport: 
               ) : (
                 <div className="text-center">
                   <p style={{ fontSize: 14, color: '#f0f4ff' }}>Click to upload CSV</p>
-                  <p style={{ fontSize: 12, color: '#8899bb', marginTop: 2 }}>Supports .csv files only</p>
+                  <p style={{ fontSize: 12, color: '#8899bb', marginTop: 2 }}>Supports .csv, .xlsx files</p>
                 </div>
               )}
-              <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
             </div>
           </div>
 

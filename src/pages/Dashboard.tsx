@@ -1,15 +1,28 @@
-import { useEffect, useState } from 'react';
-import { motion, type Variants } from 'framer-motion';
+import { useCallback, useEffect, useState } from 'react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
   FileText, Calendar, Users, TrendingUp, ArrowUp, ArrowDown,
   AlertCircle, CheckCircle2, Clock, Newspaper, Wallet,
-  Activity, Target, MapPin, ChevronRight, Zap, Star
+  Activity, Target, MapPin, ChevronRight, Zap, Star, X
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import Badge from '../components/ui/Badge';
 import { statusBadge, priorityBadge } from '../components/ui/badgeUtils';
 import type { Grievance, Event, Finance, MediaMention, Project, TeamMember } from '../lib/types';
+
+interface ConstituencyProfile {
+  id: string;
+  politician_id: string;
+  constituency_name: string;
+  state: string;
+  total_voters: number;
+  registered_voters: number;
+  area_sqkm: number;
+  population: number;
+  total_mandals: number;
+  total_villages: number;
+}
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 24 },
@@ -72,6 +85,10 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
   const [projects, setProjects] = useState<Project[]>([]);
   const [media, setMedia] = useState<MediaMention[]>([]);
   const [loading, setLoading] = useState(true);
+  const [constProfile, setConstProfile] = useState<ConstituencyProfile | null>(null);
+  const [constForm, setConstForm] = useState<Partial<ConstituencyProfile>>({});
+  const [constModalOpen, setConstModalOpen] = useState(false);
+  const [constSaving, setConstSaving] = useState(false);
   const [stats, setStats] = useState({
     totalGrievances: 0, pendingGrievances: 0, resolvedGrievances: 0,
     totalProjects: 0, totalTeam: 0, upcomingEvents: 0,
@@ -119,6 +136,37 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
     fetchAll();
   }, []);
 
+  const fetchConstituency = useCallback(async () => {
+    if (!activePolitician?.id) return;
+    const all = await api.list('constituency_profiles') as ConstituencyProfile[];
+    const match = all.find(cp => cp.politician_id === activePolitician.id) || null;
+    setConstProfile(match);
+    setConstForm(match || {});
+  }, [activePolitician?.id]);
+
+  useEffect(() => {
+    fetchConstituency();
+  }, [fetchConstituency]);
+
+  async function saveConstituencyStats() {
+    if (!activePolitician?.id) return;
+    setConstSaving(true);
+    const payload = {
+      ...constForm,
+      politician_id: activePolitician.id,
+      constituency_name: constForm.constituency_name || activePolitician.constituency_name || '',
+      state: constForm.state || activePolitician.state || '',
+    };
+    if (constProfile?.id) {
+      await api.update('constituency_profiles', constProfile.id, payload);
+    } else {
+      await api.create('constituency_profiles', payload);
+    }
+    setConstSaving(false);
+    setConstModalOpen(false);
+    fetchConstituency();
+  }
+
   const statCards = [
     { icon: FileText, label: 'Total Grievances', value: loading ? '...' : stats.totalGrievances.toString(), change: '+12%', color: '#42a5f5', bg: '#1e88e5' },
     { icon: AlertCircle, label: 'Pending Action', value: loading ? '...' : stats.pendingGrievances.toString(), change: '-8%', color: '#ffa726', bg: '#ff8c00' },
@@ -131,6 +179,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
   ];
 
   const urgentGrievances = grievances.filter(g => g.priority === 'Urgent' || g.status === 'Escalated').slice(0, 4);
+  const pulseScore = stats.totalGrievances ? Math.min(100, Math.round((stats.resolvedGrievances / stats.totalGrievances) * 100)) : 0;
 
   return (
     <div className="space-y-6">
@@ -164,6 +213,39 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
           loading ? <LoadingSkeleton key={i} /> : <StatCard key={i} {...card} index={i} />
         ))}
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="glass-card rounded-2xl p-5 relative overflow-hidden"
+      >
+        <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at top right, rgba(0,212,170,0.35), transparent 55%)' }} />
+        <div className="flex items-center justify-between flex-wrap gap-4 relative z-10">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: '#00d4aa' }}>Constituency Pulse</div>
+            <div className="text-2xl font-bold mt-1" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>
+              {loading ? '...' : `${pulseScore}/100`}
+            </div>
+            <div style={{ fontSize: 12, color: '#8899bb' }}>Resolution momentum and media positivity</div>
+          </div>
+          <div className="flex-1 min-w-[200px] max-w-[320px]">
+            <div className="h-3 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${pulseScore}%` }}
+                transition={{ duration: 1.2 }}
+                className="h-3 rounded-full"
+                style={{ background: 'linear-gradient(135deg, #00d4aa, #1e88e5)' }}
+              />
+            </div>
+            <div className="flex justify-between mt-2" style={{ fontSize: 10, color: '#8899bb' }}>
+              <span>Low</span>
+              <span>High</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <motion.div
@@ -390,19 +472,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
         transition={{ delay: 0.8 }}
         className="glass-card rounded-2xl p-5"
       >
-        <div className="flex items-center gap-2 mb-5">
-          <Activity size={18} style={{ color: '#00d4aa' }} />
-          <h3 className="font-semibold text-base" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>
-            Constituency Quick Stats
-          </h3>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Activity size={18} style={{ color: '#00d4aa' }} />
+            <h3 className="font-semibold text-base" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>
+              Constituency Quick Stats
+            </h3>
+          </div>
+          <button onClick={() => setConstModalOpen(true)} className="btn-secondary text-xs">Update Stats</button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
           {[
-            { label: 'Total Voters', value: '18.5L', icon: Users, color: '#42a5f5' },
-            { label: 'Mandals', value: '57', icon: MapPin, color: '#00d4aa' },
-            { label: 'Villages', value: '684', icon: MapPin, color: '#ffa726' },
-            { label: 'Area (sq km)', value: '1,542', icon: Target, color: '#ef5350' },
-            { label: 'Party', value: 'TDP', icon: Star, color: '#ab47bc' },
+            { label: 'Total Voters', value: constProfile?.total_voters ? constProfile.total_voters.toLocaleString('en-IN') : '—', icon: Users, color: '#42a5f5' },
+            { label: 'Mandals', value: constProfile?.total_mandals?.toString() || '—', icon: MapPin, color: '#00d4aa' },
+            { label: 'Villages', value: constProfile?.total_villages?.toString() || '—', icon: MapPin, color: '#ffa726' },
+            { label: 'Area (sq km)', value: constProfile?.area_sqkm ? constProfile.area_sqkm.toLocaleString('en-IN') : '—', icon: Target, color: '#ef5350' },
+            { label: 'Party', value: activePolitician?.party || '—', icon: Star, color: '#ab47bc' },
           ].map((item, i) => {
             const Icon = item.icon;
             return (
@@ -422,6 +507,87 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
           })}
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {constModalOpen && (
+          <div className="modal-overlay" onClick={() => setConstModalOpen(false)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass-card rounded-2xl w-full max-w-xl overflow-y-auto max-h-[90vh]"
+              style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-white/10">
+                <h2 className="font-bold text-lg" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
+                  Update Constituency Stats
+                </h2>
+                <button onClick={() => setConstModalOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(255,255,255,0.08)' }}>
+                  <X size={16} style={{ color: '#8899bb' }} />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Constituency Name</label>
+                    <input className="input-field" value={constForm.constituency_name || ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, constituency_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>State</label>
+                    <input className="input-field" value={constForm.state || ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, state: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Total Voters</label>
+                    <input type="number" className="input-field" value={constForm.total_voters ?? ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, total_voters: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Registered Voters</label>
+                    <input type="number" className="input-field" value={constForm.registered_voters ?? ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, registered_voters: Number(e.target.value) }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Total Mandals</label>
+                    <input type="number" className="input-field" value={constForm.total_mandals ?? ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, total_mandals: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Total Villages</label>
+                    <input type="number" className="input-field" value={constForm.total_villages ?? ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, total_villages: Number(e.target.value) }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Area (sq km)</label>
+                    <input type="number" className="input-field" value={constForm.area_sqkm ?? ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, area_sqkm: Number(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Population</label>
+                    <input type="number" className="input-field" value={constForm.population ?? ''}
+                      onChange={e => setConstForm(prev => ({ ...prev, population: Number(e.target.value) }))} />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 p-5 border-t border-white/10">
+                <button onClick={() => setConstModalOpen(false)} className="btn-secondary flex-1">Cancel</button>
+                <button onClick={saveConstituencyStats} className="btn-primary flex-1" disabled={constSaving}>
+                  {constSaving ? 'Saving...' : 'Save Stats'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

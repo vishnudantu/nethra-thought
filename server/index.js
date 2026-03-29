@@ -1,22 +1,172 @@
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import 'dotenv/config';
 import pool from './db.js';
 import { signToken, authMiddleware } from './auth.js';
-import { initQueues, enqueueOmniScan, enqueueMorningBrief, getQueuesStatus } from './queues.js';
+import { initQueues, enqueueOmniScan, enqueueMorningBrief, enqueueSentimentUpdate, enqueueContentPack, enqueueVisitPlanner, getQueuesStatus } from './queues.js';
 import { generateMorningBrief } from './services/briefing.js';
+import { updateSentimentScores, getCurrentSentiment, getSentimentHistory } from './services/sentiment.js';
+import { generateDailyContentPack } from './services/contentFactory.js';
+import { generateVisitPlans } from './services/visitPlanner.js';
+import { processWhatsappMessage } from './services/whatsapp.js';
+import { transcribeAudio, createVoiceReport } from './services/voice.js';
 import { listApiKeys, upsertApiKey, deactivateApiKey, hasMasterKey, getApiKey } from './services/secretStore.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({ origin: process.env.FRONTEND_URL || '*', methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 initQueues();
+
+async function sendOtpEmail(email, code) {
+  const host = process.env.SMTP_HOST;
+  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM || 'no-reply@nethra.ai';
+  if (!host || !user || !pass) return false;
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+  await transporter.sendMail({
+    from,
+    to: email,
+    subject: 'Your Nethra login OTP',
+    text: `Your OTP for Nethra login is ${code}. It expires in 10 minutes.`,
+  });
+  return true;
+}
+
+const DEFAULT_MODULES = [
+  { module_key: 'dashboard', label: 'Executive Dashboard', category: 'Core', description: 'Unified command view for daily operations.' },
+  { module_key: 'profile', label: 'Politician Profile', category: 'Core', description: 'Public profile and biography management.' },
+  { module_key: 'constituency', label: 'Constituency Intelligence', category: 'Core', description: 'Demographics, geography, and constituency stats.' },
+  { module_key: 'grievances', label: 'Grievance Command', category: 'Citizen Services', description: 'Case intake, triage, and resolution workflows.' },
+  { module_key: 'appointments', label: 'Appointments', category: 'Citizen Services', description: 'Visitor scheduling and approvals.' },
+  { module_key: 'events', label: 'Events & Outreach', category: 'Citizen Services', description: 'Program calendar and attendance tracking.' },
+  { module_key: 'voters', label: 'Voter Database', category: 'Political Ops', description: 'Voter intelligence and segmentation.' },
+  { module_key: 'polls', label: 'Polls & Surveys', category: 'Political Ops', description: 'Survey execution and sentiment capture.' },
+  { module_key: 'booths', label: 'Booth Management', category: 'Political Ops', description: 'Booth-level intelligence and agent tracking.' },
+  { module_key: 'legislative', label: 'Legislative Workbench', category: 'Governance', description: 'Bills, motions, and legislative planning.' },
+  { module_key: 'citizen', label: 'Citizen Engagement', category: 'Citizen Services', description: 'Campaigns, outreach, and feedback loops.' },
+  { module_key: 'darshan', label: 'Tirupati Darshan', category: 'Services', description: 'Darshan requests and approvals.' },
+  { module_key: 'darshans', label: 'Darshans (Other Temples)', category: 'Services', description: 'Multi-temple darshan requests.' },
+  { module_key: 'parliamentary', label: 'Parliamentary Desk', category: 'Governance', description: 'Parliamentary Q&A, debates, and bills.' },
+  { module_key: 'projects', label: 'Development Projects', category: 'Governance', description: 'Project planning, execution, and monitoring.' },
+  { module_key: 'media', label: 'Media Monitor', category: 'Communications', description: 'Press coverage, narrative tracking.' },
+  { module_key: 'communication', label: 'Communications Studio', category: 'Communications', description: 'Campaign messaging and broadcast.' },
+  { module_key: 'finance', label: 'Finance Ledger', category: 'Governance', description: 'Income, expense, and compliance tracking.' },
+  { module_key: 'team', label: 'Team Operations', category: 'Operations', description: 'Staff and field team management.' },
+  { module_key: 'analytics', label: 'Analytics', category: 'Operations', description: 'Performance, KPIs, and trends.' },
+  { module_key: 'documents', label: 'Document Vault', category: 'Operations', description: 'Secure document storage and retrieval.' },
+  { module_key: 'settings', label: 'Settings', category: 'Operations', description: 'System preferences and configuration.' },
+  { module_key: 'staff-management', label: 'Staff Management', category: 'Operations', description: 'Role-based access and staff control.' },
+  { module_key: 'ai-studio', label: 'AI Studio', category: 'AI & Automation', description: 'Speech, briefing, and narrative generation.' },
+  { module_key: 'briefing', label: 'Political Briefings', category: 'AI & Automation', description: 'AI-generated political briefings.' },
+  { module_key: 'omniscan', label: 'OmniScan', category: 'Intelligence', description: 'News, social, and media ingestion.' },
+  { module_key: 'morning-brief', label: 'Morning Brief', category: 'Intelligence', description: 'Daily intelligence digest.' },
+  { module_key: 'sentiment', label: 'Sentiment Dashboard', category: 'Intelligence', description: 'Mood tracking across channels.' },
+  { module_key: 'opposition', label: 'Opposition Tracker', category: 'Intelligence', description: 'Opposition activity and threat mapping.' },
+  { module_key: 'voice-intelligence', label: 'Voice Intelligence', category: 'Intelligence', description: 'Field voice reports and insights.' },
+  { module_key: 'promises', label: 'Promises Tracker', category: 'Intelligence', description: 'Track commitments and fulfillment.' },
+  { module_key: 'content-factory', label: 'Content Factory', category: 'Intelligence', description: 'Automated content generation pipeline.' },
+  { module_key: 'whatsapp-intelligence', label: 'WhatsApp Intelligence', category: 'Intelligence', description: 'WhatsApp ingestion and alerts.' },
+  { module_key: 'smart-visit', label: 'Smart Visit Planner', category: 'Intelligence', description: 'AI-driven constituency visit planning.' },
+  { module_key: 'predictive-crisis', label: 'Predictive Crisis Intel', category: 'Future Lab', description: 'Early warning crisis forecasting.', is_future: 1 },
+  { module_key: 'agent-system', label: 'Autonomous Agent System', category: 'Future Lab', description: '24x7 AI agent orchestration.', is_future: 1 },
+  { module_key: 'deepfake-shield', label: 'Deepfake Shield', category: 'Future Lab', description: 'Deepfake and disinformation protection.', is_future: 1 },
+  { module_key: 'relationship-graph', label: 'Relationship Graph', category: 'Future Lab', description: 'Political relationship intelligence.', is_future: 1 },
+  { module_key: 'economic-intelligence', label: 'Economic Intelligence', category: 'Future Lab', description: 'Local economic signals and stress indices.', is_future: 1 },
+  { module_key: 'citizen-services', label: 'Citizen Services Super App', category: 'Future Lab', description: 'Constituent service requests hub.', is_future: 1 },
+  { module_key: 'election-command', label: 'Election Command Center', category: 'Future Lab', description: 'Election-day war room tooling.', is_future: 1 },
+  { module_key: 'finance-compliance', label: 'Financial Compliance', category: 'Future Lab', description: 'Election expense compliance automation.', is_future: 1 },
+  { module_key: 'party-integration', label: 'Party Integration Layer', category: 'Future Lab', description: 'Party-wide coordination and sync.', is_future: 1 },
+  { module_key: 'digital-twin', label: 'Digital Twin', category: 'Future Lab', description: 'AI persona and scenario simulator.', is_future: 1 },
+  { module_key: 'policy-simulator', label: 'Policy Simulator', category: 'Future Lab', description: 'Scenario forecasting with AI policy impact.', is_future: 1 },
+  { module_key: 'crisis-war-room', label: 'Crisis War Room', category: 'Future Lab', description: 'Real-time crisis detection and response playbooks.', is_future: 1 },
+  { module_key: 'sentiment-forecast', label: 'Sentiment Forecasting', category: 'Future Lab', description: 'Predictive sentiment model with long-range signals.', is_future: 1 },
+  { module_key: 'coalition-forecast', label: 'Coalition Forecasting', category: 'Future Lab', description: 'Alliance modeling and coalition likelihood.', is_future: 1 },
+  { module_key: 'narrative-lab', label: 'Narrative Lab', category: 'Future Lab', description: 'AI narrative testing and narrative resonance.', is_future: 1 },
+  { module_key: 'electorate-graph', label: 'Electorate Graph', category: 'Future Lab', description: 'Relationship intelligence between communities.', is_future: 1 },
+  { module_key: 'autonomous-field-ops', label: 'Autonomous Field Ops', category: 'Future Lab', description: 'Smart kiosks and automated field collection.', is_future: 1 },
+];
+
+const DEFAULT_FEATURES = [
+  { feature_key: 'grievances-auto-triage', module_key: 'grievances', label: 'Auto Triage', description: 'AI auto-assigns grievances by urgency.' },
+  { feature_key: 'grievances-sla-alerts', module_key: 'grievances', label: 'SLA Alerts', description: 'Escalation alerts before SLA breaches.' },
+  { feature_key: 'projects-budget-risk', module_key: 'projects', label: 'Budget Risk Radar', description: 'Detects cost overruns and delays.' },
+  { feature_key: 'finance-fraud-detection', module_key: 'finance', label: 'Finance Anomaly Detection', description: 'Flags unusual transactions automatically.' },
+  { feature_key: 'media-realtime-alerts', module_key: 'media', label: 'Realtime Media Alerts', description: 'Instant alerts for negative coverage.' },
+  { feature_key: 'communication-multichannel', module_key: 'communication', label: 'Multichannel Campaigns', description: 'SMS, WhatsApp, and social orchestration.' },
+  { feature_key: 'analytics-predictive-trends', module_key: 'analytics', label: 'Predictive Trends', description: 'Forecast KPIs with AI models.' },
+  { feature_key: 'omniscan-social-stream', module_key: 'omniscan', label: 'Social Stream', description: 'Live social feeds with sentiment.' },
+  { feature_key: 'morning-brief-auto-priority', module_key: 'morning-brief', label: 'Auto Prioritization', description: 'AI prioritizes daily risks and wins.' },
+  { feature_key: 'sentiment-issue-heatmaps', module_key: 'sentiment', label: 'Issue Heatmaps', description: 'Constituency issue clustering.' },
+  { feature_key: 'opposition-threat-forecast', module_key: 'opposition', label: 'Threat Forecast', description: 'Predict opposition escalation risk.' },
+  { feature_key: 'voice-auto-translation', module_key: 'voice-intelligence', label: 'Auto Translation', description: 'Instant translation of field audio.' },
+  { feature_key: 'ai-studio-multilingual', module_key: 'ai-studio', label: 'Multilingual Speech Kit', description: 'Generate speeches in multiple languages.' },
+  { feature_key: 'content-factory-daily', module_key: 'content-factory', label: 'Daily Auto Content', description: 'Auto-generate daily content packs.' },
+  { feature_key: 'whatsapp-viral-detect', module_key: 'whatsapp-intelligence', label: 'Viral Detection', description: 'Detect viral forwards and misinformation.' },
+  { feature_key: 'smart-visit-ai', module_key: 'smart-visit', label: 'AI Visit Planning', description: 'AI optimizes constituency visits.' },
+  { feature_key: 'promises-extraction', module_key: 'promises', label: 'Promise Extraction', description: 'Extract promises from speeches.' },
+  { feature_key: 'predictive-crisis-alerts', module_key: 'predictive-crisis', label: 'Crisis Prediction', description: 'Early warning crisis alerts.', is_future: 1 },
+  { feature_key: 'deepfake-auto-response', module_key: 'deepfake-shield', label: 'Auto Response', description: 'Draft takedown responses.', is_future: 1 },
+  { feature_key: 'relationship-decay-alerts', module_key: 'relationship-graph', label: 'Relationship Decay', description: 'Alert when key contacts go cold.', is_future: 1 },
+  { feature_key: 'economic-stress-index', module_key: 'economic-intelligence', label: 'Stress Index', description: 'Economic stress index per mandal.', is_future: 1 },
+  { feature_key: 'citizen-app-offline', module_key: 'citizen-services', label: 'Offline Sync', description: 'Citizen app offline queue.', is_future: 1 },
+  { feature_key: 'election-turnout-forecast', module_key: 'election-command', label: 'Turnout Forecast', description: 'Live turnout forecasting.', is_future: 1 },
+  { feature_key: 'compliance-limit-alerts', module_key: 'finance-compliance', label: 'Limit Alerts', description: 'Expense limit tracking.', is_future: 1 },
+  { feature_key: 'party-central-sync', module_key: 'party-integration', label: 'Central Sync', description: 'Party-wide coordination.', is_future: 1 },
+  { feature_key: 'digital-twin-voice', module_key: 'digital-twin', label: 'Voice Persona', description: 'Generate content in politician voice.', is_future: 1 },
+  { feature_key: 'digital-twin-scenarios', module_key: 'digital-twin', label: 'Scenario Simulator', description: 'Run policy simulations.', is_future: 1 },
+  { feature_key: 'crisis-war-room-drills', module_key: 'crisis-war-room', label: 'Crisis Drills', description: 'Run readiness drills with AI.', is_future: 1 },
+  { feature_key: 'sentiment-forecast-longrange', module_key: 'sentiment-forecast', label: 'Long Range Forecast', description: '12-month sentiment forecasts.', is_future: 1 },
+  { feature_key: 'narrative-lab-engine', module_key: 'narrative-lab', label: 'Narrative Engine', description: 'AI narrative experimentation.', is_future: 1 },
+  { feature_key: 'autonomous-field-ops-kiosks', module_key: 'autonomous-field-ops', label: 'Smart Kiosks', description: 'Autonomous field data capture.', is_future: 1 },
+];
+
+async function ensureDefaultModules() {
+  const values = DEFAULT_MODULES.map(m => [
+    m.module_key, m.label, m.category, m.description || '', 1, m.is_future ? 1 : 0,
+  ]);
+  await pool.query(
+    `INSERT INTO feature_modules (module_key,label,category,description,is_active,is_future)
+     VALUES ?
+     ON DUPLICATE KEY UPDATE
+       label=VALUES(label),
+       category=VALUES(category),
+       description=VALUES(description),
+       is_future=VALUES(is_future)`,
+    [values],
+  );
+}
+
+async function ensureDefaultFeatures() {
+  await ensureDefaultModules();
+  const values = DEFAULT_FEATURES.map(f => [
+    f.feature_key, f.module_key, f.label, f.description || '', 1, f.is_future ? 1 : 0,
+  ]);
+  await pool.query(
+    `INSERT INTO feature_flags (feature_key,module_key,label,description,is_active,is_future)
+     VALUES ?
+     ON DUPLICATE KEY UPDATE
+       module_key=VALUES(module_key),
+       label=VALUES(label),
+       description=VALUES(description),
+       is_future=VALUES(is_future)`,
+    [values],
+  );
+}
 
 // ── AUTH ──────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
@@ -26,6 +176,17 @@ app.post('/api/auth/login', async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM users WHERE email = ? AND is_active = 1 LIMIT 1', [email]);
     const user = rows[0];
     if (!user || !(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: 'Invalid email or password' });
+
+    if (user.two_factor_enabled) {
+      const code = crypto.randomInt(100000, 999999).toString();
+      const hash = await bcrypt.hash(code, 10);
+      const expires = new Date(Date.now() + 10 * 60 * 1000);
+      await pool.query('UPDATE users SET two_factor_code_hash = ?, two_factor_expires = ? WHERE id = ?', [hash, expires, user.id]);
+      const sent = await sendOtpEmail(user.email, code);
+      if (!sent) return res.status(500).json({ error: 'Email service not configured' });
+      return res.json({ requires_2fa: true, email: user.email });
+    }
+
     const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
     let politician = null, allPoliticians = [];
     if (user.role === 'super_admin') {
@@ -35,18 +196,161 @@ app.post('/api/auth/login', async (req, res) => {
       const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ?', [user.politician_id]);
       politician = pols[0] || null; allPoliticians = pols;
     }
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id }, politician, allPoliticians });
+    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled }, politician, allPoliticians });
   } catch (err) { console.error('[login]', err); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
-  const [rows] = await pool.query('SELECT id,email,role,politician_id FROM users WHERE id = ?', [req.user.id]);
+  const [rows] = await pool.query('SELECT id,email,role,politician_id,two_factor_enabled FROM users WHERE id = ?', [req.user.id]);
   rows[0] ? res.json(rows[0]) : res.status(404).json({ error: 'Not found' });
+});
+
+app.post('/api/auth/2fa/request', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const [rows] = await pool.query('SELECT id,email,two_factor_enabled FROM users WHERE email = ? AND is_active = 1 LIMIT 1', [email]);
+  const user = rows[0];
+  if (!user || !user.two_factor_enabled) return res.status(404).json({ error: '2FA not enabled for this user' });
+  const code = crypto.randomInt(100000, 999999).toString();
+  const hash = await bcrypt.hash(code, 10);
+  const expires = new Date(Date.now() + 10 * 60 * 1000);
+  await pool.query('UPDATE users SET two_factor_code_hash = ?, two_factor_expires = ? WHERE id = ?', [hash, expires, user.id]);
+  const sent = await sendOtpEmail(user.email, code);
+  if (!sent) return res.status(500).json({ error: 'Email service not configured' });
+  res.json({ success: true });
+});
+
+app.post('/api/auth/2fa/verify', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+  const [rows] = await pool.query('SELECT * FROM users WHERE email = ? AND is_active = 1 LIMIT 1', [email]);
+  const user = rows[0];
+  if (!user || !user.two_factor_enabled) return res.status(401).json({ error: 'Unauthorized' });
+  if (!user.two_factor_code_hash || !user.two_factor_expires) return res.status(401).json({ error: 'OTP expired' });
+  if (new Date(user.two_factor_expires) < new Date()) return res.status(401).json({ error: 'OTP expired' });
+  const ok = await bcrypt.compare(code, user.two_factor_code_hash);
+  if (!ok) return res.status(401).json({ error: 'Invalid code' });
+  await pool.query('UPDATE users SET two_factor_code_hash = NULL, two_factor_expires = NULL WHERE id = ?', [user.id]);
+
+  const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
+  let politician = null, allPoliticians = [];
+  if (user.role === 'super_admin') {
+    const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles ORDER BY full_name');
+    allPoliticians = pols; politician = pols[0] || null;
+  } else if (user.politician_id) {
+    const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ?', [user.politician_id]);
+    politician = pols[0] || null; allPoliticians = pols;
+  }
+  res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled }, politician, allPoliticians });
+});
+
+app.post('/api/auth/2fa/toggle', authMiddleware, async (req, res) => {
+  const { enabled } = req.body;
+  await pool.query('UPDATE users SET two_factor_enabled = ? WHERE id = ?', [enabled ? 1 : 0, req.user.id]);
+  res.json({ success: true, enabled: !!enabled });
 });
 
 app.get('/api/politicians', authMiddleware, async (req, res) => {
   const [rows] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles ORDER BY full_name');
   res.json(rows);
+});
+
+app.get('/api/search', authMiddleware, async (req, res) => {
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.json([]);
+  const q = `%${query}%`;
+  const results = [];
+  try {
+    const [grievances] = await pool.query('SELECT id, subject, category, status FROM grievances WHERE subject LIKE ? OR petitioner_name LIKE ? ORDER BY created_at DESC LIMIT 5', [q, q]);
+    grievances.forEach(r => results.push({ id: r.id, type: 'grievance', title: r.subject, subtitle: `${r.category} • ${r.status}`, page: 'grievances' }));
+  } catch {}
+  try {
+    const [voters] = await pool.query('SELECT id, name, voter_id, mandal FROM voters WHERE name LIKE ? OR voter_id LIKE ? ORDER BY created_at DESC LIMIT 5', [q, q]);
+    voters.forEach(r => results.push({ id: r.id, type: 'voter', title: r.name, subtitle: `${r.voter_id} • ${r.mandal || '—'}`, page: 'voters' }));
+  } catch {}
+  try {
+    const [projects] = await pool.query('SELECT id, project_name, status FROM projects WHERE project_name LIKE ? ORDER BY created_at DESC LIMIT 5', [q]);
+    projects.forEach(r => results.push({ id: r.id, type: 'project', title: r.project_name, subtitle: r.status || '—', page: 'projects' }));
+  } catch {}
+  try {
+    const [events] = await pool.query('SELECT id, title, event_type FROM events WHERE title LIKE ? ORDER BY start_date DESC LIMIT 5', [q]);
+    events.forEach(r => results.push({ id: r.id, type: 'event', title: r.title, subtitle: r.event_type || '—', page: 'events' }));
+  } catch {}
+  try {
+    const [media] = await pool.query('SELECT id, headline, source FROM media_mentions WHERE headline LIKE ? ORDER BY created_at DESC LIMIT 5', [q]);
+    media.forEach(r => results.push({ id: r.id, type: 'media', title: r.headline, subtitle: r.source || '—', page: 'media' }));
+  } catch {}
+  try {
+    const [documents] = await pool.query('SELECT id, title, category FROM documents WHERE title LIKE ? ORDER BY created_at DESC LIMIT 5', [q]);
+    documents.forEach(r => results.push({ id: r.id, type: 'document', title: r.title, subtitle: r.category || '—', page: 'documents' }));
+  } catch {}
+  res.json(results.slice(0, 25));
+});
+
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+  const limit = parseInt(req.query.limit || '10', 10);
+  const params = [];
+  let sql = 'SELECT * FROM notifications';
+  if (req.user.role !== 'super_admin' && req.user.politician_id) {
+    sql += ' WHERE politician_id = ?';
+    params.push(req.user.politician_id);
+  }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+  const [rows] = await pool.query(sql, params);
+  res.json(rows);
+});
+
+app.put('/api/notifications/:id/read', authMiddleware, async (req, res) => {
+  await pool.query('UPDATE notifications SET is_read = 1 WHERE id = ?', [req.params.id]);
+  res.json({ success: true });
+});
+
+const DEFAULT_WEBSITE_CONTENT = [
+  { page: 'home', section: 'hero', content: { title: 'NETHRA', subtitle: 'Political Intelligence Operating System', cta: 'Request Demo' } },
+  { page: 'home', section: 'vision', content: { heading: 'The AI brain every politician needs', body: 'Nethra watches everything, knows everything, and tells you exactly what to do next.' } },
+  { page: 'home', section: 'modules', content: { heading: 'Platform Modules', items: ['OmniScan', 'Morning Brief', 'Sentiment', 'Opposition', 'Voice Intelligence', 'Content Factory'] } },
+  { page: 'home', section: 'intelligence', content: { heading: 'Intelligence Layer', items: ['Media monitoring', 'Social intelligence', 'WhatsApp signals', 'Ground reports', 'Predictive alerts'] } },
+  { page: 'home', section: 'pricing', content: { heading: 'Plans', items: ['Starter', 'Professional', 'Intelligence', 'War Room'] } },
+  { page: 'home', section: 'cta', content: { heading: 'Build your political edge', button: 'Get Started' } },
+];
+
+async function ensureWebsiteContent() {
+  const [rows] = await pool.query('SELECT COUNT(*) as count FROM website_content');
+  if (rows?.[0]?.count) return;
+  const values = DEFAULT_WEBSITE_CONTENT.map(item => [item.page, item.section, JSON.stringify(item.content)]);
+  await pool.query('INSERT INTO website_content (page, section, content) VALUES ?', [values]);
+}
+
+app.get('/api/website/content', async (req, res) => {
+  await ensureWebsiteContent();
+  const page = req.query.page || 'home';
+  const [rows] = await pool.query('SELECT page, section, content FROM website_content WHERE page = ? ORDER BY section', [page]);
+  res.json(rows || []);
+});
+
+app.get('/api/website/content/:page', async (req, res) => {
+  await ensureWebsiteContent();
+  const [rows] = await pool.query('SELECT page, section, content FROM website_content WHERE page = ? ORDER BY section', [req.params.page]);
+  res.json(rows || []);
+});
+
+app.get('/api/admin/website-content', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  await ensureWebsiteContent();
+  const [rows] = await pool.query('SELECT * FROM website_content ORDER BY page, section');
+  res.json(rows || []);
+});
+
+app.put('/api/admin/website-content', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { page, section, content } = req.body;
+  if (!page || !section) return res.status(400).json({ error: 'page and section required' });
+  await pool.query(
+    'INSERT INTO website_content (page, section, content) VALUES (?,?,?) ON DUPLICATE KEY UPDATE content=VALUES(content)',
+    [page, section, JSON.stringify(content)]
+  );
+  res.json({ success: true });
 });
 
 // ── GENERIC CRUD ──────────────────────────────────────────────
@@ -57,7 +361,11 @@ const POLITICIAN_SCOPED_TABLES = [
   'darshan_bookings','darshan_date_slots','darshan_donations','bills',
   'citizen_engagements','volunteers','suggestions','parliamentary_questions',
   'parliamentary_debates','parliamentary_bills','ai_briefings','constituencies',
-  'ai_generated_content','sentiment_scores','opposition_intelligence','voice_reports'
+  'ai_generated_content','content_calendar','sentiment_scores','opposition_intelligence','voice_reports',
+  'promises','whatsapp_intelligence','visit_plans','booths','predictive_alerts','agent_tasks',
+  'deepfake_incidents','relationships','economic_indicators','citizen_service_requests',
+  'election_updates','finance_compliance_reports','party_integrations','digital_twin_runs',
+  'darshans','notifications'
 ];
 
 function crud(table, searchCols = []) {
@@ -264,22 +572,32 @@ app.use('/api/voice_reports',         crud('voice_reports',          ['reporter_
 // ── DARSHAN SMS ───────────────────────────────────────────────
 app.post('/api/darshan-sms', authMiddleware, async (req, res) => {
   try {
-    const { booking_id, approved_by, approval_notes, contact_person, contact_phone } = req.body;
+    const { booking_id, approved_by, approval_notes, contact_person, contact_phone, ticket_pickup_point, shrine_contact_numbers } = req.body;
     const [rows] = await pool.query('SELECT * FROM darshan_bookings WHERE id = ?', [booking_id]);
     const bk = rows[0];
     if (!bk) return res.status(404).json({ success: false, error: 'Booking not found' });
     const pc = bk.pilgrim_contact?.replace(/\D/g,'').slice(-10);
     const dt = new Date(bk.darshan_date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
     const rcp = contact_person || bk.contact_person, rph = contact_phone || bk.contact_phone;
-    const cLine = rcp && rph ? `For queries: ${rcp} - ${rph}.` : '';
-    const sms = `Dear ${bk.pilgrim_name}, Darshan APPROVED by ${approved_by}. Date: ${dt}. Type: ${bk.darshan_type}. ${cLine} Carry this msg & valid ID. - MP Office`;
+    const pickupPoint = ticket_pickup_point || bk.ticket_pickup_point || 'TTD Ticket Counter, Tirumala';
+    const shrineContacts = shrine_contact_numbers || bk.shrine_contact_numbers || 'TTD Helpline: 155257';
+    const cLine = rcp && rph ? `Queries: ${rcp} - ${rph}.` : '';
+    const sms = `Dear ${bk.pilgrim_name}, your Tirupati Darshan is CONFIRMED. Date: ${dt} (${bk.darshan_type}). Ticket pickup: ${pickupPoint}. Shrine contacts: ${shrineContacts}. ${cLine} Carry this msg & valid ID. - MP Office`;
     let smsSent = false, smsErr = '';
     if (process.env.FAST2SMS_API_KEY && pc) {
       const r = await fetch('https://www.fast2sms.com/dev/bulkV2',{method:'POST',headers:{authorization:process.env.FAST2SMS_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({route:'q',message:sms,language:'english',flash:0,numbers:pc})});
       const d = await r.json(); smsSent = d.return === true; if (!smsSent) smsErr = JSON.stringify(d);
     }
-    await pool.query(`UPDATE darshan_bookings SET approval_status='approved',approved_at=NOW(),approved_by=?,approval_notes=?,contact_person=?,contact_phone=?,sms_sent=?,sms_sent_at=?,status='Confirmed' WHERE id=?`,
-      [approved_by,approval_notes||'',rcp||'',rph||'',smsSent,smsSent?new Date():null,booking_id]);
+    await pool.query(`UPDATE darshan_bookings SET approval_status='approved',approved_at=NOW(),approved_by=?,approval_notes=?,contact_person=?,contact_phone=?,ticket_pickup_point=?,shrine_contact_numbers=?,sms_sent=?,sms_sent_at=?,status='Confirmed' WHERE id=?`,
+      [approved_by,approval_notes||'',rcp||'',rph||'',pickupPoint,shrineContacts,smsSent,smsSent?new Date():null,booking_id]);
+    if (bk.politician_id) {
+      await pool.query('INSERT INTO notifications (politician_id,title,message,link) VALUES (?,?,?,?)', [
+        bk.politician_id,
+        `Darshan confirmed for ${bk.pilgrim_name}`,
+        `Darshan approved on ${dt} (${bk.darshan_type}).`,
+        'darshan',
+      ]);
+    }
     res.json({ success: true, sms_sent: smsSent, sms_error: smsErr||null, message: sms });
   } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
 });
@@ -342,6 +660,34 @@ app.get('/api/omniscan/status', authMiddleware, async (req, res) => {
   res.json(getQueuesStatus());
 });
 
+app.post('/api/sentiment/update', authMiddleware, async (req, res) => {
+  try {
+    const job = await enqueueSentimentUpdate();
+    res.json({ status: 'queued', jobId: job?.id || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to update sentiment' });
+  }
+});
+
+app.get('/api/sentiment/current', authMiddleware, async (req, res) => {
+  try {
+    const data = await getCurrentSentiment(req.user.politician_id);
+    res.json(data || {});
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to fetch sentiment' });
+  }
+});
+
+app.get('/api/sentiment/history', authMiddleware, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days || '30', 10);
+    const data = await getSentimentHistory(req.user.politician_id, days);
+    res.json(data || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to fetch sentiment history' });
+  }
+});
+
 app.get('/api/briefing/today', authMiddleware, async (req, res) => {
   try {
     const briefing = await generateMorningBrief({ politicianId: req.user.politician_id, force: false });
@@ -360,6 +706,24 @@ app.post('/api/briefing/generate', authMiddleware, async (req, res) => {
   }
 });
 
+app.post('/api/content-factory/generate', authMiddleware, async (req, res) => {
+  try {
+    const job = await enqueueContentPack(req.user.politician_id);
+    res.json({ status: 'queued', jobId: job?.id || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to generate content pack' });
+  }
+});
+
+app.post('/api/visit-planner/generate', authMiddleware, async (req, res) => {
+  try {
+    const job = await enqueueVisitPlanner(req.user.politician_id);
+    res.json({ status: 'queued', jobId: job?.id || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to generate visit plan' });
+  }
+});
+
 // ── WHATSAPP WEBHOOK (optional) ─────────────────────────────
 app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
@@ -370,28 +734,42 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
     const payload = req.body || {};
     const content = payload.message || payload.text || payload?.message?.text || '';
     if (!content) return res.json({ ok: true, skipped: true });
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const mention = {
-      headline: String(content).slice(0, 500),
-      source: 'WhatsApp',
-      source_type: 'Social Media',
-      sentiment: 'Neutral',
-      language: payload.language || 'Unknown',
-      url: '',
-      published_at: now,
-      summary: String(content).slice(0, 1000),
-      tags: JSON.stringify(['omniscan', 'whatsapp']),
-      is_read: 0,
-      reach: 0,
-      ...(payload.politician_id ? { politician_id: payload.politician_id } : {}),
-    };
-    const keys = Object.keys(mention);
-    const cols = keys.map(k => `\`${k}\``).join(',');
-    const ph = keys.map(() => '?').join(',');
-    await pool.query(`INSERT INTO media_mentions (${cols}) VALUES (${ph})`, keys.map(k => mention[k]));
+    await processWhatsappMessage({
+      politician_id: payload.politician_id || null,
+      sender_phone: payload.sender || payload.from || '',
+      message_type: payload.type || 'text',
+      content: String(content),
+      transcription: payload.transcription || '',
+    });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to ingest webhook' });
+  }
+});
+
+// ── VOICE INTELLIGENCE ─────────────────────────────────────
+app.post('/api/voice/transcribe', authMiddleware, async (req, res) => {
+  try {
+    const { audio_base64, filename, mimeType, transcript, reporter_name, reporter_role, language, location, gps_lat, gps_lng, classification } = req.body;
+    let text = transcript;
+    if (!text && audio_base64) {
+      text = await transcribeAudio({ audioBase64: audio_base64, filename, mimeType });
+    }
+    if (!text) return res.status(400).json({ error: 'No transcript or audio provided' });
+    const reportId = await createVoiceReport({
+      politician_id: req.user.politician_id,
+      reporter_name,
+      reporter_role,
+      transcript: text,
+      classification,
+      language,
+      location,
+      gps_lat,
+      gps_lng,
+    });
+    res.json({ success: true, transcript: text, report_id: reportId });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to transcribe' });
   }
 });
 
@@ -479,6 +857,300 @@ app.delete('/api/admin/api-keys/:name', authMiddleware, async (req, res) => {
   try {
     await deactivateApiKey(req.params.name);
     res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── SUPER ADMIN — FEATURE MODULES & ACCESS ────────────────────
+app.get('/api/admin/feature-modules', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await ensureDefaultModules();
+    const [rows] = await pool.query('SELECT * FROM feature_modules ORDER BY category, label');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/feature-modules', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { module_key, label, category = '', description = '', is_future = 0 } = req.body || {};
+  if (!module_key || !label) return res.status(400).json({ error: 'module_key and label required' });
+  try {
+    await pool.query(
+      'INSERT INTO feature_modules (module_key,label,category,description,is_active,is_future) VALUES (?,?,?,?,1,?)',
+      [module_key, label, category, description, is_future ? 1 : 0],
+    );
+    const [rows] = await pool.query('SELECT * FROM feature_modules WHERE module_key = ?', [module_key]);
+    res.status(201).json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/feature-modules/:key', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { key } = req.params;
+  const { label, category, description, is_active, is_future } = req.body || {};
+  try {
+    const updates = [];
+    const params = [];
+    if (label !== undefined) { updates.push('label = ?'); params.push(label); }
+    if (category !== undefined) { updates.push('category = ?'); params.push(category); }
+    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (is_active !== undefined) { updates.push('is_active = ?'); params.push(is_active ? 1 : 0); }
+    if (is_future !== undefined) { updates.push('is_future = ?'); params.push(is_future ? 1 : 0); }
+    if (!updates.length) return res.status(400).json({ error: 'No fields to update' });
+    await pool.query(`UPDATE feature_modules SET ${updates.join(', ')} WHERE module_key = ?`, [...params, key]);
+    const [rows] = await pool.query('SELECT * FROM feature_modules WHERE module_key = ?', [key]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/feature-flags', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await ensureDefaultFeatures();
+    const [rows] = await pool.query('SELECT * FROM feature_flags ORDER BY module_key, label');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/feature-flags', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { feature_key, module_key, label, description = '', is_future = 0 } = req.body || {};
+  if (!feature_key || !module_key || !label) return res.status(400).json({ error: 'feature_key, module_key and label required' });
+  try {
+    await pool.query(
+      'INSERT INTO feature_flags (feature_key,module_key,label,description,is_active,is_future) VALUES (?,?,?,?,1,?)',
+      [feature_key, module_key, label, description, is_future ? 1 : 0],
+    );
+    const [rows] = await pool.query('SELECT * FROM feature_flags WHERE feature_key = ?', [feature_key]);
+    res.status(201).json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/feature-flags/:key', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { key } = req.params;
+  const { label, description, is_active, is_future, module_key } = req.body || {};
+  try {
+    const updates = [];
+    const params = [];
+    if (label !== undefined) { updates.push('label = ?'); params.push(label); }
+    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (module_key !== undefined) { updates.push('module_key = ?'); params.push(module_key); }
+    if (is_active !== undefined) { updates.push('is_active = ?'); params.push(is_active ? 1 : 0); }
+    if (is_future !== undefined) { updates.push('is_future = ?'); params.push(is_future ? 1 : 0); }
+    if (!updates.length) return res.status(400).json({ error: 'No fields to update' });
+    await pool.query(`UPDATE feature_flags SET ${updates.join(', ')} WHERE feature_key = ?`, [...params, key]);
+    const [rows] = await pool.query('SELECT * FROM feature_flags WHERE feature_key = ?', [key]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/module-access', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await ensureDefaultModules();
+    const [modules] = await pool.query('SELECT * FROM feature_modules ORDER BY category, label');
+    const [politicianAccess] = await pool.query('SELECT * FROM politician_module_access');
+    const [roleAccess] = await pool.query('SELECT * FROM role_module_access');
+    res.json({ modules, politician_access: politicianAccess, role_access: roleAccess });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/module-access', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { module_key, politician_id, role, is_enabled } = req.body || {};
+  if (!module_key || (!politician_id && !role)) return res.status(400).json({ error: 'module_key and politician_id or role required' });
+  try {
+    if (politician_id) {
+      await pool.query(
+        'INSERT INTO politician_module_access (politician_id,module_key,is_enabled) VALUES (?,?,?) ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled)',
+        [politician_id, module_key, is_enabled ? 1 : 0],
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO role_module_access (role,module_key,is_enabled) VALUES (?,?,?) ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled)',
+        [role, module_key, is_enabled ? 1 : 0],
+      );
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/feature-access', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await ensureDefaultFeatures();
+    const [features] = await pool.query('SELECT * FROM feature_flags ORDER BY module_key, label');
+    const [politicianAccess] = await pool.query('SELECT * FROM politician_feature_access');
+    const [roleAccess] = await pool.query('SELECT * FROM role_feature_access');
+    res.json({ features, politician_access: politicianAccess, role_access: roleAccess });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/feature-access', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { feature_key, politician_id, role, is_enabled } = req.body || {};
+  if (!feature_key || (!politician_id && !role)) return res.status(400).json({ error: 'feature_key and politician_id or role required' });
+  try {
+    if (politician_id) {
+      await pool.query(
+        'INSERT INTO politician_feature_access (politician_id,feature_key,is_enabled) VALUES (?,?,?) ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled)',
+        [politician_id, feature_key, is_enabled ? 1 : 0],
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO role_feature_access (role,feature_key,is_enabled) VALUES (?,?,?) ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled)',
+        [role, feature_key, is_enabled ? 1 : 0],
+      );
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/politician-overview', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const [rows] = await pool.query(`
+      SELECT p.id, p.full_name, p.party, p.designation, p.constituency_name, p.state, p.is_active, p.subscription_status,
+        p.color_primary, p.color_secondary,
+        (SELECT COUNT(*) FROM grievances g WHERE g.politician_id = p.id AND g.status NOT IN ('Resolved','Closed')) AS open_grievances,
+        (SELECT COUNT(*) FROM projects pr WHERE pr.politician_id = p.id AND pr.status IN ('In Progress','Planning','Tendering')) AS active_projects,
+        (SELECT COUNT(*) FROM events e WHERE e.politician_id = p.id AND e.start_date >= CURDATE()) AS upcoming_events,
+        (SELECT COUNT(*) FROM media_mentions m WHERE m.politician_id = p.id AND m.sentiment = 'Negative' AND m.published_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS negative_mentions,
+        (SELECT COUNT(*) FROM opposition_intelligence o WHERE o.politician_id = p.id AND o.threat_level >= 7 AND o.detected_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS high_threats,
+        (SELECT COUNT(*) FROM voice_reports v WHERE v.politician_id = p.id AND v.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS voice_reports,
+        (SELECT ROUND(AVG(s.overall_score)) FROM sentiment_scores s WHERE s.politician_id = p.id AND s.score_date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)) AS sentiment_avg
+      FROM politician_profiles p
+      ORDER BY p.full_name
+    `);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/reports/weekly', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { politician_id } = req.body || {};
+  try {
+    const targets = [];
+    if (politician_id) {
+      targets.push(politician_id);
+    } else {
+      const [pols] = await pool.query('SELECT id FROM politician_profiles ORDER BY full_name');
+      targets.push(...pols.map(p => p.id));
+    }
+    const results = [];
+    for (const polId of targets) {
+      const [[pol]] = await pool.query('SELECT full_name,constituency_name,state FROM politician_profiles WHERE id = ?', [polId]);
+      if (!pol) continue;
+      const [[grievances]] = await pool.query(
+        "SELECT COUNT(*) as total, SUM(status IN ('Resolved','Closed')) as resolved FROM grievances WHERE politician_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
+        [polId],
+      );
+      const [[sentiment]] = await pool.query(
+        'SELECT ROUND(AVG(overall_score)) as avg_score FROM sentiment_scores WHERE politician_id = ? AND score_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)',
+        [polId],
+      );
+      const [[opposition]] = await pool.query(
+        'SELECT COUNT(*) as threats FROM opposition_intelligence WHERE politician_id = ? AND threat_level >= 7 AND detected_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)',
+        [polId],
+      );
+      const [[projects]] = await pool.query(
+        "SELECT COUNT(*) as active FROM projects WHERE politician_id = ? AND status IN ('In Progress','Planning','Tendering')",
+        [polId],
+      );
+      const title = `Weekly Performance Report — ${pol.full_name}`;
+      const summary = `Grievances: ${grievances?.total || 0} (Resolved ${grievances?.resolved || 0}). Sentiment: ${sentiment?.avg_score ?? 0}. Opposition threats: ${opposition?.threats || 0}. Active projects: ${projects?.active || 0}.`;
+      const content = [
+        `Politician: ${pol.full_name}`,
+        `Constituency: ${pol.constituency_name || 'N/A'}, ${pol.state || 'N/A'}`,
+        '',
+        'Highlights:',
+        `• New grievances: ${grievances?.total || 0}`,
+        `• Resolved grievances: ${grievances?.resolved || 0}`,
+        `• Average sentiment score: ${sentiment?.avg_score ?? 0}`,
+        `• High-threat opposition activity: ${opposition?.threats || 0}`,
+        `• Active projects: ${projects?.active || 0}`,
+      ].join('\n');
+      const [result] = await pool.query(
+        'INSERT INTO admin_reports (politician_id,report_type,title,summary,content,created_by) VALUES (?,?,?,?,?,?)',
+        [polId, 'weekly_performance', title, summary, content, req.user.id],
+      );
+      results.push({ id: result.insertId, title, summary });
+    }
+    res.json({ success: true, reports: results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/reports', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { politician_id } = req.query;
+  try {
+    const params = [];
+    let sql = 'SELECT * FROM admin_reports';
+    if (politician_id) {
+      sql += ' WHERE politician_id = ?';
+      params.push(politician_id);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT 200';
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── ACCESS SUMMARY (ROLE + POLITICIAN) ────────────────────────
+app.get('/api/access/summary', authMiddleware, async (req, res) => {
+  try {
+    await ensureDefaultModules();
+    await ensureDefaultFeatures();
+    const role = req.user.role;
+    const polId = req.user.politician_id;
+    const [moduleRows] = await pool.query('SELECT module_key,is_active FROM feature_modules WHERE is_active = 1');
+    const [featureRows] = await pool.query('SELECT feature_key,is_active FROM feature_flags WHERE is_active = 1');
+    const moduleKeys = moduleRows.map(r => r.module_key);
+    const featureKeys = featureRows.map(r => r.feature_key);
+
+    if (role === 'super_admin') {
+      return res.json({ modules: moduleKeys, features: featureKeys, moduleAccess: {}, featureAccess: {} });
+    }
+
+    const [roleModules] = await pool.query('SELECT module_key,is_enabled FROM role_module_access WHERE role = ?', [role]);
+    const [roleFeatures] = await pool.query('SELECT feature_key,is_enabled FROM role_feature_access WHERE role = ?', [role]);
+    const [polModules] = polId
+      ? await pool.query('SELECT module_key,is_enabled FROM politician_module_access WHERE politician_id = ?', [polId])
+      : [[]];
+    const [polFeatures] = polId
+      ? await pool.query('SELECT feature_key,is_enabled FROM politician_feature_access WHERE politician_id = ?', [polId])
+      : [[]];
+
+    const roleModuleMap = new Map(roleModules.map(r => [r.module_key, !!r.is_enabled]));
+    const roleFeatureMap = new Map(roleFeatures.map(r => [r.feature_key, !!r.is_enabled]));
+    const polModuleMap = new Map(polModules.map(r => [r.module_key, !!r.is_enabled]));
+    const polFeatureMap = new Map(polFeatures.map(r => [r.feature_key, !!r.is_enabled]));
+
+    const moduleAccess = {};
+    const featureAccess = {};
+    const enabledModules = [];
+    const enabledFeatures = [];
+
+    moduleKeys.forEach(key => {
+      let enabled = true;
+      if (roleModuleMap.has(key)) enabled = roleModuleMap.get(key);
+      if (polModuleMap.has(key)) enabled = polModuleMap.get(key);
+      moduleAccess[key] = enabled;
+      if (enabled) enabledModules.push(key);
+    });
+
+    featureKeys.forEach(key => {
+      let enabled = true;
+      if (roleFeatureMap.has(key)) enabled = roleFeatureMap.get(key);
+      if (polFeatureMap.has(key)) enabled = polFeatureMap.get(key);
+      featureAccess[key] = enabled;
+      if (enabled) enabledFeatures.push(key);
+    });
+
+    res.json({ modules: enabledModules, features: enabledFeatures, moduleAccess, featureAccess });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

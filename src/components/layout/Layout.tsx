@@ -75,6 +75,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
           onToggleSidebar={() => isMobile ? setMobileOpen(o => !o) : setSidebarCollapsed(c => !c)}
           isMobile={isMobile}
           mobileMenuOpen={mobileOpen}
+          onNavigate={handleNavigate}
         />
 
         <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
@@ -139,6 +140,25 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
             animate={{ opacity: [0.4, 0, 0.4] }}
             transition={{ duration: 2.5, repeat: Infinity }}
           />
+        </motion.button>
+      )}
+
+      {!aiOpen && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => handleNavigate('quick-capture')}
+          className="fixed bottom-6 left-6 z-50 w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
+          style={{
+            background: `linear-gradient(135deg, ${secondaryColor}, ${primaryColor})`,
+            boxShadow: `0 8px 32px ${secondaryColor}40, 0 4px 16px rgba(0,0,0,0.4)`,
+          }}
+          title="Quick Capture"
+        >
+          <Sparkles size={20} color="#060b18" strokeWidth={2.5} />
         </motion.button>
       )}
     </div>

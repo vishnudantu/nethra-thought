@@ -1,4 +1,5 @@
 import pool from '../db.js';
+import nodemailer from 'nodemailer';
 import { getApiKey } from './secretStore.js';
 
 function formatDate(date = new Date()) {
@@ -58,6 +59,30 @@ async function fetchEvents() {
   return rows || [];
 }
 
+async function fetchOpposition() {
+  const [rows] = await pool.query(
+    "SELECT opponent_name, activity_type, detected_at FROM opposition_intelligence ORDER BY detected_at DESC LIMIT 5"
+  );
+  return rows || [];
+}
+
+async function fetchApprovals() {
+  const [darshanRows] = await pool.query(
+    "SELECT COUNT(*) as pending_darshan FROM darshan_bookings WHERE approval_status = 'pending'"
+  );
+  const [contentRows] = await pool.query(
+    "SELECT COUNT(*) as pending_content FROM ai_generated_content WHERE is_saved = 0"
+  );
+  const [grievanceRows] = await pool.query(
+    "SELECT COUNT(*) as urgent_grievances FROM grievances WHERE status IN ('Pending','Escalated') AND priority IN ('High','Urgent')"
+  );
+  return {
+    pending_darshan: darshanRows?.[0]?.pending_darshan || 0,
+    pending_content: contentRows?.[0]?.pending_content || 0,
+    urgent_grievances: grievanceRows?.[0]?.urgent_grievances || 0,
+  };
+}
+
 async function generateWithGemini(prompt) {
   const apiKey = await getApiKey('GEMINI_API_KEY');
   if (!apiKey) return null;
@@ -76,6 +101,34 @@ async function generateWithGemini(prompt) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
 }
 
+async function sendBriefEmail(subject, body, politicianId) {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+  const from = process.env.SMTP_FROM || 'no-reply@nethra.ai';
+  if (!host || !user || !pass) return false;
+  const transporter = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } });
+  const [rows] = await pool.query('SELECT email FROM users WHERE politician_id = ? AND is_active = 1', [politicianId]);
+  const recipients = rows.map(r => r.email).filter(Boolean);
+  if (!recipients.length) return false;
+  await transporter.sendMail({ from, to: recipients.join(','), subject, text: body });
+  return true;
+}
+
+async function sendBriefSms(summary) {
+  const numbers = (process.env.BRIEF_SMS_NUMBERS || '').split(',').map(n => n.trim()).filter(Boolean);
+  if (!numbers.length || !process.env.FAST2SMS_API_KEY) return false;
+  const msg = `NETHRA Brief: ${summary.slice(0, 140)}`;
+  const r = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+    method: 'POST',
+    headers: { authorization: process.env.FAST2SMS_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ route: 'q', message: msg, language: 'english', flash: 0, numbers: numbers.join(',') }),
+  });
+  const d = await r.json();
+  return d.return === true;
+}
+
 export async function generateMorningBrief({ politicianId, force = false } = {}) {
   const briefingDate = formatDate();
   if (!force) {
@@ -91,6 +144,8 @@ export async function generateMorningBrief({ politicianId, force = false } = {})
   const mentions = await fetchMentions(since.toISOString().slice(0, 19).replace('T', ' '));
   const grievances = await fetchGrievances();
   const events = await fetchEvents();
+  const opposition = await fetchOpposition();
+  const approvals = await fetchApprovals();
 
   const sentimentCounts = mentions.reduce((acc, m) => {
     acc[m.sentiment] = (acc[m.sentiment] || 0) + 1;
@@ -99,15 +154,18 @@ export async function generateMorningBrief({ politicianId, force = false } = {})
 
   const topMention = mentions[0];
   const summary = `Media: ${mentions.length} mentions (Pos ${sentimentCounts.Positive || 0}, Neg ${sentimentCounts.Negative || 0}). ` +
-    `Pending grievances: ${grievances.length}. Upcoming events: ${events.length}.`;
+    `Pending grievances: ${grievances.length}. Upcoming events: ${events.length}. Pending approvals: Darshan ${approvals.pending_darshan}, Content ${approvals.pending_content}.`;
 
-  const prompt = `Generate a concise Morning Intelligence Brief for ${politician?.full_name || 'the politician'}.\n` +
-    `Constituency: ${politician?.constituency_name || 'N/A'}, ${politician?.state || 'N/A'}.\n` +
+  const prompt = `Generate NETHRA DAILY INTELLIGENCE BRIEF with sections:\n` +
+    `Overnight Alerts, Constituency Pulse (Mood + trend), Media Summary, Social Summary, Opposition Watch, Today's Priorities, Pending Approvals, Your Schedule Today, Parliamentary Alerts, Weekly Performance.\n` +
+    `Politician: ${politician?.full_name || 'the politician'} (${politician?.designation || ''}), Constituency: ${politician?.constituency_name || 'N/A'} ${politician?.state || ''}.\n` +
     `Top media mention: ${topMention?.headline || 'None'} (${topMention?.source || ''}).\n` +
     `Media counts: ${JSON.stringify(sentimentCounts)}.\n` +
     `Pending grievances (up to 5): ${grievances.slice(0, 5).map(g => `${g.subject} (${g.category}, ${g.priority})`).join('; ')}.\n` +
     `Upcoming events (up to 3): ${events.slice(0, 3).map(e => `${e.title} at ${e.location} on ${e.start_date}`).join('; ')}.\n` +
-    `Format: Executive Summary, Alerts, Media Summary, Grievances Snapshot, Today's Priorities.`;
+    `Opposition activity: ${opposition.slice(0, 3).map(o => `${o.opponent_name} - ${o.activity_type}`).join('; ')}.\n` +
+    `Pending approvals: darshan ${approvals.pending_darshan}, content ${approvals.pending_content}, urgent grievances ${approvals.urgent_grievances}.\n` +
+    `Return crisp bullet points.`;
 
   const aiContent = await generateWithGemini(prompt);
   const content = aiContent || [
@@ -141,6 +199,16 @@ export async function generateMorningBrief({ politicianId, force = false } = {})
   };
 
   const insertId = await safeInsert('ai_briefings', data);
+  if (politicianId) {
+    await safeInsert('notifications', {
+      politician_id: politicianId,
+      title,
+      message: summary,
+      link: 'morning-brief',
+    });
+    await sendBriefEmail(title, content, politicianId).catch(() => {});
+    await sendBriefSms(summary).catch(() => {});
+  }
   if (insertId) {
     const [rows] = await pool.query('SELECT * FROM ai_briefings WHERE id = ? LIMIT 1', [insertId]);
     return rows?.[0] || data;

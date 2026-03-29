@@ -4,9 +4,12 @@ import {
   LayoutDashboard, FileText, Calendar, Users, Newspaper, TrendingUp, FolderOpen,
   MessageSquare, Map, BarChart3, Settings, ChevronRight, Wallet, UserCheck, Zap,
   CalendarCheck, PieChart, Star, Scale, Megaphone, CircleUser as UserCircle,
-  Building2, Sparkles, LogOut, ChevronDown, Shield, Check, BrainCircuit, Activity, Clock, Eye, Mic
+  Building2, Sparkles, LogOut, ChevronDown, Shield, Check, BrainCircuit, Activity, Clock, Eye, Mic,
+  Box, Flag, MessageCircleWarning, Radar, Bot, ShieldAlert, Network, LineChart, Handshake, FileCheck2,
+  Users2, Cpu, Target, Wand2, Globe
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
+import { useI18n } from '../../lib/i18n';
 
 interface NavItem {
   id: string;
@@ -15,46 +18,66 @@ interface NavItem {
   badge?: number;
   group?: string;
   adminOnly?: boolean;
+  moduleKey?: string;
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'core' },
-  { id: 'profile', label: 'Politician Profile', icon: UserCircle, group: 'core' },
-  { id: 'constituency', label: 'Constituency', icon: Map, group: 'core' },
-  { id: 'grievances', label: 'Grievances', icon: FileText, badge: 5, group: 'core' },
-  { id: 'appointments', label: 'Appointments', icon: CalendarCheck, group: 'core' },
-  { id: 'events', label: 'Events', icon: Calendar, group: 'core' },
-  { id: 'voters', label: 'Voter Database', icon: UserCheck, group: 'political' },
-  { id: 'polls', label: 'Polls & Surveys', icon: PieChart, group: 'political' },
-  { id: 'legislative', label: 'Legislative', icon: Scale, group: 'political' },
-  { id: 'citizen', label: 'Citizen Engagement', icon: Megaphone, group: 'political' },
-  { id: 'darshan', label: 'Tirupati Darshan', icon: Star, group: 'services' },
-  { id: 'parliamentary', label: 'Parliamentary', icon: Building2, group: 'services' },
-  { id: 'ai-studio', label: 'AI Studio', icon: BrainCircuit, group: 'services' },
-  { id: 'omniscan', label: 'OmniScan', icon: Activity, group: 'intelligence' },
-  { id: 'morning-brief', label: 'Morning Brief', icon: Clock, group: 'intelligence' },
-  { id: 'sentiment', label: 'Sentiment Dashboard', icon: BarChart3, group: 'intelligence' },
-  { id: 'opposition', label: 'Opposition Tracker', icon: Eye, group: 'intelligence' },
-  { id: 'voice-intelligence', label: 'Voice Intelligence', icon: Mic, group: 'intelligence' },
-  { id: 'briefing', label: 'Political Briefings', icon: Sparkles, group: 'intelligence' },
-  { id: 'projects', label: 'Dev Projects', icon: TrendingUp, group: 'admin' },
-  { id: 'media', label: 'Media Monitor', icon: Newspaper, group: 'admin' },
-  { id: 'communication', label: 'Communication', icon: MessageSquare, group: 'admin' },
-  { id: 'finance', label: 'Finance', icon: Wallet, group: 'admin' },
-  { id: 'team', label: 'Team', icon: Users, group: 'admin' },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3, group: 'admin' },
-  { id: 'documents', label: 'Documents', icon: FolderOpen, group: 'admin' },
-  { id: 'settings', label: 'Settings', icon: Settings, group: 'admin' },
-  { id: 'staff-management', label: 'Staff Management', icon: Users, group: 'admin', adminOnly: true },
-  { id: 'superadmin', label: 'Platform Admin', icon: Shield, group: 'admin', adminOnly: true },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'core', moduleKey: 'dashboard' },
+  { id: 'quick-capture', label: 'Quick Capture', icon: Wand2, group: 'core', moduleKey: 'dashboard' },
+  { id: 'profile', label: 'Politician Profile', icon: UserCircle, group: 'core', moduleKey: 'profile' },
+  { id: 'constituency', label: 'Constituency', icon: Map, group: 'core', moduleKey: 'constituency' },
+  { id: 'grievances', label: 'Grievances', icon: FileText, badge: 5, group: 'core', moduleKey: 'grievances' },
+  { id: 'appointments', label: 'Appointments', icon: CalendarCheck, group: 'core', moduleKey: 'appointments' },
+  { id: 'events', label: 'Events', icon: Calendar, group: 'core', moduleKey: 'events' },
+  { id: 'voters', label: 'Voter Database', icon: UserCheck, group: 'political', moduleKey: 'voters' },
+  { id: 'polls', label: 'Polls & Surveys', icon: PieChart, group: 'political', moduleKey: 'polls' },
+  { id: 'booths', label: 'Booth Management', icon: Box, group: 'political', moduleKey: 'booths' },
+  { id: 'legislative', label: 'Legislative', icon: Scale, group: 'political', moduleKey: 'legislative' },
+  { id: 'citizen', label: 'Citizen Engagement', icon: Megaphone, group: 'political', moduleKey: 'citizen' },
+  { id: 'darshan', label: 'Tirupati Darshan', icon: Star, group: 'services', moduleKey: 'darshan' },
+  { id: 'darshans', label: 'Darshans', icon: Map, group: 'services', moduleKey: 'darshans' },
+  { id: 'parliamentary', label: 'Parliamentary', icon: Building2, group: 'services', moduleKey: 'parliamentary' },
+  { id: 'ai-studio', label: 'AI Studio', icon: BrainCircuit, group: 'services', moduleKey: 'ai-studio' },
+  { id: 'omniscan', label: 'OmniScan', icon: Activity, group: 'intelligence', moduleKey: 'omniscan' },
+  { id: 'morning-brief', label: 'Morning Brief', icon: Clock, group: 'intelligence', moduleKey: 'morning-brief' },
+  { id: 'sentiment', label: 'Sentiment Dashboard', icon: BarChart3, group: 'intelligence', moduleKey: 'sentiment' },
+  { id: 'opposition', label: 'Opposition Tracker', icon: Eye, group: 'intelligence', moduleKey: 'opposition' },
+  { id: 'voice-intelligence', label: 'Voice Intelligence', icon: Mic, group: 'intelligence', moduleKey: 'voice-intelligence' },
+  { id: 'promises', label: 'Promises Tracker', icon: Flag, group: 'intelligence', moduleKey: 'promises' },
+  { id: 'content-factory', label: 'Content Factory', icon: Sparkles, group: 'intelligence', moduleKey: 'content-factory' },
+  { id: 'whatsapp-intelligence', label: 'WhatsApp Intel', icon: MessageCircleWarning, group: 'intelligence', moduleKey: 'whatsapp-intelligence' },
+  { id: 'smart-visit', label: 'Smart Visit Planner', icon: Map, group: 'intelligence', moduleKey: 'smart-visit' },
+  { id: 'briefing', label: 'Political Briefings', icon: Sparkles, group: 'intelligence', moduleKey: 'briefing' },
+  { id: 'predictive-crisis', label: 'Predictive Crisis', icon: Radar, group: 'future', moduleKey: 'predictive-crisis' },
+  { id: 'agent-system', label: 'Agent System', icon: Bot, group: 'future', moduleKey: 'agent-system' },
+  { id: 'deepfake-shield', label: 'Deepfake Shield', icon: ShieldAlert, group: 'future', moduleKey: 'deepfake-shield' },
+  { id: 'relationship-graph', label: 'Relationship Graph', icon: Network, group: 'future', moduleKey: 'relationship-graph' },
+  { id: 'economic-intelligence', label: 'Economic Intelligence', icon: LineChart, group: 'future', moduleKey: 'economic-intelligence' },
+  { id: 'citizen-services', label: 'Citizen Services', icon: Handshake, group: 'future', moduleKey: 'citizen-services' },
+  { id: 'election-command', label: 'Election Command', icon: Target, group: 'future', moduleKey: 'election-command' },
+  { id: 'finance-compliance', label: 'Finance Compliance', icon: FileCheck2, group: 'future', moduleKey: 'finance-compliance' },
+  { id: 'party-integration', label: 'Party Integration', icon: Users2, group: 'future', moduleKey: 'party-integration' },
+  { id: 'digital-twin', label: 'Digital Twin', icon: Cpu, group: 'future', moduleKey: 'digital-twin' },
+  { id: 'projects', label: 'Dev Projects', icon: TrendingUp, group: 'admin', moduleKey: 'projects' },
+  { id: 'media', label: 'Media Monitor', icon: Newspaper, group: 'admin', moduleKey: 'media' },
+  { id: 'communication', label: 'Communication', icon: MessageSquare, group: 'admin', moduleKey: 'communication' },
+  { id: 'finance', label: 'Finance', icon: Wallet, group: 'admin', moduleKey: 'finance' },
+  { id: 'team', label: 'Team', icon: Users, group: 'admin', moduleKey: 'team' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, group: 'admin', moduleKey: 'analytics' },
+  { id: 'documents', label: 'Documents', icon: FolderOpen, group: 'admin', moduleKey: 'documents' },
+  { id: 'settings', label: 'Settings', icon: Settings, group: 'admin', moduleKey: 'settings' },
+  { id: 'website-admin', label: 'Website CMS', icon: Globe, group: 'admin', adminOnly: true, moduleKey: 'superadmin' },
+  { id: 'staff-management', label: 'Staff Management', icon: Users, group: 'admin', adminOnly: true, moduleKey: 'staff-management' },
+  { id: 'superadmin', label: 'Platform Admin', icon: Shield, group: 'admin', adminOnly: true, moduleKey: 'superadmin' },
 ];
 
-const groupLabels: Record<string, string> = {
-  core: 'CORE',
-  political: 'POLITICAL',
-  services: 'SERVICES',
-  intelligence: 'INTELLIGENCE',
-  admin: 'ADMINISTRATION',
+const groupLabelKeys: Record<string, string> = {
+  core: 'group.core',
+  political: 'group.political',
+  services: 'group.services',
+  intelligence: 'group.intelligence',
+  future: 'group.future',
+  admin: 'group.admin',
 };
 
 interface SidebarProps {
@@ -64,16 +87,18 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps) {
-  const { userRole, activePolitician, allPoliticians, setActivePolitician, signOut } = useAuth();
+  const { userRole, activePolitician, allPoliticians, setActivePolitician, signOut, hasModule } = useAuth();
+  const { t } = useI18n();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  const groups = ['core', 'political', 'services', 'intelligence', 'admin'];
+  const groups = ['core', 'political', 'services', 'intelligence', 'future', 'admin'];
   const isSuperAdmin = userRole?.role === 'super_admin';
 
   const isPoliticianAdmin = userRole?.role === 'politician_admin';
   const visibleItems = navItems.filter(item =>
-    !item.adminOnly || isSuperAdmin || (isPoliticianAdmin && item.id === 'staff-management')
+    (!item.adminOnly || isSuperAdmin || (isPoliticianAdmin && item.id === 'staff-management')) &&
+    (!item.moduleKey || hasModule(item.moduleKey))
   );
   // Debug: force superadmin item if role is super_admin
   const finalItems = isSuperAdmin
@@ -131,7 +156,7 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
             <div key={group}>
               {!collapsed && (
                 <div style={{ fontSize: 9, fontWeight: 700, color: 'rgba(136,153,187,0.5)', letterSpacing: '1px', padding: '8px 10px 4px', marginTop: group !== 'core' ? 8 : 0 }}>
-                  {groupLabels[group]}
+                  {t(groupLabelKeys[group] || group)}
                 </div>
               )}
               {collapsed && group !== 'core' && <div style={{ height: 8 }} />}
@@ -162,7 +187,10 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
                         animate={{ opacity: 1 }}
                         className="text-sm font-medium flex-1 truncate"
                       >
-                        {item.label}
+                        {(() => {
+                          const label = t(`nav.${item.id}`);
+                          return label.startsWith('nav.') ? item.label : label;
+                        })()}
                       </motion.span>
                     )}
                     {!collapsed && item.badge && (

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Bell, Shield, Palette, Globe, Database, Key, LogOut, ChevronRight, Zap, Check } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { useI18n } from '../lib/i18n';
 import { api } from '../lib/api';
 
 function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
@@ -23,6 +24,7 @@ function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: b
 
 export default function Settings() {
   const { activePolitician, user, signOut } = useAuth();
+  const { language, setLanguage, languages } = useI18n();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [notifications, setNotifications] = useState({
@@ -53,6 +55,21 @@ export default function Settings() {
   function handleSignOut() {
     signOut();
     window.location.href = '/';
+  }
+
+  useEffect(() => {
+    if (user?.two_factor_enabled !== undefined) {
+      setSecurity(s => ({ ...s, twoFactor: !!user.two_factor_enabled }));
+    }
+  }, [user?.two_factor_enabled]);
+
+  async function handleToggle2fa(enabled: boolean) {
+    setSecurity(s => ({ ...s, twoFactor: enabled }));
+    try {
+      await api.post('/api/auth/2fa/toggle', { enabled });
+    } catch {
+      setSecurity(s => ({ ...s, twoFactor: !enabled }));
+    }
   }
 
   async function handleSaveNotifications() {
@@ -201,6 +218,12 @@ export default function Settings() {
             <span style={{ fontSize: 13, color: '#f0f4ff' }}>Login Notifications</span>
             <ToggleSwitch enabled={security.loginNotifications} onChange={v => setSecurity(s => ({ ...s, loginNotifications: v }))} />
           </div>
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl"
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            <span style={{ fontSize: 13, color: '#f0f4ff' }}>Two-Factor Authentication (Email OTP)</span>
+            <ToggleSwitch enabled={security.twoFactor} onChange={handleToggle2fa} />
+          </div>
           <div className="px-4 py-3">
             <button onClick={() => setShowPasswordForm(!showPasswordForm)}
               className="flex items-center gap-2 text-sm transition-all"
@@ -248,7 +271,6 @@ export default function Settings() {
         <div className="p-2">
           {[
             { label: 'Theme', value: 'Dark' },
-            { label: 'Language', value: 'English' },
             { label: 'Date Format', value: 'DD/MM/YYYY' },
           ].map((item, i) => (
             <div key={i} className="flex items-center justify-between px-4 py-3 rounded-xl"
@@ -261,6 +283,21 @@ export default function Settings() {
               </div>
             </div>
           ))}
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl"
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            <span style={{ fontSize: 13, color: '#f0f4ff' }}>Language</span>
+            <select
+              value={language}
+              onChange={e => setLanguage(e.target.value as typeof language)}
+              className="rounded-lg px-2 py-1.5 text-xs"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff' }}
+            >
+              {languages.map(opt => (
+                <option key={opt.code} value={opt.code}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </motion.div>
 

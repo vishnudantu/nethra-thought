@@ -1,26 +1,58 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Zap, Eye, EyeOff, Mail, Lock, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { signIn, verify2fa } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [otpRequired, setOtpRequired] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setLoading(true);
     setError('');
-    const { error: err } = await signIn(email, password);
+    const { error: err, requires2fa, email: loginEmail } = await signIn(email, password);
     if (err) {
       setError('Invalid email or password. Please try again.');
+    } else if (requires2fa) {
+      setOtpRequired(true);
+      setOtpEmail(loginEmail || email);
     }
     setLoading(false);
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!otp.trim()) { setOtpError('Enter the OTP sent to your email.'); return; }
+    setOtpLoading(true);
+    setOtpError('');
+    const { error: err } = await verify2fa(otpEmail, otp);
+    if (err) setOtpError('Invalid or expired OTP. Please try again.');
+    setOtpLoading(false);
+  }
+
+  async function handleResendOtp() {
+    if (!otpEmail) return;
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      await api.post('/api/auth/2fa/request', { email: otpEmail });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to resend OTP';
+      setOtpError(message);
+    }
+    setOtpLoading(false);
   }
 
   return (
@@ -123,7 +155,7 @@ export default function Login() {
           </div>
 
           <div className="rounded-2xl p-8" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)' }}>
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={otpRequired ? handleVerifyOtp : handleSubmit} className="space-y-5">
               {error && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -136,80 +168,117 @@ export default function Login() {
                 </motion.div>
               )}
 
-              <div>
-                <label className="block mb-2" style={{ fontSize: 13, fontWeight: 600, color: '#8899bb' }}>Email Address</label>
-                <div className="relative">
-                  <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }} />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full pl-11 pr-4 py-3 rounded-xl transition-all"
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#f0f4ff',
-                      fontSize: 14,
-                      outline: 'none',
-                    }}
-                    onFocus={e => (e.target.style.borderColor = 'rgba(0,212,170,0.4)')}
-                    onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
-                  />
+              {!otpRequired && (
+                <div>
+                  <label className="block mb-2" style={{ fontSize: 13, fontWeight: 600, color: '#8899bb' }}>Email Address</label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }} />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl transition-all"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#f0f4ff',
+                        fontSize: 14,
+                        outline: 'none',
+                      }}
+                      onFocus={e => (e.target.style.borderColor = 'rgba(0,212,170,0.4)')}
+                      onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block mb-2" style={{ fontSize: 13, fontWeight: 600, color: '#8899bb' }}>Password</label>
-                <div className="relative">
-                  <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }} />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-11 pr-12 py-3 rounded-xl transition-all"
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#f0f4ff',
-                      fontSize: 14,
-                      outline: 'none',
-                    }}
-                    onFocus={e => (e.target.style.borderColor = 'rgba(0,212,170,0.4)')}
-                    onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: '#8899bb' }}
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              {!otpRequired && (
+                <div>
+                  <label className="block mb-2" style={{ fontSize: 13, fontWeight: 600, color: '#8899bb' }}>Password</label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }} />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-11 pr-12 py-3 rounded-xl transition-all"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#f0f4ff',
+                        fontSize: 14,
+                        outline: 'none',
+                      }}
+                      onFocus={e => (e.target.style.borderColor = 'rgba(0,212,170,0.4)')}
+                      onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+                      style={{ color: '#8899bb' }}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {otpRequired && (
+                <div className="space-y-4">
+                  {otpError && (
+                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2 px-4 py-3 rounded-xl"
+                      style={{ background: 'rgba(255,85,85,0.12)', border: '1px solid rgba(255,85,85,0.25)', color: '#ff7777' }}>
+                      <AlertCircle size={15} />
+                      <span style={{ fontSize: 13 }}>{otpError}</span>
+                    </motion.div>
+                  )}
+                  <div>
+                    <label className="block mb-2" style={{ fontSize: 13, fontWeight: 600, color: '#8899bb' }}>Email OTP</label>
+                    <div className="relative">
+                      <ShieldCheck size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }} />
+                      <input
+                        type="text"
+                        value={otp}
+                        onChange={e => setOtp(e.target.value)}
+                        placeholder="Enter 6-digit OTP"
+                        className="w-full pl-11 pr-4 py-3 rounded-xl transition-all"
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: '#f0f4ff',
+                          fontSize: 14,
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <p style={{ fontSize: 11, color: '#8899bb', marginTop: 6 }}>OTP sent to {otpEmail}</p>
+                  </div>
+                  <button type="button" onClick={handleResendOtp}
+                    className="w-full py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+                    style={{ background: 'rgba(255,255,255,0.08)', color: '#8899bb' }}>
+                    <RefreshCw size={14} /> Resend OTP
                   </button>
                 </div>
-              </div>
+              )}
 
               <motion.button
                 type="submit"
-                disabled={loading}
-                whileHover={{ scale: loading ? 1 : 1.01 }}
-                whileTap={{ scale: loading ? 1 : 0.99 }}
+                disabled={loading || otpLoading}
+                whileHover={{ scale: loading || otpLoading ? 1 : 1.01 }}
+                whileTap={{ scale: loading || otpLoading ? 1 : 0.99 }}
                 className="w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
                 style={{
-                  background: loading ? 'rgba(0,212,170,0.4)' : 'linear-gradient(135deg, #00d4aa, #1e88e5)',
+                  background: loading || otpLoading ? 'rgba(0,212,170,0.4)' : 'linear-gradient(135deg, #00d4aa, #1e88e5)',
                   color: '#060b18',
                   fontSize: 14,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  border: 'none',
+                  cursor: loading || otpLoading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loading ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} />
-                    Signing in...
-                  </>
-                ) : 'Sign In'}
+                {loading || otpLoading ? 'Processing...' : otpRequired ? 'Verify OTP' : 'Sign In'}
               </motion.button>
             </form>
 

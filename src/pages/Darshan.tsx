@@ -44,6 +44,8 @@ interface DarshanBooking {
   contact_person: string;
   contact_phone: string;
   approval_notes: string;
+  ticket_pickup_point: string;
+  shrine_contact_numbers: string;
   created_at: string;
 }
 
@@ -408,6 +410,8 @@ function ApprovalModal({ booking, onClose, onDone }: { booking: DarshanBooking; 
   const [approvedBy, setApprovedBy] = useState('');
   const [contactPerson, setContactPerson] = useState(booking.contact_person || '');
   const [contactPhone, setContactPhone] = useState(booking.contact_phone || '');
+  const [ticketPickupPoint, setTicketPickupPoint] = useState(booking.ticket_pickup_point || 'TTD Ticket Counter, Tirumala');
+  const [shrineContacts, setShrineContacts] = useState(booking.shrine_contact_numbers || 'TTD Helpline: 155257');
   const [approvalNotes, setApprovalNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [action, setAction] = useState<'approve' | 'reject' | null>(null);
@@ -418,7 +422,7 @@ function ApprovalModal({ booking, onClose, onDone }: { booking: DarshanBooking; 
     ? new Date(booking.darshan_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
 
-  const smsMessage = `Dear ${booking.pilgrim_name}, your Tirupati Darshan request has been APPROVED by ${approvedBy || '[Politician Name]'}. Date: ${darshanDate}. Darshan: ${booking.darshan_type}. ${contactPerson && contactPhone ? `For queries contact: ${contactPerson} - ${contactPhone}.` : ''} Please carry this message and a valid ID. - MP Office`;
+  const smsMessage = `Dear ${booking.pilgrim_name}, your Tirupati Darshan is CONFIRMED by ${approvedBy || '[Politician Name]'}. Date: ${darshanDate} (${booking.darshan_type}). Ticket pickup: ${ticketPickupPoint}. Shrine contacts: ${shrineContacts}. ${contactPerson && contactPhone ? `Queries: ${contactPerson} - ${contactPhone}.` : ''} Carry this message and a valid ID. - MP Office`;
 
   async function handleApprove() {
     if (!approvedBy.trim()) return;
@@ -436,6 +440,8 @@ function ApprovalModal({ booking, onClose, onDone }: { booking: DarshanBooking; 
           approval_notes: approvalNotes,
           contact_person: contactPerson,
           contact_phone: contactPhone,
+          ticket_pickup_point: ticketPickupPoint,
+          shrine_contact_numbers: shrineContacts,
         }),
       });
     } catch (err) {
@@ -541,6 +547,16 @@ function ApprovalModal({ booking, onClose, onDone }: { booking: DarshanBooking; 
                   <div>
                     <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Contact Phone</label>
                     <input className="input-field" placeholder="Phone number" value={contactPhone} onChange={e => setContactPhone(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Ticket Pickup Point</label>
+                    <input className="input-field" placeholder="TTD Ticket Counter, Tirumala" value={ticketPickupPoint} onChange={e => setTicketPickupPoint(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Shrine Contact Numbers</label>
+                    <input className="input-field" placeholder="TTD Helpline: 155257" value={shrineContacts} onChange={e => setShrineContacts(e.target.value)} />
                   </div>
                 </div>
                 <div>

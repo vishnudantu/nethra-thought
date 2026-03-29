@@ -204,3 +204,245 @@ export interface VoiceReport {
   attachments: string[] | null;
   created_at: string;
 }
+
+export interface FeatureModule {
+  id: string;
+  module_key: string;
+  label: string;
+  category: string;
+  description: string;
+  is_active: number;
+  is_future: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeatureFlag {
+  id: string;
+  feature_key: string;
+  module_key: string;
+  label: string;
+  description: string;
+  is_active: number;
+  is_future: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModuleAccess {
+  id: string;
+  politician_id?: string;
+  role?: string;
+  module_key: string;
+  is_enabled: number;
+  updated_at: string;
+}
+
+export interface FeatureAccess {
+  id: string;
+  politician_id?: string;
+  role?: string;
+  feature_key: string;
+  is_enabled: number;
+  updated_at: string;
+}
+
+export interface AdminReport {
+  id: string;
+  politician_id: string | null;
+  report_type: string;
+  title: string;
+  summary: string;
+  content: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface PromiseItem {
+  id: string;
+  promise_text: string;
+  made_at: string | null;
+  location: string;
+  category: string;
+  status: 'not_started' | 'in_progress' | 'completed' | 'cancelled';
+  linked_project_id: string | null;
+  deadline: string | null;
+  completion_date: string | null;
+  notes: string;
+  source: string;
+  created_at: string;
+}
+
+export interface AiGeneratedContent {
+  id: string;
+  content_type: string;
+  prompt: string;
+  content: string;
+  is_saved: number;
+  tags: string[] | null;
+  created_at: string;
+}
+
+export interface ContentCalendarItem {
+  id: string;
+  content_id: string | null;
+  scheduled_date: string | null;
+  platform: string;
+  status: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface WhatsappIntel {
+  id: string;
+  received_at: string;
+  sender_phone: string;
+  message_type: string;
+  content: string;
+  transcription: string;
+  classification: string;
+  sentiment: string;
+  urgency_score: number;
+  is_viral: number;
+  viral_count: number;
+  is_misinformation: number;
+  routed_to: string;
+  action_taken: string;
+  processed_at: string | null;
+  created_at: string;
+}
+
+export interface VisitPlan {
+  id: string;
+  mandal: string;
+  village: string;
+  priority: number;
+  reasoning: string;
+  recommended_date: string | null;
+  status: string;
+  last_visit_date: string | null;
+  notes: string;
+  created_at: string;
+}
+
+export interface Booth {
+  id: string;
+  booth_number: string;
+  booth_name: string;
+  location: string;
+  mandal: string;
+  total_voters: number;
+  expected_turnout: number;
+  agent_name: string;
+  historical_vote_percentage: Record<string, number> | null;
+  coordinates: { lat: number; lng: number } | null;
+  created_at: string;
+}
+
+export interface PredictiveAlert {
+  id: string;
+  alert_type: string;
+  probability: number;
+  description: string;
+  recommended_action: string;
+  timeframe_days: number;
+  status: string;
+  created_at: string;
+}
+
+export interface AgentTask {
+  id: string;
+  agent_type: string;
+  task_type: string;
+  description: string;
+  status: string;
+  result: string;
+  assigned_to: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeepfakeIncident {
+  id: string;
+  platform: string;
+  content_url: string;
+  detected_at: string;
+  confidence: number;
+  status: string;
+  response_plan: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface Relationship {
+  id: string;
+  entity_name: string;
+  entity_type: string;
+  relationship_type: string;
+  influence_score: number;
+  alignment: string;
+  last_contact_at: string | null;
+  notes: string;
+  created_at: string;
+}
+
+export interface EconomicIndicator {
+  id: string;
+  indicator_type: string;
+  mandal: string;
+  value: number;
+  unit: string;
+  recorded_date: string | null;
+  trend: string;
+  source: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface CitizenServiceRequest {
+  id: string;
+  requester_name: string;
+  request_type: string;
+  status: string;
+  description: string;
+  source: string;
+  created_at: string;
+}
+
+export interface ElectionUpdate {
+  id: string;
+  booth_id: string | null;
+  update_type: string;
+  description: string;
+  reported_at: string;
+  status: string;
+  created_at: string;
+}
+
+export interface FinanceComplianceReport {
+  id: string;
+  report_type: string;
+  summary: string;
+  status: string;
+  alerts: string[] | null;
+  created_at: string;
+}
+
+export interface PartyIntegration {
+  id: string;
+  party_name: string;
+  integration_type: string;
+  status: string;
+  last_sync_at: string | null;
+  notes: string;
+  created_at: string;
+}
+
+export interface DigitalTwinRun {
+  id: string;
+  scenario_name: string;
+  input_summary: string;
+  output_summary: string;
+  status: string;
+  created_at: string;
+}
