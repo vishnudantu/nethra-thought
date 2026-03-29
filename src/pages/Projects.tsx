@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, TrendingUp, MapPin, X, IndianRupee } from 'lucide-react';
+import { Plus, TrendingUp, MapPin, X } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge, { statusBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge } from '../components/ui/badgeUtils';
 import type { Project } from '../lib/types';
 
 const categories = ['Infrastructure', 'Water Supply', 'Healthcare', 'Education', 'Agriculture', 'Employment', 'Housing', 'Sanitation', 'Power', 'Transport'];
@@ -109,7 +110,7 @@ function ProjectModal({ project, onClose, onSave }: {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Status</label>
-              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Project['status'] })}>
                 {['Planning', 'Tendering', 'In Progress', 'Stalled', 'Completed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
@@ -167,7 +168,7 @@ export default function Projects() {
 
   async function fetchProjects() {
     setLoading(true);
-    const data = await api.list('projects');
+    const data = await api.list('projects') as Project[];
     setProjects(data || []);
     setLoading(false);
   }
@@ -175,8 +176,8 @@ export default function Projects() {
   useEffect(() => { fetchProjects(); }, []);
 
   const filtered = filter === 'All' ? projects : projects.filter(p => p.status === filter);
-  const totalBudget = projects.reduce((s: number, p: any) => s + parseFloat(p.budget_allocated || 0), 0);
-  const totalSpent = projects.reduce((s: number, p: any) => s + parseFloat(p.budget_spent || 0), 0);
+  const totalBudget = projects.reduce((s, p) => s + Number(p.budget_allocated ?? 0), 0);
+  const totalSpent = projects.reduce((s, p) => s + Number(p.budget_spent ?? 0), 0);
 
   const progressColors: Record<string, string> = {
     Planning: '#8899bb', Tendering: '#ffa726', 'In Progress': '#00d4aa',
@@ -190,7 +191,7 @@ export default function Projects() {
           { label: 'Total Projects', value: projects.length, color: '#42a5f5' },
           { label: 'In Progress', value: projects.filter(p => p.status === 'In Progress').length, color: '#00d4aa' },
           { label: 'Completed', value: projects.filter(p => p.status === 'Completed').length, color: '#00c864' },
-          { label: 'Total Beneficiaries', value: projects.reduce((s: number, p: any) => s + parseInt(p.beneficiaries || 0), 0).toLocaleString(), color: '#ffa726' },
+          { label: 'Total Beneficiaries', value: projects.reduce((s, p) => s + Number(p.beneficiaries ?? 0), 0).toLocaleString(), color: '#ffa726' },
         ].map((s, i) => (
           <motion.div
             key={s.label}
@@ -260,7 +261,9 @@ export default function Projects() {
           </div>
         )) : filtered.map((p, i) => {
           const color = progressColors[p.status] || '#8899bb';
-          const util = p.budget_allocated ? Math.round((parseFloat(p.budget_spent) / parseFloat(p.budget_allocated)) * 100) : 0;
+          const spent = Number(p.budget_spent ?? 0);
+          const allocated = Number(p.budget_allocated ?? 0);
+          const util = allocated ? Math.round((spent / allocated) * 100) : 0;
           return (
             <motion.div
               key={p.id}
@@ -284,7 +287,7 @@ export default function Projects() {
                     </div>
                     <div style={{ fontSize: 12, color: '#8899bb' }}>{p.scheme}</div>
                     <div style={{ fontSize: 12, color: '#8899bb' }}>
-                      {p.beneficiaries > 0 ? `${parseInt(p.beneficiaries).toLocaleString()} beneficiaries` : ''}
+                      {p.beneficiaries > 0 ? `${Number(p.beneficiaries).toLocaleString()} beneficiaries` : ''}
                     </div>
                   </div>
                   <div>
@@ -307,11 +310,11 @@ export default function Projects() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff' }}>
-                    ₹{(parseFloat(p.budget_allocated) / 10000000).toFixed(2)} Cr
+                    ₹{(allocated / 10000000).toFixed(2)} Cr
                   </div>
                   <div style={{ fontSize: 11, color: '#8899bb' }}>allocated</div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#00d4aa', marginTop: 4 }}>
-                    ₹{(parseFloat(p.budget_spent) / 10000000).toFixed(2)} Cr spent ({util}%)
+                    ₹{(spent / 10000000).toFixed(2)} Cr spent ({util}%)
                   </div>
                 </div>
               </div>

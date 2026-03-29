@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, MessageSquare, Send, Mail, Phone, X } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge, { statusBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge } from '../components/ui/badgeUtils';
 import type { Communication as CommType } from '../lib/types';
 
 const recipientGroups = ['All Voters', 'Party Workers', 'Village Leaders', 'Mandal Heads', 'Seniors', 'Youth', 'Farmers', 'Women'];
@@ -80,7 +81,7 @@ function CommModal({ comm, onClose, onSave }: {
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Status</label>
-              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as CommType['status'] })}>
                 {['Draft', 'Scheduled', 'Sent', 'Failed'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>

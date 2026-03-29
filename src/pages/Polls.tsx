@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, BarChart2, PieChart, TrendingUp, Users, CheckCircle, Clock, CreditCard as Edit2, Trash2, Eye, Share2, Download, MessageSquare, ThumbsUp, ThumbsDown, Minus, ChevronRight, Target, Activity } from 'lucide-react';
+import { Plus, Search, X, BarChart2, PieChart, Users, CreditCard as Edit2, Trash2, ThumbsUp, ThumbsDown, Minus, Target, Activity } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Poll {
@@ -229,7 +229,10 @@ function PollResultsModal({ poll, onClose }: { poll: Poll; onClose: () => void }
   const [responses, setResponses] = useState<PollResponse[]>([]);
 
   useEffect(() => {
-    api.list('poll_responses').then((data: any[]) => setResponses((data || []).filter((r: any) => r.poll_id === poll.id)));
+    api.list('poll_responses').then(data => {
+      const responsesData = data as PollResponse[];
+      setResponses((responsesData || []).filter(r => r.poll_id === poll.id));
+    });
   }, [poll.id]);
 
   const progress = poll.target_responses > 0 ? Math.min(100, (poll.total_responses / poll.target_responses) * 100) : 0;

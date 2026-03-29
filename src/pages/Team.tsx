@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Users, Mail, Phone, X, Search } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge, { statusBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge } from '../components/ui/badgeUtils';
 import type { TeamMember } from '../lib/types';
 
 const departments = ['Administration', 'Communications', 'Public Relations', 'Policy', 'Outreach', 'Finance', 'Technology', 'Welfare', 'Legal'];
@@ -90,7 +91,7 @@ function TeamModal({ member, onClose, onSave }: {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Status</label>
-              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as TeamMember['status'] })}>
                 {['Active', 'Inactive', 'On Leave'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>

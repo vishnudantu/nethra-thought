@@ -41,7 +41,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
   const sidebarWidth = sidebarCollapsed ? 72 : 256;
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg-primary)' }}>
+    <div className="min-h-screen flex relative overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
       {isMobile && mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
@@ -66,7 +66,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
       </div>
 
       <div
-        className="flex-1 flex flex-col min-h-screen transition-all duration-300"
+        className="flex-1 flex flex-col min-h-screen transition-all duration-300 relative z-10"
         style={{ marginLeft: isMobile ? 0 : sidebarWidth }}
       >
         <Header
@@ -81,10 +81,10 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
+              initial={{ opacity: 0, y: 18, filter: 'blur(6px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -12, filter: 'blur(6px)' }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
             >
               {children}
             </motion.div>
@@ -93,16 +93,24 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
       </div>
 
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div style={{
-          position: 'absolute', top: -200, right: -200, width: 600, height: 600,
-          borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,212,170,0.04) 0%, transparent 70%)',
-          filter: 'blur(40px)'
-        }} />
-        <div style={{
-          position: 'absolute', bottom: -200, left: -100, width: 500, height: 500,
-          borderRadius: '50%', background: 'radial-gradient(circle, rgba(30,136,229,0.04) 0%, transparent 70%)',
-          filter: 'blur(40px)'
-        }} />
+        <motion.div
+          className="floating-orb teal"
+          style={{ width: 520, height: 520, top: -220, right: -180 }}
+          animate={{ y: [0, -18, 0], x: [0, 12, 0] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="floating-orb blue"
+          style={{ width: 460, height: 460, bottom: -180, left: -140 }}
+          animate={{ y: [0, 14, 0], x: [0, -10, 0] }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="floating-orb amber"
+          style={{ width: 360, height: 360, top: '35%', left: '60%' }}
+          animate={{ y: [0, -12, 0], x: [0, 8, 0] }}
+          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+        />
       </div>
 
       <AnimatePresence>

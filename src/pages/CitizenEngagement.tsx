@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Users, MessageSquare, Heart, Calendar, CheckCircle, Clock, CreditCard as Edit2, Trash2, MapPin, ThumbsUp, Megaphone, Handshake, Star, ChevronRight, Activity, Lightbulb, UserPlus, Video, Tag, ArrowUp } from 'lucide-react';
+import { Plus, Search, X, Users, Heart, Calendar, CreditCard as Edit2, Trash2, MapPin, Megaphone, Lightbulb, Video, ArrowUp } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Engagement {

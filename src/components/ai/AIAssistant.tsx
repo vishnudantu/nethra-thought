@@ -151,8 +151,9 @@ export default function AIAssistant({ onClose }: AIAssistantProps) {
           m.id === assistantMsg.id ? { ...m, content: fullContent } : m
         ));
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
+    } catch (err: unknown) {
+      const error = err as { name?: string };
+      if (error?.name !== 'AbortError') {
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id
             ? { ...m, content: 'Sorry, I encountered an error. Please try again.' }

@@ -19,7 +19,7 @@ function generatePassword() {
 }
 
 export default function StaffManagement() {
-  const { activePolitician, userRole } = useAuth();
+  const { activePolitician } = useAuth();
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -33,16 +33,16 @@ export default function StaffManagement() {
 
   const primaryColor = activePolitician?.color_primary || '#00d4aa';
   const secondaryColor = activePolitician?.color_secondary || '#1e88e5';
-  const isSuperAdmin = userRole?.role === 'super_admin';
 
   useEffect(() => { fetchStaff(); }, []);
 
   async function fetchStaff() {
     setLoading(true);
     try {
-      const data = await api.get('/api/admin/users');
-      setStaff((data || []).filter((u: StaffUser) => u.role === 'staff'));
-    } catch (e) {
+      const data = await api.get('/api/admin/users') as StaffUser[];
+      setStaff((data || []).filter(u => u.role === 'staff'));
+    } catch (err) {
+      console.error('[staff]', err);
       setStaff([]);
     }
     setLoading(false);
@@ -66,8 +66,9 @@ export default function StaffManagement() {
       setShowForm(false);
       await fetchStaff();
       setTimeout(() => setSuccess(''), 4000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create account';
+      setError(message);
     }
     setSaving(false);
   }
@@ -77,8 +78,9 @@ export default function StaffManagement() {
       await api.delete(`/api/admin/users/${id}`);
       setStaff(prev => prev.filter(s => s.id !== id));
       setConfirmDelete(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to deactivate account');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to deactivate account';
+      setError(message);
     }
   }
 

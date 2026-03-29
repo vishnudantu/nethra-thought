@@ -26,6 +26,11 @@ import PoliticalBriefing from './pages/PoliticalBriefing';
 import SuperAdmin from './pages/SuperAdmin';
 import AIStudio from './pages/AIStudio';
 import StaffManagement from './pages/StaffManagement';
+import OmniScan from './pages/OmniScan';
+import MorningBrief from './pages/MorningBrief';
+import SentimentDashboard from './pages/SentimentDashboard';
+import OppositionTracker from './pages/OppositionTracker';
+import VoiceIntelligence from './pages/VoiceIntelligence';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -70,6 +75,11 @@ function AppContent() {
       case 'profile': return <Profile />;
       case 'parliamentary': return <Parliamentary />;
       case 'briefing': return <PoliticalBriefing />;
+      case 'omniscan': return <OmniScan />;
+      case 'morning-brief': return <MorningBrief />;
+      case 'sentiment': return <SentimentDashboard />;
+      case 'opposition': return <OppositionTracker />;
+      case 'voice-intelligence': return <VoiceIntelligence />;
       case 'superadmin': return <SuperAdmin />;
       case 'ai-studio': return <AIStudio />;
       case 'staff-management': return <StaffManagement />;

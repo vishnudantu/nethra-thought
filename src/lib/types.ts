@@ -161,3 +161,46 @@ export interface Constituency {
   party: string;
   created_at: string;
 }
+
+export interface SentimentScore {
+  id: string;
+  score_date: string;
+  overall_score: number;
+  news_score: number;
+  social_score: number;
+  whatsapp_score: number;
+  grievance_score: number;
+  ground_score: number;
+  channel_breakdown: Record<string, number> | null;
+  issue_breakdown: Record<string, number> | null;
+  created_at: string;
+}
+
+export interface OppositionIntel {
+  id: string;
+  opponent_name: string;
+  opponent_party: string;
+  opponent_constituency: string;
+  activity_type: string;
+  description: string;
+  source: string;
+  detected_at: string;
+  sentiment_toward_us: string;
+  threat_level: number;
+  ai_analysis: string;
+  created_at: string;
+}
+
+export interface VoiceReport {
+  id: string;
+  reporter_name: string;
+  reporter_role: string;
+  transcript: string;
+  classification: string;
+  language: string;
+  location: string;
+  gps_lat: number | null;
+  gps_lng: number | null;
+  attachments: string[] | null;
+  created_at: string;
+}

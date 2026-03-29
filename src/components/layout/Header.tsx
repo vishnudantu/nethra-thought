@@ -25,6 +25,8 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   citizen: { title: 'Citizen Engagement', subtitle: 'Community outreach and engagement' },
   darshan: { title: 'Tirupati Darshan', subtitle: 'Darshan booking and management' },
   parliamentary: { title: 'Parliamentary', subtitle: 'Parliamentary activities and questions' },
+  omniscan: { title: 'OmniScan', subtitle: '24/7 media and social intelligence pipeline' },
+  'morning-brief': { title: 'Morning Brief', subtitle: 'Daily intelligence summary and priorities' },
   briefing: { title: 'Political Briefings', subtitle: 'AI-powered political intelligence' },
   projects: { title: 'Development Projects', subtitle: 'Infrastructure and development tracking' },
   media: { title: 'Media Monitor', subtitle: 'Press coverage and sentiment analysis' },
@@ -35,6 +37,9 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   settings: { title: 'Settings', subtitle: 'Application preferences' },
   superadmin: { title: 'Platform Administration', subtitle: 'Deploy and manage politician accounts' },
   'ai-studio': { title: 'AI Studio', subtitle: 'Generate speeches, briefings and political content with AI' },
+  sentiment: { title: 'Sentiment Dashboard', subtitle: 'Real-time constituency mood and trends' },
+  opposition: { title: 'Opposition Tracker', subtitle: 'Monitor opposition activity and threats' },
+  'voice-intelligence': { title: 'Voice Intelligence', subtitle: 'Field voice reports and transcription' },
   'staff-management': { title: 'Staff Management', subtitle: 'Create and manage login accounts for your team' },
 };
 
@@ -57,9 +62,10 @@ export default function Header({ title, sidebarCollapsed, onToggleSidebar, isMob
       transition={{ duration: 0.4 }}
       className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 md:px-6 py-3 md:py-4"
       style={{
-        background: 'rgba(6, 11, 24, 0.9)',
-        backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'linear-gradient(180deg, rgba(6, 11, 24, 0.96), rgba(6, 11, 24, 0.82))',
+        backdropFilter: 'blur(24px)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
         minHeight: 64,
       }}
     >

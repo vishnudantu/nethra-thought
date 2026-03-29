@@ -78,7 +78,7 @@ function MediaModal({ mention, onClose, onSave }: {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Sentiment</label>
-              <select className="input-field" value={form.sentiment} onChange={e => setForm({ ...form, sentiment: e.target.value as any })}>
+              <select className="input-field" value={form.sentiment} onChange={e => setForm({ ...form, sentiment: e.target.value as MediaMention['sentiment'] })}>
                 {['Positive', 'Negative', 'Neutral'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
@@ -140,7 +140,6 @@ export default function Media() {
   const filtered = filter === 'All' ? mentions : mentions.filter(m => m.sentiment === filter);
   const pos = mentions.filter(m => m.sentiment === 'Positive').length;
   const neg = mentions.filter(m => m.sentiment === 'Negative').length;
-  const neu = mentions.filter(m => m.sentiment === 'Neutral').length;
   const sentimentScore = mentions.length ? Math.round(((pos - neg) / mentions.length) * 100) : 0;
 
   return (

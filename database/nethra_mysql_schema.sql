@@ -669,6 +669,79 @@ CREATE TABLE IF NOT EXISTS `ai_generated_content` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ======================
+-- SENTIMENT SCORES
+-- ======================
+CREATE TABLE IF NOT EXISTS `sentiment_scores` (
+  `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`    INT UNSIGNED DEFAULT NULL,
+  `score_date`       DATE NOT NULL DEFAULT (CURRENT_DATE),
+  `overall_score`    INT DEFAULT 0,
+  `news_score`       INT DEFAULT 0,
+  `social_score`     INT DEFAULT 0,
+  `whatsapp_score`   INT DEFAULT 0,
+  `grievance_score`  INT DEFAULT 0,
+  `ground_score`     INT DEFAULT 0,
+  `channel_breakdown` JSON DEFAULT NULL,
+  `issue_breakdown`   JSON DEFAULT NULL,
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- OPPOSITION INTELLIGENCE
+-- ======================
+CREATE TABLE IF NOT EXISTS `opposition_intelligence` (
+  `id`                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`      INT UNSIGNED DEFAULT NULL,
+  `opponent_name`      VARCHAR(255) NOT NULL,
+  `opponent_party`     VARCHAR(100) DEFAULT '',
+  `opponent_constituency` VARCHAR(255) DEFAULT '',
+  `activity_type`      VARCHAR(100) DEFAULT '',
+  `description`        TEXT DEFAULT NULL,
+  `source`             VARCHAR(255) DEFAULT '',
+  `detected_at`        DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `sentiment_toward_us` VARCHAR(50) DEFAULT 'Neutral',
+  `threat_level`       INT DEFAULT 5,
+  `ai_analysis`        TEXT DEFAULT NULL,
+  `created_at`         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- VOICE INTELLIGENCE REPORTS
+-- ======================
+CREATE TABLE IF NOT EXISTS `voice_reports` (
+  `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id`  INT UNSIGNED DEFAULT NULL,
+  `reporter_name`  VARCHAR(255) DEFAULT '',
+  `reporter_role`  VARCHAR(100) DEFAULT '',
+  `transcript`     LONGTEXT DEFAULT NULL,
+  `classification` VARCHAR(100) DEFAULT 'General',
+  `language`       VARCHAR(50) DEFAULT 'Telugu',
+  `location`       VARCHAR(255) DEFAULT '',
+  `gps_lat`        DECIMAL(10,7) DEFAULT NULL,
+  `gps_lng`        DECIMAL(10,7) DEFAULT NULL,
+  `attachments`    JSON DEFAULT NULL,
+  `created_at`     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`politician_id`) REFERENCES `politician_profiles`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
+-- API KEYS (ENCRYPTED)
+-- ======================
+CREATE TABLE IF NOT EXISTS `api_keys` (
+  `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `key_name`        VARCHAR(120) NOT NULL UNIQUE,
+  `encrypted_value` LONGTEXT NOT NULL,
+  `iv`              VARCHAR(64) NOT NULL,
+  `auth_tag`        VARCHAR(64) NOT NULL,
+  `key_hint`        VARCHAR(20) DEFAULT '',
+  `is_active`       TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================
 -- INDEXES
 -- ======================
 CREATE INDEX idx_grievances_status   ON grievances(status);
@@ -680,6 +753,9 @@ CREATE INDEX idx_events_start        ON events(start_date);
 CREATE INDEX idx_darshan_date        ON darshan_bookings(darshan_date);
 CREATE INDEX idx_darshan_approval    ON darshan_bookings(approval_status);
 CREATE INDEX idx_users_email         ON users(email);
+CREATE INDEX idx_sentiment_date      ON sentiment_scores(score_date);
+CREATE INDEX idx_opposition_detected ON opposition_intelligence(detected_at);
+CREATE INDEX idx_voice_created       ON voice_reports(created_at);
 
 SET FOREIGN_KEY_CHECKS = 1;
 

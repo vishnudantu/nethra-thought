@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Users, Map, Building, Landmark, Phone, Globe, Activity } from 'lucide-react';
+import { MapPin, Users, Map, Building, Landmark, Globe, Activity } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Constituency as ConstType } from '../lib/types';
 

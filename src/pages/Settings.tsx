@@ -88,8 +88,9 @@ export default function Settings() {
       setPasswordSuccess('Password changed successfully');
       setPasswordForm({ current: '', newPass: '', confirm: '' });
       setShowPasswordForm(false);
-    } catch (err: any) {
-      setPasswordError(err.message || 'Failed to change password');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to change password';
+      setPasswordError(message);
     }
     setChangingPassword(false);
   }

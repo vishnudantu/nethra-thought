@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FileText, Calendar, Users, Newspaper, TrendingUp, FolderOpen,
   MessageSquare, Map, BarChart3, Settings, ChevronRight, Wallet, UserCheck, Zap,
   CalendarCheck, PieChart, Star, Scale, Megaphone, CircleUser as UserCircle,
-  Building2, Sparkles, LogOut, ChevronDown, Shield, Check, BrainCircuit
+  Building2, Sparkles, LogOut, ChevronDown, Shield, Check, BrainCircuit, Activity, Clock, Eye, Mic
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 
@@ -30,8 +30,13 @@ const navItems: NavItem[] = [
   { id: 'citizen', label: 'Citizen Engagement', icon: Megaphone, group: 'political' },
   { id: 'darshan', label: 'Tirupati Darshan', icon: Star, group: 'services' },
   { id: 'parliamentary', label: 'Parliamentary', icon: Building2, group: 'services' },
-  { id: 'briefing', label: 'Political Briefings', icon: Sparkles, group: 'services' },
   { id: 'ai-studio', label: 'AI Studio', icon: BrainCircuit, group: 'services' },
+  { id: 'omniscan', label: 'OmniScan', icon: Activity, group: 'intelligence' },
+  { id: 'morning-brief', label: 'Morning Brief', icon: Clock, group: 'intelligence' },
+  { id: 'sentiment', label: 'Sentiment Dashboard', icon: BarChart3, group: 'intelligence' },
+  { id: 'opposition', label: 'Opposition Tracker', icon: Eye, group: 'intelligence' },
+  { id: 'voice-intelligence', label: 'Voice Intelligence', icon: Mic, group: 'intelligence' },
+  { id: 'briefing', label: 'Political Briefings', icon: Sparkles, group: 'intelligence' },
   { id: 'projects', label: 'Dev Projects', icon: TrendingUp, group: 'admin' },
   { id: 'media', label: 'Media Monitor', icon: Newspaper, group: 'admin' },
   { id: 'communication', label: 'Communication', icon: MessageSquare, group: 'admin' },
@@ -48,6 +53,7 @@ const groupLabels: Record<string, string> = {
   core: 'CORE',
   political: 'POLITICAL',
   services: 'SERVICES',
+  intelligence: 'INTELLIGENCE',
   admin: 'ADMINISTRATION',
 };
 
@@ -62,7 +68,7 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  const groups = ['core', 'political', 'services', 'admin'];
+  const groups = ['core', 'political', 'services', 'intelligence', 'admin'];
   const isSuperAdmin = userRole?.role === 'super_admin';
 
   const isPoliticianAdmin = userRole?.role === 'politician_admin';
@@ -93,7 +99,11 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
       animate={{ width: collapsed ? 72 : 256 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="fixed left-0 top-0 h-full z-40 flex flex-col overflow-hidden"
-      style={{ background: 'rgba(6, 11, 24, 0.95)', borderRight: '1px solid rgba(255,255,255,0.06)' }}
+      style={{
+        background: 'linear-gradient(180deg, rgba(6, 11, 24, 0.98), rgba(10, 16, 32, 0.95))',
+        borderRight: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '10px 0 30px rgba(0,0,0,0.35)',
+      }}
     >
       <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: 72 }}>
         <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
@@ -140,7 +150,8 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
                       color: isActive ? primaryColor : '#8899bb',
                       background: isActive ? `linear-gradient(135deg, ${primaryColor}1a, ${secondaryColor}1a)` : undefined,
                     }}
-                    whileHover={{ x: 3 }}
+                    whileHover={{ x: 4, boxShadow: `0 10px 24px ${primaryColor}25` }}
+                    whileTap={{ scale: 0.98 }}
                   >
                     <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
                       <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />

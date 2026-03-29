@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Scale, CheckCircle, Clock, AlertCircle, ThumbsUp, ThumbsDown, Minus, FileText, BarChart2, Filter, CreditCard as Edit2, Trash2, Tag, Calendar, Building, TrendingUp, Eye, ChevronRight, Download, Star, Bookmark } from 'lucide-react';
+import { Plus, Search, X, Scale, CheckCircle, AlertCircle, ThumbsUp, ThumbsDown, Minus, FileText, CreditCard as Edit2, Trash2, Eye } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Bill {
@@ -228,7 +228,6 @@ export default function Legislative() {
 
   const enacted = bills.filter(b => b.status === 'Enacted' || b.status === 'Presidential Assent');
   const ayeVotes = bills.filter(b => b.member_vote === 'Aye');
-  const nayVotes = bills.filter(b => b.member_vote === 'Nay');
   const highImpact = bills.filter(b => b.impact_level === 'High' || b.impact_level === 'Critical');
 
   return (

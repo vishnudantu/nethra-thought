@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, MapPin, Phone, Mail, Globe, Twitter, Facebook, Instagram, Youtube, CreditCard as Edit3, Save, X, Plus, Trash2, ChevronDown, ChevronUp, Award, BookOpen, Calendar, TrendingUp, Users, Map, Building, BarChart3, Shield, AlertTriangle, CheckCircle, Camera, Star, Layers } from 'lucide-react';
+import { User, MapPin, Phone, Mail, Globe, Twitter, Facebook, Instagram, CreditCard as Edit3, Save, X, Plus, Trash2, Award, BookOpen, Calendar, TrendingUp, Users, Map, Building, BarChart3, CheckCircle, Star } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface PoliticianProfile {
@@ -129,13 +129,24 @@ export default function Profile() {
   const [newLanguage, setNewLanguage] = useState('');
   const [newAchievement, setNewAchievement] = useState('');
 
-  useEffect(() => {
-    fetchProfiles();
+  const fetchCasteDemographics = useCallback(async (constProfileId: string) => {
+    const allCaste = await api.list('caste_demographics') as CasteDemographic[];
+    const data = allCaste.filter(cd => cd.constituency_profile_id === constProfileId);
+    setCasteDemographics(data || []);
   }, []);
 
-  async function fetchProfiles() {
+  const fetchConstituency = useCallback(async (politicianId: string) => {
+    const allConst = await api.list('constituency_profiles') as ConstituencyProfile[];
+    const data = allConst.find(cp => cp.politician_id === politicianId) || null;
+    setConstProfile(data);
+    setConstForm(data || {});
+    if (data) await fetchCasteDemographics(data.id);
+    else setCasteDemographics([]);
+  }, [fetchCasteDemographics]);
+
+  const fetchProfiles = useCallback(async () => {
     setLoading(true);
-    const data = await api.list('politician_profiles', { order: 'created_at', dir: 'ASC' });
+    const data = await api.list('politician_profiles', { order: 'created_at', dir: 'ASC' }) as PoliticianProfile[];
     if (data && data.length > 0) {
       setProfiles(data);
       setSelectedProfile(data[0]);
@@ -143,22 +154,11 @@ export default function Profile() {
       await fetchConstituency(data[0].id);
     }
     setLoading(false);
-  }
+  }, [fetchConstituency]);
 
-  async function fetchConstituency(politicianId: string) {
-    const allConst = await api.list('constituency_profiles');
-    const data = allConst.find((cp: any) => cp.politician_id === politicianId) || null;
-    setConstProfile(data);
-    setConstForm(data || {});
-    if (data) await fetchCasteDemographics(data.id);
-    else setCasteDemographics([]);
-  }
-
-  async function fetchCasteDemographics(constProfileId: string) {
-    const allCaste = await api.list('caste_demographics');
-    const data = allCaste.filter((cd: any) => cd.constituency_profile_id === constProfileId);
-    setCasteDemographics(data || []);
-  }
+  useEffect(() => {
+    fetchProfiles();
+  }, [fetchProfiles]);
 
   async function saveProfile() {
     setSaving(true);
@@ -361,7 +361,6 @@ export default function Profile() {
             {activeTab === 0 && (
               <ProfileTab
                 key="profile"
-                profile={selectedProfile}
                 form={profileForm}
                 editing={editingProfile}
                 saving={saving}
@@ -460,9 +459,8 @@ export default function Profile() {
 
 // ─── Profile Tab ────────────────────────────────────────────────────────────
 
-function ProfileTab({ profile, form, editing, saving, newLanguage, newAchievement,
+function ProfileTab({ form, editing, saving, newLanguage, newAchievement,
   setNewLanguage, setNewAchievement, onChange, onSave, onCancel }: {
-  profile: PoliticianProfile;
   form: Partial<PoliticianProfile>;
   editing: boolean;
   saving: boolean;

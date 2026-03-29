@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Plus, CreditCard as Edit2, Trash2, Check, X, AlertCircle, Mail, UserCheck, Shield, Building2, ChevronDown, Search, ToggleLeft, ToggleRight, Key, RefreshCw, Eye, EyeOff, Copy, CheckCheck } from 'lucide-react';
+import { Users, Plus, Trash2, Check, X, AlertCircle, UserCheck, Shield, Building2, Search, ToggleLeft, ToggleRight, Key, RefreshCw, Eye, EyeOff, Copy, CheckCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import Badge from '../components/ui/Badge';
 
 interface Politician {
   id: string;
@@ -50,11 +51,50 @@ const defaultForm: DeployForm = {
   slug: '', color_primary: '#00d4aa', color_secondary: '#1e88e5',
 };
 
+interface AutofillExtra {
+  constituency_name?: string;
+  state?: string;
+  constituency_stats?: {
+    total_voters?: number;
+    registered_voters?: number;
+    area_sqkm?: number;
+    population?: number;
+    total_mandals?: number;
+    total_villages?: number;
+    total_booths?: number;
+    literacy_rate?: number;
+    sex_ratio?: number;
+  };
+  confidence?: string;
+}
+
+type AutofillWindow = Window & { __autofill_extra?: AutofillExtra };
+
+interface ApiKeyRecord {
+  key_name: string;
+  key_hint?: string;
+  is_active: number;
+  updated_at?: string;
+}
+
+const API_KEY_ITEMS = [
+  { key_name: 'GEMINI_API_KEY', label: 'Gemini API Key' },
+  { key_name: 'YOUTUBE_API_KEY', label: 'YouTube Data API Key' },
+  { key_name: 'TWITTER_BEARER_TOKEN', label: 'X (Twitter) Bearer Token' },
+  { key_name: 'WHATSAPP_WEBHOOK_SECRET', label: 'WhatsApp Webhook Secret' },
+  { key_name: 'OPENAI_API_KEY', label: 'OpenAI API Key' },
+  { key_name: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key' },
+];
+
 export default function SuperAdmin() {
   const { refreshPoliticians } = useAuth();
-  const [tab, setTab] = useState<'politicians' | 'users'>('politicians');
+  const [tab, setTab] = useState<'politicians' | 'users' | 'api-keys'>('politicians');
   const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
+  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+  const [masterKeyConfigured, setMasterKeyConfigured] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [showDeploy, setShowDeploy] = useState(false);
   const [form, setForm] = useState<DeployForm>(defaultForm);
@@ -75,17 +115,25 @@ export default function SuperAdmin() {
 
   async function fetchData() {
     setLoading(true);
-    const [polData, usersData] = await Promise.all([
+    const [polDataRaw, usersDataRaw] = await Promise.all([
       api.list('politician_profiles'),
       api.get('/api/admin/users'),
     ]);
-    if (polData) setPoliticians(polData);
-    if (usersData) {
-      const enriched = usersData.map((r: any) => ({
-        ...r,
-        politician_name: polData?.find((p: any) => p.id === r.politician_id)?.full_name,
-      }));
-      setUsers(enriched);
+    const polData = polDataRaw as Politician[];
+    const usersData = usersDataRaw as ManagedUser[];
+    const enriched = usersData.map(r => ({
+      ...r,
+      politician_name: polData?.find(p => p.id === r.politician_id)?.full_name,
+    }));
+    setPoliticians(polData || []);
+    setUsers(enriched || []);
+    try {
+      const keyRes = await api.get('/api/admin/api-keys') as { keys: ApiKeyRecord[]; masterKeyConfigured: boolean };
+      setApiKeys(keyRes?.keys || []);
+      setMasterKeyConfigured(!!keyRes?.masterKeyConfigured);
+    } catch {
+      setApiKeys([]);
+      setMasterKeyConfigured(false);
     }
     setLoading(false);
   }
@@ -97,6 +145,31 @@ export default function SuperAdmin() {
   function generatePassword() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
     return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+
+  async function saveApiKey(name: string) {
+    const value = keyInputs[name];
+    if (!value) return;
+    try {
+      await api.post('/api/admin/api-keys', { key_name: name, value });
+      setApiKeyStatus(`Saved ${name}`);
+      setKeyInputs(prev => ({ ...prev, [name]: '' }));
+      await fetchData();
+      setTimeout(() => setApiKeyStatus(''), 3000);
+    } catch {
+      setApiKeyStatus(`Failed to save ${name}`);
+    }
+  }
+
+  async function deleteApiKey(name: string) {
+    try {
+      await api.delete(`/api/admin/api-keys/${name}`);
+      setApiKeyStatus(`Removed ${name}`);
+      await fetchData();
+      setTimeout(() => setApiKeyStatus(''), 3000);
+    } catch {
+      setApiKeyStatus(`Failed to remove ${name}`);
+    }
   }
 
   async function handleAutoFill() {
@@ -122,10 +195,11 @@ export default function SuperAdmin() {
         color_secondary: prev.color_secondary,
       }));
       // Store extra data for after profile creation
-      (window as any).__autofill_extra = data;
+      (window as AutofillWindow).__autofill_extra = data;
       setAutofillSuccess(`Auto-filled from AI${data.confidence ? ' (confidence: ' + data.confidence + ')' : ''}. Review and adjust before saving.`);
-    } catch (err: any) {
-      setAutofillError(err.message || 'Could not find politician data. Fill manually.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not find politician data. Fill manually.';
+      setAutofillError(message);
     }
     setAutofilling(false);
   }
@@ -167,32 +241,33 @@ export default function SuperAdmin() {
       });
 
       // Save constituency stats if autofill data available
-      const extra = (window as any).__autofill_extra;
+      const extra = (window as AutofillWindow).__autofill_extra;
       if (extra?.constituency_stats && polData?.id) {
         const cs = extra.constituency_stats;
         await api.create('constituency_profiles', {
           politician_id: polData.id,
           constituency_name: extra.constituency_name || form.constituency_name,
           state: extra.state || form.state,
-          total_voters: cs.total_voters || 0,
-          registered_voters: cs.registered_voters || 0,
-          area_sqkm: cs.area_sqkm || 0,
-          population: cs.population || 0,
-          total_mandals: cs.total_mandals || 0,
-          total_villages: cs.total_villages || 0,
-          total_booths: cs.total_booths || 0,
-          literacy_rate: cs.literacy_rate || 0,
-          sex_ratio: cs.sex_ratio || 0,
+          total_voters: cs.total_voters ?? 0,
+          registered_voters: cs.registered_voters ?? 0,
+          area_sqkm: cs.area_sqkm ?? 0,
+          population: cs.population ?? 0,
+          total_mandals: cs.total_mandals ?? 0,
+          total_villages: cs.total_villages ?? 0,
+          total_booths: cs.total_booths ?? 0,
+          literacy_rate: cs.literacy_rate ?? 0,
+          sex_ratio: cs.sex_ratio ?? 0,
         }).catch(() => {});
-        delete (window as any).__autofill_extra;
+        delete (window as AutofillWindow).__autofill_extra;
       }
       setDeploySuccess(`${form.full_name} has been deployed successfully! Login: ${form.email}`);
       setForm(defaultForm);
       setShowDeploy(false);
       await fetchData();
       await refreshPoliticians();
-    } catch (err: any) {
-      setDeployError(err.message || 'Deployment failed. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Deployment failed. Please try again.';
+      setDeployError(message);
     }
     setDeploying(false);
   }
@@ -287,7 +362,7 @@ export default function SuperAdmin() {
 
       <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
         <div className="flex items-center gap-0 p-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          {(['politicians', 'users'] as const).map(t => (
+          {(['politicians', 'users', 'api-keys'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -298,7 +373,11 @@ export default function SuperAdmin() {
                 color: tab === t ? '#00d4aa' : '#8899bb',
               }}
             >
-              {t === 'politicians' ? `Deployed Politicians (${politicians.length})` : `Platform Users (${users.length})`}
+              {t === 'politicians'
+                ? `Deployed Politicians (${politicians.length})`
+                : t === 'users'
+                ? `Platform Users (${users.length})`
+                : 'API Keys'}
             </button>
           ))}
           <div className="flex-1" />
@@ -322,8 +401,77 @@ export default function SuperAdmin() {
             <div className="w-8 h-8 rounded-full border-2 animate-spin mx-auto mb-3" style={{ borderColor: 'rgba(0,212,170,0.2)', borderTopColor: '#00d4aa' }} />
             Loading...
           </div>
+        ) : tab === 'api-keys' ? (
+          <div className="p-5 space-y-4">
+            {!masterKeyConfigured && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+                style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+                <AlertCircle size={15} />
+                <span style={{ fontSize: 13 }}>API_KEYS_MASTER_KEY is not configured on the server.</span>
+              </div>
+            )}
+            {apiKeyStatus && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+                style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa' }}>
+                <Check size={14} />
+                <span style={{ fontSize: 13 }}>{apiKeyStatus}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {API_KEY_ITEMS.map(item => {
+                const existing = apiKeys.find(k => k.key_name === item.key_name);
+                return (
+                  <div key={item.key_name} className="glass-card rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: '#8899bb' }}>{item.key_name}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={existing?.is_active ? 'success' : 'neutral'}>
+                          {existing?.is_active ? 'Active' : 'Not Set'}
+                        </Badge>
+                        {existing?.key_hint && (
+                          <span style={{ fontSize: 11, color: '#8899bb' }}>{existing.key_hint}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="password"
+                        className="input-field"
+                        placeholder="Paste new key"
+                        value={keyInputs[item.key_name] || ''}
+                        onChange={e => setKeyInputs(prev => ({ ...prev, [item.key_name]: e.target.value }))}
+                      />
+                      <button
+                        onClick={() => saveApiKey(item.key_name)}
+                        className="btn-primary"
+                        disabled={!masterKeyConfigured || !(keyInputs[item.key_name] || '').trim()}
+                      >
+                        Save
+                      </button>
+                      {existing?.is_active && (
+                        <button
+                          onClick={() => deleteApiKey(item.key_name)}
+                          className="btn-secondary"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {existing?.updated_at && (
+                      <div style={{ fontSize: 11, color: '#6677aa', marginTop: 6 }}>
+                        Updated: {new Date(existing.updated_at).toLocaleString('en-IN')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : tab === 'politicians' ? (
-          <div className="divide-y" style={{ divideColor: 'rgba(255,255,255,0.04)' }}>
+          <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
             {filteredPoliticians.length === 0 ? (
               <div className="py-16 text-center" style={{ color: '#8899bb' }}>
                 <Building2 size={40} className="mx-auto mb-3 opacity-30" />
@@ -379,7 +527,7 @@ export default function SuperAdmin() {
             ))}
           </div>
         ) : (
-          <div className="divide-y" style={{ divideColor: 'rgba(255,255,255,0.04)' }}>
+          <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
             {users.length === 0 ? (
               <div className="py-16 text-center" style={{ color: '#8899bb' }}>
                 <Users size={40} className="mx-auto mb-3 opacity-30" />

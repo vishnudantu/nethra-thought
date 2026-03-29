@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import {
   FileText, Calendar, Users, TrendingUp, ArrowUp, ArrowDown,
   AlertCircle, CheckCircle2, Clock, Newspaper, Wallet,
@@ -7,13 +7,15 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import Badge, { statusBadge, priorityBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge, priorityBadge } from '../components/ui/badgeUtils';
+import type { Grievance, Event, Finance, MediaMention, Project, TeamMember } from '../lib/types';
 
-const cardVariants = {
+const cardVariants: Variants = {
   hidden: { opacity: 0, y: 24 },
   visible: (i: number) => ({
     opacity: 1, y: 0,
-    transition: { delay: i * 0.07, duration: 0.5, ease: 'easeOut' }
+    transition: { delay: i * 0.07, duration: 0.5, ease: [0.16, 1, 0.3, 1] }
   }),
 };
 
@@ -65,10 +67,10 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
   const { activePolitician, userRole } = useAuth();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
-  const [grievances, setGrievances] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [media, setMedia] = useState<any[]>([]);
+  const [grievances, setGrievances] = useState<Grievance[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [media, setMedia] = useState<MediaMention[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalGrievances: 0, pendingGrievances: 0, resolvedGrievances: 0,
@@ -78,7 +80,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
 
   useEffect(() => {
     async function fetchAll() {
-      const [grievanceData, eventsData, projectsData, mediaData, teamData, finData] = await Promise.all([
+      const [grievanceDataRaw, eventsDataRaw, projectsDataRaw, mediaDataRaw, teamDataRaw, finDataRaw] = await Promise.all([
         api.list('grievances', { order: 'created_at', dir: 'DESC', limit: '50' }),
         api.list('events', { order: 'start_date', dir: 'ASC', limit: '5' }),
         api.list('projects', { order: 'created_at', dir: 'DESC', limit: '5' }),
@@ -87,7 +89,16 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
         api.list('finances'),
       ]);
 
-      const income = finData.filter((f: any) => f.transaction_type === 'Income').reduce((s: number, f: any) => s + parseFloat(f.amount || 0), 0);
+      const grievanceData = grievanceDataRaw as Grievance[];
+      const eventsData = eventsDataRaw as Event[];
+      const projectsData = projectsDataRaw as Project[];
+      const mediaData = mediaDataRaw as MediaMention[];
+      const teamData = teamDataRaw as TeamMember[];
+      const finData = finDataRaw as Finance[];
+
+      const income = finData
+        .filter(f => f.transaction_type === 'Income')
+        .reduce((s, f) => s + Number(f.amount ?? 0), 0);
 
       setGrievances(grievanceData);
       setEvents(eventsData);
@@ -178,7 +189,9 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
             {loading ? [1,2,3].map(i => (
               <div key={i} className="shimmer h-16 rounded-xl" />
             )) : projects.slice(0, 4).map((p, i) => {
-              const utilization = p.budget_allocated ? Math.round((parseFloat(p.budget_spent) / parseFloat(p.budget_allocated)) * 100) : 0;
+              const spent = Number(p.budget_spent ?? 0);
+              const allocated = Number(p.budget_allocated ?? 0);
+              const utilization = allocated ? Math.round((spent / allocated) * 100) : 0;
               const colors = ['#00d4aa', '#42a5f5', '#ffa726', '#ef5350', '#ab47bc', '#26c6da'];
               const color = colors[i % colors.length];
               return (
@@ -210,7 +223,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
                   <div className="flex justify-between mt-1">
                     <span style={{ fontSize: 11, color: '#8899bb' }}>{p.mandal}</span>
                     <span style={{ fontSize: 11, color: '#8899bb' }}>
-                      ₹{(parseFloat(p.budget_spent) / 100000).toFixed(1)}L / ₹{(parseFloat(p.budget_allocated) / 100000).toFixed(1)}L ({utilization}%)
+                      ₹{(spent / 100000).toFixed(1)}L / ₹{(allocated / 100000).toFixed(1)}L ({utilization}%)
                     </span>
                   </div>
                 </motion.div>

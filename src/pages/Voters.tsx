@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users, Search, X, Star, Upload, Download, Filter, UserCheck, AlertCircle, TrendingUp, ChevronDown, FileText, CreditCard as Edit2, Trash2, CheckCircle, XCircle, BarChart2 } from 'lucide-react';
+import { Plus, Users, Search, X, Star, Upload, Download, UserCheck, AlertCircle, CreditCard as Edit2, Trash2, CheckCircle, BarChart2 } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Voter } from '../lib/types';
 
@@ -247,14 +247,15 @@ function CSVImportModal({ onClose, onImport }: { onClose: () => void; onImport: 
         };
         try {
           // Try update first, fall back to create (upsert by voter_id)
-          const existing = await api.list('voters', { search: voterData.voter_id });
-          const match = existing.find((v: any) => v.voter_id === voterData.voter_id);
+          const existing = await api.list('voters', { search: voterData.voter_id }) as Voter[];
+          const match = existing.find(v => v.voter_id === voterData.voter_id);
           if (match) { await api.update('voters', match.id, voterData); }
           else { await api.create('voters', voterData); }
           success++;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
           failed++;
-          errors.push(`Failed to import ${row.name}: ${err.message}`);
+          errors.push(`Failed to import ${row.name}: ${message}`);
         }
       }
 
@@ -423,19 +424,19 @@ export default function Voters() {
   const [importToast, setImportToast] = useState('');
   const PAGE_SIZE = 20;
 
-  async function fetchVoters() {
+  const fetchVoters = useCallback(async () => {
     setLoading(true);
-    const allVoters = await api.list('voters', { order: 'created_at', dir: 'DESC', limit: '2000' });
+    const allVoters = await api.list('voters', { order: 'created_at', dir: 'DESC', limit: '2000' }) as Voter[];
     let filtered = allVoters || [];
-    if (partyFilter !== 'All') filtered = filtered.filter((v: any) => v.party_affiliation === partyFilter);
-    if (supportFilter !== 'All') filtered = filtered.filter((v: any) => String(v.support_level) === supportFilter);
-    if (casteFilter !== 'All') filtered = filtered.filter((v: any) => v.caste_category === casteFilter);
+    if (partyFilter !== 'All') filtered = filtered.filter(v => v.party_affiliation === partyFilter);
+    if (supportFilter !== 'All') filtered = filtered.filter(v => String(v.support_level) === supportFilter);
+    if (casteFilter !== 'All') filtered = filtered.filter(v => (v as Voter & { caste_category?: string }).caste_category === casteFilter);
     setTotalCount(filtered.length);
     setVoters(filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
     setLoading(false);
-  }
+  }, [partyFilter, supportFilter, casteFilter, page, PAGE_SIZE]);
 
-  useEffect(() => { fetchVoters(); }, [page, partyFilter, supportFilter, casteFilter]);
+  useEffect(() => { fetchVoters(); }, [fetchVoters]);
 
   const filtered = voters.filter(v =>
     !search || v.name.toLowerCase().includes(search.toLowerCase()) ||

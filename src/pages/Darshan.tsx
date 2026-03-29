@@ -4,7 +4,7 @@ import {
   Plus, Search, X, Star, Users, Calendar, CheckCircle, Clock,
   CreditCard as Edit2, Trash2, ListOrdered, Ban, ArrowUpCircle,
   Info, ShieldCheck, ThumbsUp, ThumbsDown, MessageSquare, Send,
-  AlertTriangle, Phone, Bell, Lock
+  Bell, Lock
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -67,12 +67,6 @@ const STATUS_COLORS: Record<string, string> = {
   'Waitlisted': '#f06292',
 };
 
-const APPROVAL_COLORS: Record<string, { bg: string; color: string; label: string }> = {
-  pending:  { bg: 'rgba(255,167,38,0.12)',  color: '#ffa726', label: 'Pending Approval' },
-  approved: { bg: 'rgba(0,200,100,0.12)',   color: '#00c864', label: 'Approved' },
-  rejected: { bg: 'rgba(255,85,85,0.12)',   color: '#ff5555', label: 'Rejected' },
-};
-
 type EligibilityResult =
   | { eligible: true }
   | { eligible: false; reason: string; cooldown_until?: string };
@@ -82,13 +76,8 @@ async function checkEligibility(contact: string, currentBookingId?: string): Pro
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  const { data } = await supabase
-    .from('darshan_bookings')
-    .select('id, pilgrim_name, darshan_date, cooldown_until, status')
-    .eq('pilgrim_contact', contact)
-    .neq('status', 'Cancelled')
-    .eq('is_waitlisted', false)
-    .order('darshan_date', { ascending: false });
+  const allBookings = await api.list('darshan_bookings', { order: 'darshan_date', dir: 'DESC', limit: '2000' }) as DarshanBooking[];
+  const data = allBookings.filter(b => b.pilgrim_contact === contact && b.status !== 'Cancelled' && !b.is_waitlisted);
 
   if (!data || data.length === 0) return { eligible: true };
   const relevant = data.filter(b => !currentBookingId || b.id !== currentBookingId);
@@ -120,11 +109,8 @@ async function checkEligibility(contact: string, currentBookingId?: string): Pro
 }
 
 async function checkDateAvailability(date: string, currentBookingId?: string): Promise<{ available: boolean; waitlistCount: number; slot: DateSlot | null }> {
-  const { data: slot } = await supabase
-    .from('darshan_date_slots')
-    .select('*')
-    .eq('slot_date', date)
-    .maybeSingle();
+  const slots = await api.list('darshan_date_slots') as DateSlot[];
+  const slot = slots.find(s => s.slot_date === date) || null;
   if (!slot) return { available: true, waitlistCount: 0, slot: null };
   const isCurrentlyFilled = slot.is_filled && slot.confirmed_booking_id !== currentBookingId;
   return { available: !isCurrentlyFilled, waitlistCount: slot.waitlist_count, slot };
@@ -167,14 +153,14 @@ function BookingModal({ booking, onClose, onSave }: { booking: Partial<DarshanBo
       setCheckingEligibility(true);
       checkEligibility(form.pilgrim_contact, booking?.id).then(r => { setEligibility(r); setCheckingEligibility(false); });
     } else { setEligibility(null); }
-  }, [form.pilgrim_contact]);
+  }, [form.pilgrim_contact, booking?.id]);
 
   useEffect(() => {
     if (form.darshan_date && !isEdit) {
       setCheckingDate(true);
       checkDateAvailability(form.darshan_date, booking?.id).then(r => { setDateAvailability(r); setCheckingDate(false); });
     } else { setDateAvailability(null); }
-  }, [form.darshan_date]);
+  }, [form.darshan_date, booking?.id, isEdit]);
 
   async function handleSave() {
     if (!form.pilgrim_name || !form.pilgrim_contact || !form.darshan_date) return;
@@ -452,7 +438,9 @@ function ApprovalModal({ booking, onClose, onDone }: { booking: DarshanBooking; 
           contact_phone: contactPhone,
         }),
       });
-    } catch (_) {}
+    } catch (err) {
+      console.error('[darshan-sms]', err);
+    }
     setProcessing(false);
     onDone();
     onClose();
@@ -632,7 +620,7 @@ export default function Darshan() {
 
   async function fetchData() {
     setLoading(true);
-    const data = await api.list('darshan_bookings');
+    const data = await api.list('darshan_bookings') as DarshanBooking[];
     setBookings(data || []);
     setLoading(false);
   }
@@ -640,8 +628,8 @@ export default function Darshan() {
   async function deleteBooking(id: string) {
     const booking = bookings.find(b => b.id === id);
     if (booking && !booking.is_waitlisted) {
-      const slots = await api.list('darshan_date_slots');
-      const slot = slots.find((s: any) => s.slot_date === booking.darshan_date);
+      const slots = await api.list('darshan_date_slots') as DateSlot[];
+      const slot = slots.find(s => s.slot_date === booking.darshan_date);
       if (slot) await api.update('darshan_date_slots', slot.id, { is_filled: false, confirmed_booking_id: null });
     }
     await api.remove('darshan_bookings', id);
@@ -655,8 +643,8 @@ export default function Darshan() {
     const cooldownDate = new Date(booking.darshan_date);
     cooldownDate.setMonth(cooldownDate.getMonth() + 6);
     await api.update('darshan_bookings', bookingId, { is_waitlisted: false, waitlist_position: null, status: 'Booked', promoted_from_waitlist: true, cooldown_until: cooldownDate.toISOString().split('T')[0], approval_status: 'pending' });
-    const slots = await api.list('darshan_date_slots');
-    const slot = slots.find((s: any) => s.slot_date === booking.darshan_date);
+    const slots = await api.list('darshan_date_slots') as DateSlot[];
+    const slot = slots.find(s => s.slot_date === booking.darshan_date);
     if (slot) await api.update('darshan_date_slots', slot.id, { is_filled: true, confirmed_booking_id: bookingId });
     else await api.create('darshan_date_slots', { slot_date: booking.darshan_date, is_filled: true, confirmed_booking_id: bookingId, waitlist_count: 0 });
     setTab('pending');

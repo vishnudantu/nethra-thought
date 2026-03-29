@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+/* eslint-disable react-refresh/only-export-components */
 import { api } from './api';
 
 export interface UserRole {
   id: string;
+  email?: string;
   role: 'super_admin' | 'politician_admin' | 'staff';
   politician_id: string | null;
 }

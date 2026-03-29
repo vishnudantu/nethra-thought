@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Plus, X, CheckCircle, Clock, AlertTriangle, TrendingUp, FileText, Mic, Target, Eye, Bell, Zap, ChevronDown, ChevronUp, Star, MessageSquare, BarChart3, Lightbulb, Shield, Users, CreditCard as Edit2, Trash2, BookOpen, Calendar, Radio, Flame } from 'lucide-react';
+import { Sparkles, Plus, X, CheckCircle, AlertTriangle, TrendingUp, FileText, Mic, Target, Eye, Bell, Zap, ChevronDown, ChevronUp, Star, MessageSquare, BarChart3, Lightbulb, Shield, Users, CreditCard as Edit2, Trash2, BookOpen, Radio, Flame } from 'lucide-react';
 import { api } from '../lib/api';
 
 type BriefingType = 'Daily Digest' | 'Speech Draft' | 'Talking Points' | 'Risk Alert' | 'Opportunity Alert' | 'Opposition Tracker' | 'Constituency Pulse';
@@ -217,7 +217,6 @@ function BriefingModal({ b, onClose, onSave }: { b: Partial<Briefing> | null; on
 
 export default function PoliticalBriefing() {
   const [briefings, setBriefings] = useState<Briefing[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'briefings' | 'roadmap'>('briefings');
   const [filter, setFilter] = useState<BriefingType | 'All'>('All');
   const [modal, setModal] = useState<{ open: boolean; data: Partial<Briefing> | null }>({ open: false, data: null });
@@ -225,10 +224,8 @@ export default function PoliticalBriefing() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   async function fetchData() {
-    setLoading(true);
     const data = await api.list('ai_briefings', { order: 'created_at', dir: 'DESC' });
     setBriefings(data || []);
-    setLoading(false);
   }
 
   async function markRead(id: string, val: boolean) {

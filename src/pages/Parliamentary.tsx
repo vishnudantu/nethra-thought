@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scale, Plus, Search, X, ExternalLink, CheckCircle, Clock, FileText, MessageSquare, Vote, Tag, Calendar, Building2, BookOpen, Mic, ChevronDown, ChevronUp, Info, Filter, TrendingUp, Award, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { Scale, Plus, Search, X, ExternalLink, CheckCircle, MessageSquare, Vote, Mic, ChevronDown, ChevronUp, CreditCard as Edit2, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 
 type House = 'Lok Sabha' | 'Rajya Sabha';
@@ -85,8 +85,6 @@ const Q_TYPE_COLORS: Record<QType, string> = {
   'Short Notice':   '#f06292',
   'Private Member': '#00d4aa',
 };
-
-const SANSAD_BASE = 'https://sansad.in/ls/questions';
 
 function QuestionModal({ q, onClose, onSave }: { q: Partial<PQuestion> | null; onClose: () => void; onSave: () => void }) {
   const isEdit = !!q?.id;
@@ -419,7 +417,6 @@ export default function Parliamentary() {
   const [questions, setQuestions] = useState<PQuestion[]>([]);
   const [debates, setDebates] = useState<PDebate[]>([]);
   const [bills, setBills] = useState<PBill[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [qModal, setQModal] = useState<{ open: boolean; data: Partial<PQuestion> | null }>({ open: false, data: null });
   const [dModal, setDModal] = useState<{ open: boolean; data: Partial<PDebate> | null }>({ open: false, data: null });
@@ -428,7 +425,6 @@ export default function Parliamentary() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   async function fetchAll() {
-    setLoading(true);
     const [questions, debates, bills] = await Promise.all([
       api.list('parliamentary_questions', { order: 'created_at', dir: 'DESC' }),
       api.list('parliamentary_debates', { order: 'created_at', dir: 'DESC' }),
@@ -437,7 +433,6 @@ export default function Parliamentary() {
     setQuestions(questions || []);
     setDebates(debates || []);
     setBills(bills || []);
-    setLoading(false);
   }
 
   useEffect(() => { fetchAll(); }, []);

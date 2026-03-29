@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Filter, X, CheckCircle, Clock, AlertCircle, TrendingUp, FileText } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge, { statusBadge, priorityBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge, priorityBadge } from '../components/ui/badgeUtils';
 import type { Grievance } from '../lib/types';
 
 const categories = ['All', 'Infrastructure', 'Water Supply', 'Education', 'Healthcare', 'Agriculture', 'Electricity', 'Social Welfare', 'General'];
@@ -88,13 +89,13 @@ function Modal({ grievance, onClose, onSave }: {
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Priority</label>
-              <select className="input-field" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as any })}>
+              <select className="input-field" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as Grievance['priority'] })}>
                 {priorities.map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Status</label>
-              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Grievance['status'] })}>
                 {statuses.filter(s => s !== 'All').map(s => <option key={s}>{s}</option>)}
               </select>
             </div>

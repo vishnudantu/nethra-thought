@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Users, FileText, Activity, Target, Zap } from 'lucide-react';
+import { TrendingUp, FileText, Activity, Target, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Stats {
@@ -16,7 +16,6 @@ function DonutChart({ positive, negative, neutral }: { positive: number; negativ
   if (total === 0) return null;
   const pPos = (positive / total) * 100;
   const pNeg = (negative / total) * 100;
-  const pNeu = (neutral / total) * 100;
 
   return (
     <div className="flex items-center gap-6">
@@ -81,6 +80,12 @@ function BarChartComponent({ data, color }: { data: { label: string; value: numb
 }
 
 export default function Analytics() {
+  type Grievance = { category?: string; status?: string };
+  type Project = { status?: string; budget_allocated?: string | number; budget_spent?: string | number };
+  type MediaMention = { sentiment?: string };
+  type TeamMember = { status?: string };
+  type Finance = { transaction_type?: string; amount?: string | number };
+
   const [stats, setStats] = useState<Stats>({
     grievances: { total: 0, resolved: 0, pending: 0, categories: {} },
     projects: { total: 0, inProgress: 0, completed: 0, totalBudget: 0, totalSpent: 0 },
@@ -92,7 +97,7 @@ export default function Analytics() {
 
   useEffect(() => {
     async function fetchStats() {
-      const [gData, pData, mData, tData, fData] = await Promise.all([
+      const [gDataRaw, pDataRaw, mDataRaw, tDataRaw, fDataRaw] = await Promise.all([
         api.list('grievances'),
         api.list('projects'),
         api.list('media_mentions'),
@@ -100,7 +105,16 @@ export default function Analytics() {
         api.list('finances'),
       ]);
 
-      const catCounts = gData.reduce((acc: Record<string,number>, g: any) => ({ ...acc, [g.category]: (acc[g.category] || 0) + 1 }), {} as Record<string, number>);
+      const gData = gDataRaw as Grievance[];
+      const pData = pDataRaw as Project[];
+      const mData = mDataRaw as MediaMention[];
+      const tData = tDataRaw as TeamMember[];
+      const fData = fDataRaw as Finance[];
+
+      const catCounts = gData.reduce((acc: Record<string, number>, g) => {
+        const key = g.category || 'Uncategorized';
+        return { ...acc, [key]: (acc[key] || 0) + 1 };
+      }, {} as Record<string, number>);
 
       setStats({
         grievances: {
@@ -113,8 +127,8 @@ export default function Analytics() {
           total: pData.length,
           inProgress: pData.filter(p => p.status === 'In Progress').length,
           completed: pData.filter(p => p.status === 'Completed').length,
-          totalBudget: pData.reduce((s: number, p: any) => s + parseFloat(p.budget_allocated || 0), 0),
-          totalSpent: pData.reduce((s: number, p: any) => s + parseFloat(p.budget_spent || 0), 0),
+          totalBudget: pData.reduce((s, p) => s + Number(p.budget_allocated || 0), 0),
+          totalSpent: pData.reduce((s, p) => s + Number(p.budget_spent || 0), 0),
         },
         media: {
           positive: mData.filter(m => m.sentiment === 'Positive').length,
@@ -127,8 +141,8 @@ export default function Analytics() {
           total: tData.length,
         },
         finance: {
-          income: fData.filter(f => f.transaction_type === 'Income').reduce((s: number, f: any) => s + parseFloat(f.amount || 0), 0),
-          expense: fData.filter(f => f.transaction_type === 'Expense').reduce((s: number, f: any) => s + parseFloat(f.amount || 0), 0),
+          income: fData.filter(f => f.transaction_type === 'Income').reduce((s, f) => s + Number(f.amount || 0), 0),
+          expense: fData.filter(f => f.transaction_type === 'Expense').reduce((s, f) => s + Number(f.amount || 0), 0),
         },
       });
       setLoading(false);

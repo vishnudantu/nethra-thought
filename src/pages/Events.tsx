@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Calendar, MapPin, Users, Clock, X } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, X } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge, { statusBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge } from '../components/ui/badgeUtils';
 import type { Event } from '../lib/types';
 
 const eventTypes = ['Meeting', 'Rally', 'Inauguration', 'Campaign', 'Official Visit', 'Press Conference', 'Public Hearing', 'Party Event', 'Other'];
@@ -75,7 +76,7 @@ function EventModal({ event, onClose, onSave }: {
             </div>
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Status</label>
-              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+              <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Event['status'] })}>
                 {['Upcoming', 'Ongoing', 'Completed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>

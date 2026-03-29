@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Wallet, TrendingUp, TrendingDown, X, IndianRupee } from 'lucide-react';
+import { Plus, Wallet, TrendingUp, TrendingDown, X } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge, { statusBadge } from '../components/ui/Badge';
+import Badge from '../components/ui/Badge';
+import { statusBadge } from '../components/ui/badgeUtils';
 import type { Finance as FinanceType } from '../lib/types';
 
 const incomeCategories = ['MPLADS Fund', 'Party Funds', 'Donation', 'Grant', 'Other'];
@@ -63,7 +64,7 @@ function FinanceModal({ transaction, onClose, onSave }: {
             {['Income', 'Expense'].map(t => (
               <button
                 key={t}
-                onClick={() => setForm({ ...form, transaction_type: t as any, category: t === 'Income' ? 'MPLADS Fund' : 'Infrastructure' })}
+                onClick={() => setForm({ ...form, transaction_type: t as FinanceType['transaction_type'], category: t === 'Income' ? 'MPLADS Fund' : 'Infrastructure' })}
                 className="flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all"
                 style={{
                   background: form.transaction_type === t
@@ -134,7 +135,7 @@ export default function Finance() {
 
   async function fetchFinances() {
     setLoading(true);
-    const data = await api.list('finances', { order: 'created_at', dir: 'DESC' });
+    const data = await api.list('finances', { order: 'created_at', dir: 'DESC' }) as FinanceType[];
     setTransactions(data || []);
     setLoading(false);
   }
@@ -142,8 +143,8 @@ export default function Finance() {
   useEffect(() => { fetchFinances(); }, []);
 
   const filtered = filter === 'All' ? transactions : transactions.filter(t => t.transaction_type === filter);
-  const totalIncome = transactions.filter((t: any) => t.transaction_type === 'Income').reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
-  const totalExpense = transactions.filter((t: any) => t.transaction_type === 'Expense').reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+  const totalIncome = transactions.filter(t => t.transaction_type === 'Income').reduce((s, t) => s + Number(t.amount ?? 0), 0);
+  const totalExpense = transactions.filter(t => t.transaction_type === 'Expense').reduce((s, t) => s + Number(t.amount ?? 0), 0);
   const balance = totalIncome - totalExpense;
 
   return (
@@ -247,7 +248,7 @@ export default function Finance() {
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
                     color: t.transaction_type === 'Income' ? '#00c864' : '#ff5555' }}>
-                    {t.transaction_type === 'Income' ? '+' : '-'}₹{parseFloat(t.amount || 0).toLocaleString('en-IN')}
+                    {t.transaction_type === 'Income' ? '+' : '-'}₹{Number(t.amount ?? 0).toLocaleString('en-IN')}
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: '#8899bb' }}>{t.payment_mode}</td>
                   <td style={{ padding: '12px 14px' }}>

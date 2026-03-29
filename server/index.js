@@ -4,6 +4,9 @@ import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import pool from './db.js';
 import { signToken, authMiddleware } from './auth.js';
+import { initQueues, enqueueOmniScan, enqueueMorningBrief, getQueuesStatus } from './queues.js';
+import { generateMorningBrief } from './services/briefing.js';
+import { listApiKeys, upsertApiKey, deactivateApiKey, hasMasterKey, getApiKey } from './services/secretStore.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -12,6 +15,8 @@ app.use(cors({ origin: process.env.FRONTEND_URL || '*', methods: ['GET','POST','
 app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+initQueues();
 
 // ── AUTH ──────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
@@ -52,7 +57,7 @@ const POLITICIAN_SCOPED_TABLES = [
   'darshan_bookings','darshan_date_slots','darshan_donations','bills',
   'citizen_engagements','volunteers','suggestions','parliamentary_questions',
   'parliamentary_debates','parliamentary_bills','ai_briefings','constituencies',
-  'ai_generated_content'
+  'ai_generated_content','sentiment_scores','opposition_intelligence','voice_reports'
 ];
 
 function crud(table, searchCols = []) {
@@ -252,6 +257,9 @@ app.use('/api/parliamentary_bills',   crud('parliamentary_bills',    ['bill_name
 app.use('/api/ai_briefings',          crud('ai_briefings',           ['title','briefing_type']));
 app.use('/api/ai_generated_content',  crud('ai_generated_content',  ['content_type','prompt']));
 app.use('/api/constituencies',        crud('constituencies',         ['name','state']));
+app.use('/api/sentiment_scores',      crud('sentiment_scores',       []));
+app.use('/api/opposition_intelligence', crud('opposition_intelligence', ['opponent_name','activity_type','description']));
+app.use('/api/voice_reports',         crud('voice_reports',          ['reporter_name','classification','transcript']));
 
 // ── DARSHAN SMS ───────────────────────────────────────────────
 app.post('/api/darshan-sms', authMiddleware, async (req, res) => {
@@ -296,7 +304,7 @@ function buildPrompt(ctx, mode) {
 app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
   const { messages, politician_context, mode='chat', politician_id, save_content, content_type, prompt_summary } = req.body;
   if (!messages?.length) return res.status(400).json({ error: 'No messages provided' });
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = await getApiKey('GEMINI_API_KEY');
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
   const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
@@ -318,6 +326,73 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
       await pool.query('INSERT INTO ai_generated_content (politician_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,0)', [politician_id, content_type||mode, (prompt_summary||up).slice(0,500), full]);
     }
   } catch (e) { console.error('[ai-assistant]',e); if(!res.headersSent) res.status(500).json({error:e.message}); }
+});
+
+// ── OMNISCAN & MORNING BRIEF ────────────────────────────────
+app.post('/api/omniscan/trigger', authMiddleware, async (req, res) => {
+  try {
+    const job = await enqueueOmniScan();
+    res.json({ status: 'queued', jobId: job?.id || null, queues: getQueuesStatus() });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to trigger OmniScan' });
+  }
+});
+
+app.get('/api/omniscan/status', authMiddleware, async (req, res) => {
+  res.json(getQueuesStatus());
+});
+
+app.get('/api/briefing/today', authMiddleware, async (req, res) => {
+  try {
+    const briefing = await generateMorningBrief({ politicianId: req.user.politician_id, force: false });
+    res.json(briefing);
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to fetch briefing' });
+  }
+});
+
+app.post('/api/briefing/generate', authMiddleware, async (req, res) => {
+  try {
+    const job = await enqueueMorningBrief(req.user.politician_id);
+    res.json({ status: 'queued', jobId: job?.id || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to generate briefing' });
+  }
+});
+
+// ── WHATSAPP WEBHOOK (optional) ─────────────────────────────
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  try {
+    const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
+    if (secret && req.headers['x-webhook-secret'] !== secret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const payload = req.body || {};
+    const content = payload.message || payload.text || payload?.message?.text || '';
+    if (!content) return res.json({ ok: true, skipped: true });
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const mention = {
+      headline: String(content).slice(0, 500),
+      source: 'WhatsApp',
+      source_type: 'Social Media',
+      sentiment: 'Neutral',
+      language: payload.language || 'Unknown',
+      url: '',
+      published_at: now,
+      summary: String(content).slice(0, 1000),
+      tags: JSON.stringify(['omniscan', 'whatsapp']),
+      is_read: 0,
+      reach: 0,
+      ...(payload.politician_id ? { politician_id: payload.politician_id } : {}),
+    };
+    const keys = Object.keys(mention);
+    const cols = keys.map(k => `\`${k}\``).join(',');
+    const ph = keys.map(() => '?').join(',');
+    await pool.query(`INSERT INTO media_mentions (${cols}) VALUES (${ph})`, keys.map(k => mention[k]));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to ingest webhook' });
+  }
 });
 
 // ── SUPER ADMIN — USERS ───────────────────────────────────────
@@ -375,6 +450,40 @@ app.delete('/api/admin/users/:id', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── SUPER ADMIN — API KEYS ──────────────────────────────────
+app.get('/api/admin/api-keys', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const keys = await listApiKeys();
+    res.json({ keys, masterKeyConfigured: hasMasterKey() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/api-keys', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const { key_name, value } = req.body || {};
+  if (!key_name || !value) return res.status(400).json({ error: 'key_name and value required' });
+  try {
+    if (!hasMasterKey()) return res.status(500).json({ error: 'API_KEYS_MASTER_KEY not configured' });
+    const updated = await upsertApiKey(key_name, value);
+    res.json({ success: true, key: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/admin/api-keys/:name', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await deactivateApiKey(req.params.name);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Gemini\n`);
@@ -386,7 +495,7 @@ app.post('/api/politician-autofill', authMiddleware, async (req, res) => {
   const { name, type = 'MP' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = await getApiKey('GEMINI_API_KEY');
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
 
   const prompt = `You are a political data researcher for India. Search your knowledge and return detailed information about the Indian politician: "${name}" (${type}).
@@ -432,7 +541,7 @@ If you do not know a specific numeric value use null. If you do not recognize th
 
   try {
     // Use Groq for autofill if available, fallback to Gemini
-    const groqKey = process.env.GROQ_API_KEY;
+    const groqKey = await getApiKey('GROQ_API_KEY');
     let text = '';
 
     if (groqKey) {

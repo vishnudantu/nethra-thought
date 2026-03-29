@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ElementType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Calendar, Clock, User, Phone, Star, CheckCircle, XCircle, UserCheck, AlertCircle, Filter, Download, Eye, CreditCard as Edit2, Trash2, QrCode, Bell, BarChart2, ChevronDown, MapPin } from 'lucide-react';
+import { Plus, Search, X, Calendar, Clock, Star, CheckCircle, UserCheck, CreditCard as Edit2, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Appointment {
@@ -185,7 +185,7 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
   );
 }
 
-function StatCard({ icon: Icon, label, value, color, sub }: { icon: any; label: string; value: number | string; color: string; sub?: string }) {
+function StatCard({ icon: Icon, label, value, color, sub }: { icon: ElementType; label: string; value: number | string; color: string; sub?: string }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -217,7 +217,7 @@ export default function Appointments() {
 
   async function fetchAppointments() {
     setLoading(true);
-    const data = await api.list('appointments', { order: 'requested_date', dir: 'DESC' });
+    const data = await api.list('appointments', { order: 'requested_date', dir: 'DESC' }) as Appointment[];
     setAppointments(data || []);
     setLoading(false);
   }
@@ -247,7 +247,6 @@ export default function Appointments() {
   const todayAppts = appointments.filter(a => a.requested_date === new Date().toISOString().split('T')[0]);
   const checkedIn = appointments.filter(a => a.status === 'Checked In' || a.status === 'In Progress');
   const completed = appointments.filter(a => a.status === 'Completed');
-  const scheduled = appointments.filter(a => a.status === 'Scheduled' || a.status === 'Confirmed');
 
   return (
     <div className="space-y-6">

@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import {
-  Sparkles, Send, RefreshCw, Copy, CheckCheck, Save, Trash2,
+  Sparkles, RefreshCw, Copy, CheckCheck, Save, Trash2,
   FileText, Mic2, Newspaper, Users, Zap, MessageSquare, Search,
-  BookOpen, Clock, Star, ChevronRight, X, Download
+  BookOpen, Star, ChevronRight, X, Download
 } from 'lucide-react';
 import { api, streamFetch } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -59,23 +59,17 @@ export default function AIStudio() {
   const secondaryColor = activePolitician?.color_secondary || '#1e88e5';
   const currentType = CONTENT_TYPES.find(t => t.id === activeType) || CONTENT_TYPES[0];
 
-  useEffect(() => {
-    fetchHistory();
-  }, [activePolitician?.id]);
-
-  async function fetchHistory() {
+  const fetchHistory = useCallback(async () => {
     if (!activePolitician?.id) return;
     setLoadingHistory(true);
-    const { data } = await supabase
-      .from('ai_generated_content')
-      .select('*')
-      .eq('politician_id', activePolitician.id)
-      .eq('is_saved', true)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (data) setSavedItems(data);
+    const data = await api.list('ai_generated_content', { order: 'created_at', dir: 'DESC', limit: '50' }) as GeneratedContent[];
+    setSavedItems(data.filter(item => item.is_saved));
     setLoadingHistory(false);
-  }
+  }, [activePolitician?.id]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   async function generate() {
     if (!prompt.trim() || generating) return;
@@ -92,8 +86,8 @@ export default function AIStudio() {
     } : undefined;
 
     try {
-      const session = { access_token: localStorage.getItem('nethra_token') || '' };
-      if (!session) throw new Error('Not authenticated');
+      const token = localStorage.getItem('nethra_token');
+      if (!token) throw new Error('Not authenticated');
 
       abortRef.current = new AbortController();
 
@@ -119,21 +113,18 @@ export default function AIStudio() {
       }
 
       if (full && activePolitician?.id) {
-        const { data } = await supabase
-          .from('ai_generated_content')
-          .insert({
-            politician_id: activePolitician.id,
-            content_type: activeType,
-            prompt: prompt.slice(0, 500),
-            content: full,
-            is_saved: false,
-          })
-          .select()
-          .single();
-        if (data) setCurrentContentId(data.id);
+        const created = await api.create('ai_generated_content', {
+          politician_id: activePolitician.id,
+          content_type: activeType,
+          prompt: prompt.slice(0, 500),
+          content: full,
+          is_saved: false,
+        }) as GeneratedContent;
+        if (created?.id) setCurrentContentId(created.id);
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
+    } catch (err: unknown) {
+      const error = err as { name?: string };
+      if (error?.name !== 'AbortError') {
         setOutput('Error generating content. Please try again.');
       }
     }
@@ -143,13 +134,8 @@ export default function AIStudio() {
   async function saveContent() {
     if (!currentContentId) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('ai_generated_content')
-      .update({ is_saved: true })
-      .eq('id', currentContentId);
-    if (!error) {
-      await fetchHistory();
-    }
+    await api.update('ai_generated_content', currentContentId, { is_saved: true });
+    await fetchHistory();
     setSaving(false);
   }
 
@@ -374,7 +360,7 @@ export default function AIStudio() {
                 </p>
               </div>
             ) : (
-              <div className="divide-y" style={{ divideColor: 'rgba(255,255,255,0.04)' }}>
+              <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
                 {filteredHistory.map(item => {
                   const typeInfo = CONTENT_TYPES.find(t => t.id === item.content_type);
                   const Icon = typeInfo?.icon || FileText;
