@@ -1103,9 +1103,16 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const payload = req.body || {};
   if (!payload.full_name) return res.status(400).json({ error: 'full_name required' });
-  const cols = Object.keys(payload).map(k => `\`${k}\``).join(',');
-  const ph = Object.keys(payload).map(() => '?').join(',');
-  const [r] = await pool.query(`INSERT INTO politician_profiles (${cols}) VALUES (${ph})`, Object.values(payload));
+  const clean = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (k === 'id') continue;
+    if (Array.isArray(v) || (v !== null && typeof v === 'object')) clean[k] = JSON.stringify(v);
+    else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
+    else clean[k] = v;
+  }
+  const cols = Object.keys(clean).map(k => `\`${k}\``).join(',');
+  const ph = Object.keys(clean).map(() => '?').join(',');
+  const [r] = await pool.query(`INSERT INTO politician_profiles (${cols}) VALUES (${ph})`, Object.values(clean));
   const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [r.insertId]);
   res.status(201).json(rows[0]);
 });
@@ -1113,9 +1120,16 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
 app.put('/api/founder/politicians/:id', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const payload = req.body || {};
-  const sets = Object.keys(payload).map(k => `\`${k}\` = ?`).join(',');
+  const clean = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (k === 'id') continue;
+    if (Array.isArray(v) || (v !== null && typeof v === 'object')) clean[k] = JSON.stringify(v);
+    else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
+    else clean[k] = v;
+  }
+  const sets = Object.keys(clean).map(k => `\`${k}\` = ?`).join(',');
   if (!sets) return res.status(400).json({ error: 'No fields to update' });
-  await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ?`, [...Object.values(payload), req.params.id]);
+  await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ?`, [...Object.values(clean), req.params.id]);
   const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.params.id]);
   res.json(rows[0]);
 });
