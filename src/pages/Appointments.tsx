@@ -64,19 +64,27 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
     is_vip: appt?.is_vip || false,
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     if (!form.visitor_name || !form.visitor_contact) return;
     setSaving(true);
-    const token = `TKN-${Date.now().toString().slice(-6)}`;
-    if (appt?.id) {
-      await api.update('appointments', appt.id, form);
-    } else {
-      await api.create('appointments', { ...form, token_number: token });
+    setError('');
+    try {
+      const token = `TKN-${Date.now().toString().slice(-6)}`;
+      if (appt?.id) {
+        await api.update('appointments', appt.id, form);
+      } else {
+        await api.create('appointments', { ...form, token_number: token });
+      }
+      onSave();
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save appointment';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onSave();
-    onClose();
   }
 
   return (
@@ -101,6 +109,12 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
           </button>
         </div>
         <div className="p-6 space-y-5">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+              <X size={15} />
+              <span style={{ fontSize: 13 }}>{error}</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Visitor Name *</label>

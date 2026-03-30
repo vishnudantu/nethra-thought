@@ -143,6 +143,7 @@ function BookingModal({ booking, onClose, onSave }: { booking: Partial<DarshanBo
     status: booking?.status || 'Booked',
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(false);
   const [dateAvailability, setDateAvailability] = useState<{ available: boolean; waitlistCount: number; slot: DateSlot | null } | null>(null);
@@ -168,43 +169,50 @@ function BookingModal({ booking, onClose, onSave }: { booking: Partial<DarshanBo
     if (!form.pilgrim_name || !form.pilgrim_contact || !form.darshan_date) return;
     if (eligibility && !eligibility.eligible && !willBeWaitlisted) return;
     setSaving(true);
-    const isWaitlisted = willBeWaitlisted;
-    if (isEdit && booking?.id) {
-      await api.update('darshan_bookings', booking.id, form);
-    } else {
-      const bookingNumber = `TTD-${Date.now().toString().slice(-8)}`;
-      const cooldownDate = new Date(form.darshan_date);
-      cooldownDate.setMonth(cooldownDate.getMonth() + 6);
-      let waitlistPos: number | null = null;
-      if (isWaitlisted && dateAvailability?.slot) waitlistPos = (dateAvailability.slot.waitlist_count || 0) + 1;
+    setError('');
+    try {
+      const isWaitlisted = willBeWaitlisted;
+      if (isEdit && booking?.id) {
+        await api.update('darshan_bookings', booking.id, form);
+      } else {
+        const bookingNumber = `TTD-${Date.now().toString().slice(-8)}`;
+        const cooldownDate = new Date(form.darshan_date);
+        cooldownDate.setMonth(cooldownDate.getMonth() + 6);
+        let waitlistPos: number | null = null;
+        if (isWaitlisted && dateAvailability?.slot) waitlistPos = (dateAvailability.slot.waitlist_count || 0) + 1;
 
-      const newBooking = await api.create('darshan_bookings', {
-        ...form,
-        booking_number: bookingNumber,
-        is_waitlisted: isWaitlisted,
-        waitlist_position: waitlistPos,
-        cooldown_until: isWaitlisted ? null : cooldownDate.toISOString().split('T')[0],
-        status: isWaitlisted ? 'Waitlisted' : 'Booked',
-        promoted_from_waitlist: false,
-        approval_status: 'pending',
-      });
+        const newBooking = await api.create('darshan_bookings', {
+          ...form,
+          booking_number: bookingNumber,
+          is_waitlisted: isWaitlisted,
+          waitlist_position: waitlistPos,
+          cooldown_until: isWaitlisted ? null : cooldownDate.toISOString().split('T')[0],
+          status: isWaitlisted ? 'Waitlisted' : 'Booked',
+          promoted_from_waitlist: false,
+          approval_status: 'pending',
+        });
 
-      if (newBooking) {
-        if (!isWaitlisted) {
-          await api.post('/api/darshan_date_slots/upsert', {
-            slot_date: form.darshan_date, is_filled: true, confirmed_booking_id: newBooking.id,
-            waitlist_count: dateAvailability?.slot?.waitlist_count || 0,
-          }).catch(() => api.create('darshan_date_slots', { slot_date: form.darshan_date, is_filled: true, confirmed_booking_id: newBooking.id, waitlist_count: 0 }));
-        } else if (dateAvailability?.slot) {
-          if (dateAvailability?.slot?.id) await api.update('darshan_date_slots', dateAvailability.slot.id, { waitlist_count: waitlistPos });
-        } else {
-          await api.create('darshan_date_slots', { slot_date: form.darshan_date, is_filled: false, waitlist_count: 1 });
+        if (newBooking) {
+          if (!isWaitlisted) {
+            await api.post('/api/darshan_date_slots/upsert', {
+              slot_date: form.darshan_date, is_filled: true, confirmed_booking_id: newBooking.id,
+              waitlist_count: dateAvailability?.slot?.waitlist_count || 0,
+            }).catch(() => api.create('darshan_date_slots', { slot_date: form.darshan_date, is_filled: true, confirmed_booking_id: newBooking.id, waitlist_count: 0 }));
+          } else if (dateAvailability?.slot) {
+            if (dateAvailability?.slot?.id) await api.update('darshan_date_slots', dateAvailability.slot.id, { waitlist_count: waitlistPos });
+          } else {
+            await api.create('darshan_date_slots', { slot_date: form.darshan_date, is_filled: false, waitlist_count: 1 });
+          }
         }
       }
+      onSave();
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save darshan booking';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onSave();
-    onClose();
   }
 
   const canSubmit = form.pilgrim_name && form.pilgrim_contact && form.darshan_date &&
@@ -227,6 +235,12 @@ function BookingModal({ booking, onClose, onSave }: { booking: Partial<DarshanBo
           </button>
         </div>
         <div className="p-6 space-y-5">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+              <X size={15} />
+              <span style={{ fontSize: 13 }}>{error}</span>
+            </div>
+          )}
           <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(255,167,38,0.08)', border: '1px solid rgba(255,167,38,0.2)' }}>
             <Info size={16} style={{ color: '#ffa726', flexShrink: 0, marginTop: 1 }} />
             <div style={{ fontSize: 12, color: '#ffa726', lineHeight: 1.7 }}>

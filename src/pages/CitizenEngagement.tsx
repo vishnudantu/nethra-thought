@@ -86,19 +86,27 @@ function EngagementModal({ ev, onClose, onSave }: { ev: Partial<Engagement> | nu
     is_recorded: ev?.is_recorded || false,
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     if (!form.title || !form.event_date) return;
     setSaving(true);
-    const payload = { ...form, event_date: new Date(form.event_date).toISOString() };
-    if (ev?.id) {
-      await api.update('citizen_engagements', ev.id, payload);
-    } else {
-      await api.create('citizen_engagements', payload);
+    setError('');
+    try {
+      const payload = { ...form, event_date: new Date(form.event_date).toISOString() };
+      if (ev?.id) {
+        await api.update('citizen_engagements', ev.id, payload);
+      } else {
+        await api.create('citizen_engagements', payload);
+      }
+      onSave();
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save engagement';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onSave();
-    onClose();
   }
 
   return (
@@ -114,6 +122,12 @@ function EngagementModal({ ev, onClose, onSave }: { ev: Partial<Engagement> | nu
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><X size={16} style={{ color: '#8899bb' }} /></button>
         </div>
         <div className="p-6 space-y-5">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+              <X size={15} />
+              <span style={{ fontSize: 13 }}>{error}</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="col-span-2">
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Event Title *</label>
@@ -194,19 +208,27 @@ function VolunteerModal({ vol, onClose, onSave }: { vol: Partial<Volunteer> | nu
   const [skillInput, setSkillInput] = useState('');
   const [skills, setSkills] = useState<string[]>(vol?.skills || []);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     if (!form.name || !form.phone) return;
     setSaving(true);
-    const payload = { ...form, skills, joined_date: new Date().toISOString().split('T')[0] };
-    if (vol?.id) {
-      await api.update('volunteers', vol.id, payload);
-    } else {
-      await api.create('volunteers', payload);
+    setError('');
+    try {
+      const payload = { ...form, skills, joined_date: new Date().toISOString().split('T')[0] };
+      if (vol?.id) {
+        await api.update('volunteers', vol.id, payload);
+      } else {
+        await api.create('volunteers', payload);
+      }
+      onSave();
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save volunteer';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onSave();
-    onClose();
   }
 
   return (
@@ -219,6 +241,12 @@ function VolunteerModal({ vol, onClose, onSave }: { vol: Partial<Volunteer> | nu
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><X size={16} style={{ color: '#8899bb' }} /></button>
         </div>
         <div className="p-6 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+              <X size={15} />
+              <span style={{ fontSize: 13 }}>{error}</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Name *</label><input className="input-field" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Phone *</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
@@ -268,18 +296,26 @@ function SuggestionModal({ sug, onClose, onSave }: { sug: Partial<Suggestion> | 
     status: sug?.status || 'New', priority: sug?.priority || 'Medium', admin_response: sug?.admin_response || '',
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     if (!form.title || !form.description) return;
     setSaving(true);
-    if (sug?.id) {
-      await api.update('suggestions', sug.id, { ...form, updated_at: new Date().toISOString() });
-    } else {
-      await api.create('suggestions', form);
+    setError('');
+    try {
+      if (sug?.id) {
+        await api.update('suggestions', sug.id, { ...form, updated_at: new Date().toISOString() });
+      } else {
+        await api.create('suggestions', form);
+      }
+      onSave();
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save suggestion';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onSave();
-    onClose();
   }
 
   return (
@@ -292,6 +328,12 @@ function SuggestionModal({ sug, onClose, onSave }: { sug: Partial<Suggestion> | 
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><X size={16} style={{ color: '#8899bb' }} /></button>
         </div>
         <div className="p-6 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+              <X size={15} />
+              <span style={{ fontSize: 13 }}>{error}</span>
+            </div>
+          )}
           <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Title *</label><input className="input-field" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
           <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Description *</label><textarea className="input-field" rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={{ resize: 'none' }} /></div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -342,11 +384,11 @@ export default function CitizenEngagement() {
 
   async function fetchAll() {
     setLoading(true);
-    const [{ data: ev }, { data: vol }, { data: sug }] = await Promise.all([
+    const [ev, vol, sug] = await Promise.all([
       api.list('citizen_engagements', { order: 'event_date', dir: 'DESC' }),
       api.list('volunteers'),
       api.list('suggestions'),
-    ]);
+    ]) as [Engagement[], Volunteer[], Suggestion[]];
     setEngagements(ev || []);
     setVolunteers(vol || []);
     setSuggestions(sug || []);
