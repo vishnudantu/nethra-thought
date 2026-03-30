@@ -1272,19 +1272,31 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
 
 app.put('/api/founder/politicians/:id', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const payload = req.body || {};
-  const clean = {};
-  for (const [k, v] of Object.entries(payload)) {
-    if (k === 'id') continue;
-    if (Array.isArray(v) || (v !== null && typeof v === 'object')) clean[k] = JSON.stringify(v);
-    else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
-    else clean[k] = v;
+  try {
+    const payload = req.body || {};
+    const ALLOWED = ['full_name','display_name','slug','photo_url','party','designation',
+      'constituency_name','state','lok_sabha_seat','bio','phone','email','office_address',
+      'website','twitter_handle','facebook_url','instagram_handle','youtube_channel',
+      'education','dob','age','languages','achievements','role','is_active','term_start',
+      'term_end','previous_terms','election_year','subscription_status','deployed_at',
+      'color_primary','color_secondary','auth_user_id'];
+    const clean = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (k === 'id') continue;
+      if (!ALLOWED.includes(k)) continue;
+      if (Array.isArray(v) || (v !== null && typeof v === 'object')) clean[k] = JSON.stringify(v);
+      else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
+      else clean[k] = v;
+    }
+    const sets = Object.keys(clean).map(k => `\`${k}\` = ?`).join(',');
+    if (!sets) return res.status(400).json({ error: 'No fields to update' });
+    await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ?`, [...Object.values(clean), req.params.id]);
+    const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[PUT /api/founder/politicians]', e.message);
+    res.status(500).json({ error: e.message });
   }
-  const sets = Object.keys(clean).map(k => `\`${k}\` = ?`).join(',');
-  if (!sets) return res.status(400).json({ error: 'No fields to update' });
-  await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ?`, [...Object.values(clean), req.params.id]);
-  const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.params.id]);
-  res.json(rows[0]);
 });
 
 app.get('/api/founder/politicians/:id/api-keys', authMiddleware, async (req, res) => {

@@ -161,54 +161,58 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   const [newFeature, setNewFeature] = useState({ feature_key: '', label: '', module_key: '', description: '', is_future: false });
 
   useEffect(() => {
-    fetchData();
+    fetchData().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchData() {
     setLoading(true);
-    const [polDataRaw, usersDataRaw, overviewData, moduleAccessData, featureAccessData, reportsData, dashboardData] = await Promise.all([
-      api.get('/api/founder/politicians'),
-      api.get('/api/founder/users'),
-      api.get('/api/admin/politician-overview'),
-      api.get('/api/founder/module-access'),
-      api.get('/api/founder/feature-access'),
-      api.get('/api/founder/reports'),
-      api.get('/api/founder/dashboard'),
-    ]);
-    const polData = polDataRaw as Politician[];
-    const usersData = usersDataRaw as ManagedUser[];
-    const overviewRows = overviewData as PoliticianOverview[];
-    const modulePayload = moduleAccessData as { modules: FeatureModule[]; politician_access: ModuleAccess[]; role_access: ModuleAccess[] };
-    const featurePayload = featureAccessData as { features: FeatureFlag[]; politician_access: FeatureAccess[]; role_access: FeatureAccess[] };
-    const reportRows = reportsData as AdminReport[];
-    const dashboardPayload = dashboardData as { metrics?: { total_politicians: number; total_users: number; open_alerts: number; recent_briefings: number; mrr: number }; intelligence_feed?: { id: string; opponent_name: string; activity_type: string; description: string; created_at: string }[] };
-    const enriched = usersData.map(r => ({
-      ...r,
-      politician_name: polData?.find(p => p.id === r.politician_id)?.full_name,
-    }));
-    setPoliticians(polData || []);
-    setOverview(overviewRows || []);
-    setUsers(enriched || []);
-    setModules(modulePayload?.modules || []);
-    setPoliticianModuleAccess(modulePayload?.politician_access || []);
-    setRoleModuleAccess(modulePayload?.role_access || []);
-    setFeatures(featurePayload?.features || []);
-    setPoliticianFeatureAccess(featurePayload?.politician_access || []);
-    setRoleFeatureAccess(featurePayload?.role_access || []);
-    setReports(reportRows || []);
-    setFounderMetrics(dashboardPayload?.metrics || null);
-    setFounderFeed(dashboardPayload?.intelligence_feed || []);
-    if (!selectedAccessPolitician && polData?.length) setSelectedAccessPolitician(polData[0].id);
-    if (!selectedApiPolitician && polData?.length) setSelectedApiPolitician(polData[0].id);
-    if (!reportPoliticianId && polData?.length) setReportPoliticianId(polData[0].id);
     try {
-      const keyRes = await api.get('/api/founder/api-keys') as { keys: ApiKeyRecord[]; masterKeyConfigured: boolean };
-      setApiKeys(keyRes?.keys || []);
-      setMasterKeyConfigured(!!keyRes?.masterKeyConfigured);
-    } catch {
-      setApiKeys([]);
-      setMasterKeyConfigured(false);
+      const [polDataRaw, usersDataRaw, overviewData, moduleAccessData, featureAccessData, reportsData, dashboardData] = await Promise.all([
+        api.get('/api/founder/politicians'),
+        api.get('/api/founder/users'),
+        api.get('/api/admin/politician-overview'),
+        api.get('/api/founder/module-access'),
+        api.get('/api/founder/feature-access'),
+        api.get('/api/founder/reports'),
+        api.get('/api/founder/dashboard'),
+      ]);
+      const polData = polDataRaw as Politician[];
+      const usersData = usersDataRaw as ManagedUser[];
+      const overviewRows = overviewData as PoliticianOverview[];
+      const modulePayload = moduleAccessData as { modules: FeatureModule[]; politician_access: ModuleAccess[]; role_access: ModuleAccess[] };
+      const featurePayload = featureAccessData as { features: FeatureFlag[]; politician_access: FeatureAccess[]; role_access: FeatureAccess[] };
+      const reportRows = reportsData as AdminReport[];
+      const dashboardPayload = dashboardData as { metrics?: { total_politicians: number; total_users: number; open_alerts: number; recent_briefings: number; mrr: number }; intelligence_feed?: { id: string; opponent_name: string; activity_type: string; description: string; created_at: string }[] };
+      const enriched = usersData.map(r => ({
+        ...r,
+        politician_name: polData?.find(p => p.id === r.politician_id)?.full_name,
+      }));
+      setPoliticians(polData || []);
+      setOverview(overviewRows || []);
+      setUsers(enriched || []);
+      setModules(modulePayload?.modules || []);
+      setPoliticianModuleAccess(modulePayload?.politician_access || []);
+      setRoleModuleAccess(modulePayload?.role_access || []);
+      setFeatures(featurePayload?.features || []);
+      setPoliticianFeatureAccess(featurePayload?.politician_access || []);
+      setRoleFeatureAccess(featurePayload?.role_access || []);
+      setReports(reportRows || []);
+      setFounderMetrics(dashboardPayload?.metrics || null);
+      setFounderFeed(dashboardPayload?.intelligence_feed || []);
+      if (!selectedAccessPolitician && polData?.length) setSelectedAccessPolitician(polData[0].id);
+      if (!selectedApiPolitician && polData?.length) setSelectedApiPolitician(polData[0].id);
+      if (!reportPoliticianId && polData?.length) setReportPoliticianId(polData[0].id);
+      try {
+        const keyRes = await api.get('/api/founder/api-keys') as { keys: ApiKeyRecord[]; masterKeyConfigured: boolean };
+        setApiKeys(keyRes?.keys || []);
+        setMasterKeyConfigured(!!keyRes?.masterKeyConfigured);
+      } catch {
+        setApiKeys([]);
+        setMasterKeyConfigured(false);
+      }
+    } catch (e) {
+      console.error('[fetchData]', e);
     }
     setLoading(false);
   }
@@ -360,14 +364,19 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
       if (!polData?.id) throw new Error('Server did not return a politician ID. Check server logs.');
 
       // Step 2 — Create login account
-      await api.post('/api/founder/users', {
+      const userData = await api.post('/api/founder/users', {
         email: form.email,
         password: form.password,
         role: 'politician_admin',
         politician_id: polData.id,
       });
 
-      // Step 3 — Save constituency stats if autofill data available
+      // Step 3 — Link auth_user_id back to politician profile
+      if (userData?.id) {
+        await api.put(`/api/founder/politicians/${polData.id}`, { auth_user_id: userData.id }).catch(() => {});
+      }
+
+      // Step 4 — Save constituency stats if autofill data available
       const extra = (window as AutofillWindow).__autofill_extra;
       if (extra?.constituency_stats && polData?.id) {
         const cs = extra.constituency_stats;
@@ -391,13 +400,19 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
       setDeploySuccess(`✓ ${form.full_name} deployed successfully! Login: ${form.email}`);
       setForm(defaultForm);
       setShowDeploy(false);
-      await fetchData();
-      await refreshPoliticians();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Deployment failed. Please try again.';
       setDeployError(message);
     }
     setDeploying(false);
+
+    // Refresh data separately so failures don't mask deploy success
+    try {
+      await fetchData();
+      await refreshPoliticians();
+    } catch {
+      // Refresh failure is non-critical — deploy already succeeded
+    }
   }
 
   async function togglePoliticianStatus(politician: Politician) {
