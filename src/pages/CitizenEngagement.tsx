@@ -114,7 +114,7 @@ function EngagementModal({ ev, onClose, onSave }: { ev: Partial<Engagement> | nu
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><X size={16} style={{ color: '#8899bb' }} /></button>
         </div>
         <div className="p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="col-span-2">
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Event Title *</label>
               <input className="input-field" placeholder="e.g., Kurnool Town Hall Meeting 2024" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
@@ -132,7 +132,7 @@ function EngagementModal({ ev, onClose, onSave }: { ev: Partial<Engagement> | nu
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Date & Time *</label>
               <input type="datetime-local" className="input-field" value={form.event_date} onChange={e => setForm({ ...form, event_date: e.target.value })} />
@@ -142,7 +142,7 @@ function EngagementModal({ ev, onClose, onSave }: { ev: Partial<Engagement> | nu
               <input type="number" step={0.5} min={0.5} className="input-field" value={form.duration_hours} onChange={e => setForm({ ...form, duration_hours: parseFloat(e.target.value) || 1 })} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Location</label>
               <input className="input-field" placeholder="Venue name" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
@@ -152,7 +152,7 @@ function EngagementModal({ ev, onClose, onSave }: { ev: Partial<Engagement> | nu
               <input className="input-field" placeholder="Mandal" value={form.mandal} onChange={e => setForm({ ...form, mandal: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Expected Attendance</label>
               <input type="number" className="input-field" value={form.expected_attendance} onChange={e => setForm({ ...form, expected_attendance: parseInt(e.target.value) || 100 })} />
@@ -219,7 +219,7 @@ function VolunteerModal({ vol, onClose, onSave }: { vol: Partial<Volunteer> | nu
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><X size={16} style={{ color: '#8899bb' }} /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Name *</label><input className="input-field" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Phone *</label><input className="input-field" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Age</label><input type="number" className="input-field" value={form.age} onChange={e => setForm({ ...form, age: parseInt(e.target.value) || 18 })} /></div>
@@ -294,7 +294,7 @@ function SuggestionModal({ sug, onClose, onSave }: { sug: Partial<Suggestion> | 
         <div className="p-6 space-y-4">
           <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Title *</label><input className="input-field" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
           <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Description *</label><textarea className="input-field" rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={{ resize: 'none' }} /></div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Category</label>
               <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
                 {['Infrastructure', 'Education', 'Health', 'Agriculture', 'Employment', 'Environment', 'Governance', 'General'].map(c => <option key={c}>{c}</option>)}
@@ -306,7 +306,7 @@ function SuggestionModal({ sug, onClose, onSave }: { sug: Partial<Suggestion> | 
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Submitter Name</label><input className="input-field" value={form.submitter_name} onChange={e => setForm({ ...form, submitter_name: e.target.value })} /></div>
             <div><label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Mandal</label><input className="input-field" value={form.mandal} onChange={e => setForm({ ...form, mandal: e.target.value })} /></div>
           </div>

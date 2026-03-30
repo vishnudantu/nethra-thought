@@ -474,7 +474,7 @@ const POLITICIAN_SCOPED_TABLES = [
   'finances','communications','documents','appointments','polls','poll_responses',
   'darshan_bookings','darshan_date_slots','darshan_donations','bills',
   'citizen_engagements','volunteers','suggestions','parliamentary_questions',
-  'parliamentary_debates','parliamentary_bills','ai_briefings','constituencies',
+  'parliamentary_debates','parliamentary_bills','ai_briefings','constituencies','constituency_profiles',
   'ai_generated_content','content_calendar','sentiment_scores','opposition_intelligence','voice_reports',
   'promises','whatsapp_intelligence','visit_plans','booths','predictive_alerts','agent_tasks',
   'deepfake_incidents','relationships','economic_indicators','citizen_service_requests',

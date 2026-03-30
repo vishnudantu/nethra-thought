@@ -101,7 +101,7 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
           </button>
         </div>
         <div className="p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Visitor Name *</label>
               <input className="input-field" placeholder="Full name" value={form.visitor_name} onChange={e => setForm({ ...form, visitor_name: e.target.value })} />
@@ -111,7 +111,7 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
               <input className="input-field" placeholder="+91 XXXXX XXXXX" value={form.visitor_contact} onChange={e => setForm({ ...form, visitor_contact: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Email</label>
               <input className="input-field" placeholder="email@example.com" value={form.visitor_email} onChange={e => setForm({ ...form, visitor_email: e.target.value })} />
@@ -127,7 +127,7 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
             <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Purpose of Visit *</label>
             <textarea className="input-field" rows={3} placeholder="Describe the purpose of this visit..." value={form.purpose} onChange={e => setForm({ ...form, purpose: e.target.value })} style={{ resize: 'none' }} />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Date *</label>
               <input type="date" className="input-field" value={form.requested_date} onChange={e => setForm({ ...form, requested_date: e.target.value })} />
@@ -143,7 +143,7 @@ function AppointmentModal({ appt, onClose, onSave }: { appt: Partial<Appointment
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Priority</label>
               <select className="input-field" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>

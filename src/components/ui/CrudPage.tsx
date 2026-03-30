@@ -200,9 +200,9 @@ export default function CrudPage({
                   <X size={16} style={{ color: '#8899bb' }} />
                 </button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className={fields.length > 6 ? 'p-5 grid grid-cols-1 md:grid-cols-2 gap-4' : 'p-5 space-y-4'}>
                 {fields.map(field => (
-                  <div key={field.key}>
+                  <div key={field.key} className={fields.length > 6 && (field.type === 'textarea' || field.type === 'json') ? 'md:col-span-2' : ''}>
                     <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>
                       {field.label}{field.required ? ' *' : ''}
                     </label>

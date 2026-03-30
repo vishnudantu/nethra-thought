@@ -262,6 +262,10 @@ body::after {
   overflow-y: auto;
 }
 
+.modal-overlay .glass-card {
+  overflow: auto;
+}
+
 .table-row {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.2s ease;

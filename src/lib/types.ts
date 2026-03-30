@@ -162,6 +162,31 @@ export interface Constituency {
   created_at: string;
 }
 
+export interface ConstituencyProfile {
+  id: string;
+  politician_id?: string | null;
+  constituency_name: string;
+  state: string;
+  district: string;
+  total_voters: number;
+  registered_voters: number;
+  area_sqkm: number;
+  population: number;
+  total_mandals: number;
+  total_villages: number;
+  total_booths: number;
+  urban_population_pct: number;
+  rural_population_pct: number;
+  literacy_rate: number;
+  sex_ratio: number;
+  key_facts: Array<{ label: string; value: string; detail?: string }> | null;
+  key_industries: Array<{ name: string; icon?: string; desc?: string }> | null;
+  assembly_segments: Array<string> | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SentimentScore {
   id: string;
   score_date: string;

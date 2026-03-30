@@ -102,7 +102,7 @@ function BillModal({ bill, onClose, onSave }: { bill: Partial<Bill> | null; onCl
           <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><X size={16} style={{ color: '#8899bb' }} /></button>
         </div>
         <div className="p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Bill Number *</label>
               <input className="input-field" placeholder="e.g., Bill No. 12 of 2024" value={form.bill_number} onChange={e => setForm({ ...form, bill_number: e.target.value })} />
@@ -118,7 +118,7 @@ function BillModal({ bill, onClose, onSave }: { bill: Partial<Bill> | null; onCl
             <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Bill Name *</label>
             <input className="input-field" placeholder="Full name of the bill" value={form.bill_name} onChange={e => setForm({ ...form, bill_name: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Category</label>
               <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
@@ -132,7 +132,7 @@ function BillModal({ bill, onClose, onSave }: { bill: Partial<Bill> | null; onCl
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Introduced By</label>
               <input className="input-field" placeholder="Name of minister/member" value={form.introduced_by} onChange={e => setForm({ ...form, introduced_by: e.target.value })} />
@@ -142,7 +142,7 @@ function BillModal({ bill, onClose, onSave }: { bill: Partial<Bill> | null; onCl
               <input type="date" className="input-field" value={form.introduced_date} onChange={e => setForm({ ...form, introduced_date: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Current Status</label>
               <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
@@ -159,7 +159,7 @@ function BillModal({ bill, onClose, onSave }: { bill: Partial<Bill> | null; onCl
 
           <div className="p-4 rounded-xl" style={{ background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.15)' }}>
             <h3 style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff', marginBottom: 12 }}>Voting Record</h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Your Vote</label>
                 <select className="input-field" value={form.member_vote} onChange={e => setForm({ ...form, member_vote: e.target.value })}>
