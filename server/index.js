@@ -276,12 +276,12 @@ app.post('/api/auth/login', async (req, res) => {
       const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
       politician = pols[0] || null; allPoliticians = pols;
     }
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled }, politician, allPoliticians });
+    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled, display_name: user.display_name }, politician, allPoliticians });
   } catch (err) { console.error('[login]', err); res.status(500).json({ error: 'Server error' }); }
 });
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
-  const [rows] = await pool.query('SELECT id,email,role,politician_id,two_factor_enabled FROM users WHERE id = ?', [req.user.id]);
+  const [rows] = await pool.query('SELECT id,email,role,politician_id,two_factor_enabled,display_name FROM users WHERE id = ?', [req.user.id]);
   rows[0] ? res.json(rows[0]) : res.status(404).json({ error: 'Not found' });
 });
 
@@ -322,7 +322,7 @@ app.post('/api/auth/2fa/verify', async (req, res) => {
     const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
     politician = pols[0] || null; allPoliticians = pols;
   }
-  res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled }, politician, allPoliticians });
+  res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled, display_name: user.display_name }, politician, allPoliticians });
 });
 
 app.post('/api/auth/2fa/toggle', authMiddleware, async (req, res) => {
@@ -1382,8 +1382,27 @@ app.put('/api/founder/politicians/:id/features', authMiddleware, async (req, res
 
 app.get('/api/founder/users', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const [rows] = await pool.query('SELECT id,email,role,politician_id,is_active,created_at FROM users ORDER BY created_at DESC');
+  const [rows] = await pool.query('SELECT id,email,display_name,role,politician_id,is_active,created_at FROM users ORDER BY created_at DESC');
   res.json(rows);
+});
+
+app.get('/api/founder/profile', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const [rows] = await pool.query('SELECT id,email,display_name,role FROM users WHERE id = ?', [req.user.id]);
+    rows[0] ? res.json(rows[0]) : res.status(404).json({ error: 'Not found' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/founder/profile', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const { display_name } = req.body || {};
+  if (!display_name) return res.status(400).json({ error: 'display_name required' });
+  try {
+    await pool.query('UPDATE users SET display_name = ? WHERE id = ?', [display_name.trim(), req.user.id]);
+    const [rows] = await pool.query('SELECT id,email,display_name,role FROM users WHERE id = ?', [req.user.id]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/founder/users', authMiddleware, async (req, res) => {

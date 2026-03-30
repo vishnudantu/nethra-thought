@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Eye, EyeOff, Mail, Lock, AlertCircle, ShieldCheck, RefreshCw, Radio } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 
-const BASE = (import.meta as any).env?.VITE_API_URL || '';
+const BASE = import.meta.env?.VITE_API_URL || '';
 
 interface NewsItem {
   headline: string;
@@ -96,7 +96,9 @@ export default function Login() {
           const s = await statsRes.json();
           setStats({ news_today: String(s.news_today ?? '—'), states_today: String(s.states_today ?? '—') });
         }
-      } catch (_) {}
+      } catch (err) {
+        console.error('Failed to load login news feed', err);
+      }
     }
     load();
     const t = setInterval(load, 2 * 60 * 1000);
@@ -124,7 +126,7 @@ export default function Login() {
     e.preventDefault();
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setLoading(true); setError('');
-    const { error: err, requires2fa, email: loginEmail } = await signIn(email, password) as any;
+    const { error: err, requires2fa, email: loginEmail } = await signIn(email, password);
     if (err) setError('Invalid email or password. Please try again.');
     else if (requires2fa) { setOtpRequired(true); setOtpEmail(loginEmail || email); }
     setLoading(false);
@@ -134,7 +136,7 @@ export default function Login() {
     e.preventDefault();
     if (!otp.trim()) { setOtpError('Enter the OTP sent to your email.'); return; }
     setOtpLoading(true); setOtpError('');
-    const { error: err } = await verify2fa(otpEmail, otp) as any;
+    const { error: err } = await verify2fa(otpEmail, otp);
     if (err) setOtpError('Invalid or expired OTP.');
     setOtpLoading(false);
   }

@@ -8,6 +8,7 @@ export interface UserRole {
   role: 'super_admin' | 'politician_admin' | 'staff' | 'field_worker';
   politician_id: string | null;
   two_factor_enabled?: boolean;
+  display_name?: string | null;
 }
 
 export interface PoliticianProfile {
@@ -39,6 +40,7 @@ interface AuthContextType {
   signOut: () => void;
   setActivePolitician: (p: PoliticianProfile) => void;
   refreshPoliticians: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   refreshAccess: () => Promise<void>;
   hasModule: (key: string) => boolean;
   hasFeature: (key: string) => boolean;
@@ -133,6 +135,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAllPoliticians(pols);
   }
 
+  async function refreshUser() {
+    try {
+      const data = await api.me() as UserRole;
+      setUser(data);
+    } catch {
+      // ignore
+    }
+  }
+
   async function refreshAccess() {
     const current = token || localStorage.getItem('nethra_token');
     if (!current) return;
@@ -177,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       user, userRole: user, activePolitician, allPoliticians, loading,
       signIn, verify2fa, signOut, setActivePolitician, refreshPoliticians,
-      refreshAccess, moduleAccess, featureAccess, hasModule, hasFeature,
+      refreshUser, refreshAccess, moduleAccess, featureAccess, hasModule, hasFeature,
       session: token ? { access_token: token } : null,
     }}>
       {children}

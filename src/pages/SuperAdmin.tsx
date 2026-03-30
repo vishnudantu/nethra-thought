@@ -114,7 +114,7 @@ const API_KEY_ITEMS = [
 ];
 
 export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string) => void }) {
-  const { refreshPoliticians } = useAuth();
+  const { refreshPoliticians, user, refreshUser } = useAuth();
   const [tab, setTab] = useState<'overview' | 'access' | 'reports' | 'users' | 'api-keys'>('overview');
   const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [overview, setOverview] = useState<PoliticianOverview[]>([]);
@@ -159,11 +159,21 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   const [showFeatureModal, setShowFeatureModal] = useState(false);
   const [newModule, setNewModule] = useState({ module_key: '', label: '', category: '', description: '', is_future: false });
   const [newFeature, setNewFeature] = useState({ feature_key: '', label: '', module_key: '', description: '', is_future: false });
+  const [showFounderProfile, setShowFounderProfile] = useState(false);
+  const [founderName, setFounderName] = useState('');
+  const [founderSaving, setFounderSaving] = useState(false);
+  const [founderError, setFounderError] = useState('');
 
   useEffect(() => {
     fetchData().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (user?.role === 'super_admin') {
+      setFounderName(user.display_name || '');
+    }
+  }, [user?.display_name, user?.role]);
 
   async function fetchData() {
     setLoading(true);
@@ -619,6 +629,20 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
     }
   }
 
+  async function saveFounderProfile() {
+    setFounderSaving(true);
+    setFounderError('');
+    try {
+      await api.put('/api/founder/profile', { display_name: founderName.trim() });
+      await refreshUser();
+      setShowFounderProfile(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update founder profile';
+      setFounderError(message);
+    }
+    setFounderSaving(false);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -640,6 +664,14 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             Website CMS
           </button>
           <button
+            onClick={() => { setFounderError(''); setShowFounderProfile(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0f4ff', fontSize: 13 }}
+          >
+            <Settings2 size={16} />
+            Edit Founder Profile
+          </button>
+          <button
             onClick={() => { setShowDeploy(true); setDeployError(''); setDeploySuccess(''); }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all"
             style={{ background: 'linear-gradient(135deg, #00d4aa, #1e88e5)', color: '#060b18', fontSize: 13 }}
@@ -651,7 +683,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
       </div>
 
       {founderMetrics && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {[
             { label: 'Active Politicians', value: founderMetrics.total_politicians, color: '#00d4aa' },
             { label: 'Live Sessions', value: founderMetrics.total_users, color: '#42a5f5' },
@@ -667,7 +699,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         {[
           { label: 'Total Politicians', value: stats.total, color: '#00d4aa', icon: Building2 },
           { label: 'Live Now', value: stats.live, color: '#4caf90', icon: BadgeCheck },
@@ -892,7 +924,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
               <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Founder Controls</div>
                 <div className="text-xs mt-1" style={{ color: '#8899bb' }}>Assign modules, unlock features, and generate intelligence</div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button onClick={() => setTab('access')} className="btn-secondary text-xs flex items-center gap-2">
                     <SlidersHorizontal size={12} /> Module Access
                   </button>
@@ -950,7 +982,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
                     {[
                       { label: 'Performance', value: p.performance, color: '#00d4aa' },
                       { label: 'Winning Index', value: p.winning, color: '#42a5f5' },
@@ -976,7 +1008,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
                     {[
                       { label: 'Open Grievances', value: p.open_grievances ?? 0, color: '#ff6b6b' },
                       { label: 'High Threats', value: p.high_threats ?? 0, color: '#ff7a59' },
@@ -1843,6 +1875,69 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                 <pre className="whitespace-pre-wrap font-sans text-sm text-gray-300 bg-white/5 p-4 rounded-xl border border-white/10">
                   {selectedReport.content || selectedReport.summary}
                 </pre>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showFounderProfile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowFounderProfile(false); }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg rounded-2xl overflow-hidden"
+              style={{ background: '#0d1628', border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              <div className="flex items-center justify-between p-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <div>
+                  <h2 className="font-bold text-lg" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk, sans-serif' }}>Founder Profile</h2>
+                  <p style={{ fontSize: 12, color: '#8899bb', marginTop: 2 }}>Update the Super Admin display name</p>
+                </div>
+                <button onClick={() => setShowFounderProfile(false)} style={{ color: '#8899bb' }}><X size={20} /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                {founderError && (
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
+                    <AlertCircle size={15} />
+                    <span style={{ fontSize: 13 }}>{founderError}</span>
+                  </div>
+                )}
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Display Name</label>
+                  <input
+                    value={founderName}
+                    onChange={e => setFounderName(e.target.value)}
+                    placeholder="Founder name"
+                    className="w-full px-4 py-2.5 rounded-xl"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setShowFounderProfile(false)}
+                    className="flex-1 py-2.5 rounded-xl font-medium transition-all"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb', fontSize: 13 }}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveFounderProfile}
+                    disabled={founderSaving || !founderName.trim()}
+                    className="flex-1 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+                    style={{ background: founderSaving || !founderName.trim() ? 'rgba(0,212,170,0.4)' : 'linear-gradient(135deg, #00d4aa, #1e88e5)', color: '#060b18', fontSize: 13, cursor: founderSaving || !founderName.trim() ? 'not-allowed' : 'pointer' }}
+                  >
+                    {founderSaving ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

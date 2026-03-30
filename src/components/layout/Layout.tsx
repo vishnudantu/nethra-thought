@@ -13,11 +13,12 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, activePage, onNavigate }: LayoutProps) {
-  const { activePolitician } = useAuth();
+  const { activePolitician, user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false); // always starts closed on mobile
   const [isMobile, setIsMobile] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const primaryColor = activePolitician?.color_primary || '#00d4aa';
   const secondaryColor = activePolitician?.color_secondary || '#1e88e5';
@@ -118,7 +119,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
         {aiOpen && <AIAssistant onClose={() => setAiOpen(false)} />}
       </AnimatePresence>
 
-      {!aiOpen && (
+      {!aiOpen && !isSuperAdmin && (
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -143,7 +144,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
         </motion.button>
       )}
 
-      {!aiOpen && (
+      {!aiOpen && !isSuperAdmin && (
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}

@@ -89,7 +89,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps) {
-  const { userRole, activePolitician, allPoliticians, setActivePolitician, signOut, hasModule } = useAuth();
+  const { userRole, user, activePolitician, allPoliticians, setActivePolitician, signOut, hasModule } = useAuth();
   const { t } = useI18n();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -113,12 +113,18 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
     });
   const finalItems = visibleItems.filter(i => i.id !== 'superadmin').concat(visibleItems.find(i => i.id === 'superadmin') ? [visibleItems.find(i => i.id === 'superadmin')!] : []);
 
-  const initials = activePolitician?.full_name
-    ? activePolitician.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')
-    : 'NA';
-
   const primaryColor = activePolitician?.color_primary || '#00d4aa';
   const secondaryColor = activePolitician?.color_secondary || '#1e88e5';
+  const profileName = (() => {
+    if (!isSuperAdmin) return activePolitician?.full_name || 'Loading...';
+    if (user?.display_name) return user.display_name;
+    if (user?.email) return user.email.split('@')[0];
+    return 'Super Admin';
+  })();
+  const initials = profileName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const profileSubtitle = isSuperAdmin
+    ? 'Founder Command Center'
+    : `${activePolitician?.designation || userRole?.role?.replace('_', ' ') || ''}${activePolitician?.constituency_name ? ` • ${activePolitician.constituency_name}` : ''}`;
 
   function handleSignOut() {
     setSigningOut(true);
@@ -274,10 +280,10 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
               </div>
               <div className="flex-1 min-w-0">
                 <div className="truncate" style={{ fontSize: 12, fontWeight: 600, color: '#f0f4ff' }}>
-                  {activePolitician?.full_name || 'Loading...'}
+                  {profileName}
                 </div>
                 <div className="truncate" style={{ fontSize: 10, color: '#8899bb' }}>
-                  {activePolitician?.designation || userRole?.role?.replace('_', ' ')} • {activePolitician?.constituency_name || ''}
+                  {profileSubtitle}
                 </div>
               </div>
             </div>

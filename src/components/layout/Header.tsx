@@ -85,7 +85,7 @@ interface NotificationItem {
 }
 
 export default function Header({ title, sidebarCollapsed, onToggleSidebar, isMobile, mobileMenuOpen, onNavigate }: HeaderProps) {
-  const { activePolitician, signOut } = useAuth();
+  const { activePolitician, signOut, user } = useAuth();
   const { t, languages, language, setLanguage } = useI18n();
   const info = pageInfo[title] || { title, subtitle: '' };
   const translatedTitle = (() => {
@@ -95,11 +95,21 @@ export default function Header({ title, sidebarCollapsed, onToggleSidebar, isMob
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
+  const isSuperAdmin = user?.role === 'super_admin';
   const primaryColor = activePolitician?.color_primary || '#00d4aa';
   const secondaryColor = activePolitician?.color_secondary || '#1e88e5';
-  const initials = activePolitician?.full_name
-    ? activePolitician.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')
-    : 'NA';
+  const displayName = (() => {
+    if (!isSuperAdmin) return activePolitician?.full_name || 'NA';
+    if (user?.display_name) return user.display_name;
+    if (user?.email) return user.email.split('@')[0];
+    return 'Super Admin';
+  })();
+  const initials = displayName
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -303,10 +313,12 @@ export default function Header({ title, sidebarCollapsed, onToggleSidebar, isMob
           {profileOpen && (
             <div className="absolute right-0 top-12 w-56 rounded-xl overflow-hidden z-40"
               style={{ background: 'rgba(8,14,26,0.98)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <button onClick={() => { onNavigate('profile'); setProfileOpen(false); }}
-                className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center gap-2">
-                <User size={14} /> <span>{t('header.profile')}</span>
-              </button>
+              {!isSuperAdmin && (
+                <button onClick={() => { onNavigate('profile'); setProfileOpen(false); }}
+                  className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center gap-2">
+                  <User size={14} /> <span>{t('header.profile')}</span>
+                </button>
+              )}
               <button onClick={() => { onNavigate('settings'); setProfileOpen(false); }}
                 className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-center gap-2">
                 <Settings size={14} /> <span>{t('header.settings')}</span>

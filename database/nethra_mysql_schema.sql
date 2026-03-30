@@ -14,6 +14,7 @@ SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 CREATE TABLE IF NOT EXISTS `users` (
   `id`            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `email`         VARCHAR(255) NOT NULL UNIQUE,
+  `display_name`  VARCHAR(255) DEFAULT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
   `role`          ENUM('super_admin','politician_admin','staff','field_worker') NOT NULL DEFAULT 'staff',
   `politician_id` INT UNSIGNED DEFAULT NULL,
