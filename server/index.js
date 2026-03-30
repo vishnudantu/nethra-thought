@@ -1995,6 +1995,66 @@ app.get('/api/access/summary', authMiddleware, async (req, res) => {
   }
 });
 
+// ── PUBLIC NEWS API — no auth required ────────────────────────
+// Feeds the login screen live news ticker
+app.get('/api/public/news', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 30);
+    const category = req.query.category || 'all';
+    let sql = `SELECT headline, snippet, source, url, category, sentiment, published_at
+               FROM news_cache
+               WHERE published_at >= DATE_SUB(NOW(), INTERVAL 48 HOUR)`;
+    const params = [];
+    if (category !== 'all') { sql += ' AND category = ?'; params.push(category); }
+    sql += ' ORDER BY published_at DESC LIMIT ?';
+    params.push(limit);
+    const [rows] = await pool.query(sql, params);
+    res.json(rows || []);
+  } catch (e) { res.json([]); }
+});
+
+app.get('/api/public/stats', async (req, res) => {
+  try {
+    const [[n]] = await pool.query(
+      `SELECT COUNT(*) as count FROM news_cache WHERE published_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+    );
+    const [headlines] = await pool.query(
+      `SELECT headline FROM news_cache WHERE published_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+    );
+    const states = ['Andhra Pradesh','Telangana','Tamil Nadu','Karnataka','Kerala','Maharashtra',
+      'Gujarat','Rajasthan','Uttar Pradesh','Bihar','West Bengal','Odisha','Punjab','Haryana',
+      'Delhi','Madhya Pradesh','Chhattisgarh','Jharkhand','Assam'];
+    const allText = headlines.map((r) => r.headline).join(' ');
+    const statesFound = states.filter(s => allText.includes(s)).length;
+    res.json({ news_today: n.count || 0, states_today: statesFound || 0, total_mps: 543 });
+  } catch (e) { res.json({ news_today: 0, states_today: 0, total_mps: 543 }); }
+});
+
+app.get('/api/public/ticker', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT headline FROM news_cache WHERE published_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY published_at DESC LIMIT 10`
+    );
+    res.json((rows || []).map((r) => r.headline.substring(0, 80)));
+  } catch (e) { res.json([]); }
+});
+
+// ── NEWS CACHE TABLE (auto-create if not exists) ──────────────
+pool.query(`CREATE TABLE IF NOT EXISTS news_cache (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  headline VARCHAR(500) NOT NULL,
+  snippet TEXT,
+  source VARCHAR(100),
+  url TEXT,
+  category VARCHAR(50),
+  sentiment ENUM('positive','negative','neutral') DEFAULT 'neutral',
+  published_at DATETIME,
+  fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  headline_hash VARCHAR(64) UNIQUE,
+  INDEX idx_published (published_at),
+  INDEX idx_category (category)
+) ENGINE=InnoDB`).catch(() => {});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Gemini\n`);
