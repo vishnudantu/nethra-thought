@@ -92,18 +92,24 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  const groups = ['core', 'political', 'services', 'intelligence', 'future', 'admin'];
-  const isSuperAdmin = userRole?.role === 'super_admin';
-
-  const isPoliticianAdmin = userRole?.role === 'politician_admin';
-  const visibleItems = navItems.filter(item =>
-    (!item.adminOnly || isSuperAdmin || (isPoliticianAdmin && item.id === 'staff-management')) &&
-    (!item.moduleKey || hasModule(item.moduleKey))
-  );
-  // Debug: force superadmin item if role is super_admin
-  const finalItems = isSuperAdmin
-    ? [...visibleItems.filter(i => i.id !== 'superadmin'), navItems.find(i => i.id === 'superadmin')!]
-    : visibleItems.filter(i => i.id !== 'superadmin');
+  const role = (userRole?.role || '').toLowerCase();
+  const isSuperAdmin = role === 'super_admin';
+  const isFieldWorker = role === 'field_worker';
+  const isStaff = role === 'staff';
+  const groups = isSuperAdmin ? ['admin'] : isFieldWorker ? ['core', 'intelligence'] : ['core', 'political', 'services', 'intelligence', 'future', 'admin'];
+  const superAdminNavIds = new Set(['superadmin', 'website-admin']);
+  const fieldWorkerNavIds = new Set(['dashboard', 'quick-capture', 'voice-intelligence', 'grievances', 'appointments', 'events']);
+  const staffRestrictedIds = new Set(['voters', 'finance', 'finance-compliance']);
+  const isPoliticianAdmin = role === 'politician_admin';
+  const visibleItems = isSuperAdmin
+    ? navItems.filter(item => superAdminNavIds.has(item.id))
+    : navItems.filter(item => {
+      if (isFieldWorker) return fieldWorkerNavIds.has(item.id);
+      if (isStaff && staffRestrictedIds.has(item.id)) return false;
+      return (!item.adminOnly || isSuperAdmin || (isPoliticianAdmin && item.id === 'staff-management')) &&
+        (!item.moduleKey || hasModule(item.moduleKey));
+    });
+  const finalItems = visibleItems.filter(i => i.id !== 'superadmin').concat(visibleItems.find(i => i.id === 'superadmin') ? [visibleItems.find(i => i.id === 'superadmin')!] : []);
 
   const initials = activePolitician?.full_name
     ? activePolitician.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')

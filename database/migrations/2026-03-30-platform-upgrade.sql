@@ -1,0 +1,195 @@
+-- Migration: 2026-03-30 Platform upgrade (politician scoping + founder ops)
+SET FOREIGN_KEY_CHECKS = 0;
+
+ALTER TABLE `users` MODIFY `role` ENUM('super_admin','politician_admin','staff','field_worker') NOT NULL DEFAULT 'staff';
+ALTER TABLE `users` ADD COLUMN `two_factor_secret` VARCHAR(64) DEFAULT NULL;
+ALTER TABLE `users` ADD COLUMN `failed_login_attempts` INT DEFAULT 0;
+ALTER TABLE `users` ADD COLUMN `locked_until` DATETIME DEFAULT NULL;
+ALTER TABLE `users` ADD COLUMN `last_login_at` DATETIME DEFAULT NULL;
+ALTER TABLE `users` ADD COLUMN `last_login_ip` VARCHAR(45) DEFAULT NULL;
+
+ALTER TABLE `grievances` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `events` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `team_members` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `voters` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `projects` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `media_mentions` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `finances` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `communications` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `documents` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `appointments` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `polls` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `poll_responses` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `darshan_bookings` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `darshan_date_slots` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `darshan_donations` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `bills` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `citizen_engagements` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `volunteers` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `suggestions` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `parliamentary_questions` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `parliamentary_debates` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `parliamentary_bills` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `ai_briefings` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `constituencies` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `ai_generated_content` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `content_calendar` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `opposition_intelligence` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `voice_reports` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `promises` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `whatsapp_intelligence` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `visit_plans` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `booths` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `predictive_alerts` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `agent_tasks` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `deepfake_incidents` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `relationships` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `economic_indicators` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `citizen_service_requests` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `election_updates` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `finance_compliance_reports` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `party_integrations` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `digital_twin_runs` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `darshans` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+ALTER TABLE `notifications` ADD COLUMN `politician_id` INT UNSIGNED DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS `audit_logs` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT UNSIGNED DEFAULT NULL,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `action` VARCHAR(50) NOT NULL,
+  `table_name` VARCHAR(100) DEFAULT NULL,
+  `record_id` INT UNSIGNED DEFAULT NULL,
+  `metadata` JSON DEFAULT NULL,
+  `ip_address` VARCHAR(45) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `user_sessions` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT UNSIGNED NOT NULL,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `refresh_token_hash` VARCHAR(255) NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `ip_address` VARCHAR(45) DEFAULT NULL,
+  `user_agent` VARCHAR(255) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `temple_registry` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `temple_name` VARCHAR(255) NOT NULL,
+  `location` VARCHAR(255) DEFAULT '',
+  `state` VARCHAR(100) DEFAULT '',
+  `shrine_type` VARCHAR(100) DEFAULT '',
+  `contact_phone` VARCHAR(20) DEFAULT '',
+  `contact_email` VARCHAR(255) DEFAULT '',
+  `notes` TEXT DEFAULT NULL,
+  `is_active` TINYINT(1) DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `darshan_slots` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `temple_id` INT UNSIGNED DEFAULT NULL,
+  `darshan_date` DATE NOT NULL,
+  `slot_time` VARCHAR(50) DEFAULT '',
+  `capacity` INT DEFAULT 0,
+  `reserved_count` INT DEFAULT 0,
+  `status` ENUM('Open','Full','Closed') DEFAULT 'Open',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `darshan_quotas` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `temple_id` INT UNSIGNED DEFAULT NULL,
+  `quota_date` DATE NOT NULL,
+  `quota_limit` INT DEFAULT 0,
+  `used_count` INT DEFAULT 0,
+  `notes` TEXT DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `darshan_waiting_list` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `temple_id` INT UNSIGNED DEFAULT NULL,
+  `pilgrim_name` VARCHAR(255) NOT NULL,
+  `contact_phone` VARCHAR(20) DEFAULT '',
+  `requested_date` DATE DEFAULT NULL,
+  `status` ENUM('Waiting','Notified','Confirmed','Cancelled') DEFAULT 'Waiting',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `darshan_requests` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `temple_id` INT UNSIGNED DEFAULT NULL,
+  `pilgrim_name` VARCHAR(255) NOT NULL,
+  `pilgrim_contact` VARCHAR(20) DEFAULT '',
+  `darshan_date` DATE DEFAULT NULL,
+  `darshan_type` VARCHAR(100) DEFAULT '',
+  `status` ENUM('Pending','Approved','Rejected','Scheduled') DEFAULT 'Pending',
+  `notes` TEXT DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `platform_metrics` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `metric_key` VARCHAR(100) NOT NULL,
+  `metric_value` DECIMAL(14,2) DEFAULT 0,
+  `recorded_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `politician_metrics` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED NOT NULL,
+  `metric_key` VARCHAR(100) NOT NULL,
+  `metric_value` DECIMAL(14,2) DEFAULT 0,
+  `recorded_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `billing_records` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `amount` DECIMAL(14,2) NOT NULL DEFAULT 0,
+  `currency` VARCHAR(10) DEFAULT 'INR',
+  `billing_period` VARCHAR(50) DEFAULT 'monthly',
+  `status` ENUM('pending','paid','failed') DEFAULT 'pending',
+  `paid_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `api_key_usage` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `key_name` VARCHAR(100) NOT NULL,
+  `endpoint` VARCHAR(255) DEFAULT '',
+  `status_code` INT DEFAULT NULL,
+  `used_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `feature_flag_changes` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED DEFAULT NULL,
+  `changed_by` INT UNSIGNED DEFAULT NULL,
+  `flag_key` VARCHAR(100) NOT NULL,
+  `change_type` VARCHAR(50) NOT NULL,
+  `old_value` VARCHAR(100) DEFAULT NULL,
+  `new_value` VARCHAR(100) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `weekly_reports` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `politician_id` INT UNSIGNED NOT NULL,
+  `week_start` DATE NOT NULL,
+  `report_data` JSON DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET FOREIGN_KEY_CHECKS = 1;

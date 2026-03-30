@@ -23,7 +23,7 @@ export default function StaffManagement() {
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ email: '', password: '', role: 'staff' });
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -40,7 +40,7 @@ export default function StaffManagement() {
     setLoading(true);
     try {
       const data = await api.get('/api/admin/users') as StaffUser[];
-      setStaff((data || []).filter(u => u.role === 'staff'));
+      setStaff((data || []).filter(u => u.role === 'staff' || u.role === 'field_worker'));
     } catch (err) {
       console.error('[staff]', err);
       setStaff([]);
@@ -58,11 +58,11 @@ export default function StaffManagement() {
       await api.post('/api/admin/users', {
         email: form.email,
         password: form.password,
-        role: 'staff',
+        role: form.role,
         politician_id: activePolitician?.id,
       });
       setSuccess(`Staff account created: ${form.email}`);
-      setForm({ email: '', password: '' });
+      setForm({ email: '', password: '', role: 'staff' });
       setShowForm(false);
       await fetchStaff();
       setTimeout(() => setSuccess(''), 4000);
@@ -104,7 +104,7 @@ export default function StaffManagement() {
           </p>
         </div>
         <button
-          onClick={() => { setShowForm(true); setError(''); setForm({ email: '', password: generatePassword() }); }}
+          onClick={() => { setShowForm(true); setError(''); setForm({ email: '', password: generatePassword(), role: 'staff' }); }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm"
           style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`, color: '#060b18', border: 'none', cursor: 'pointer' }}
         >
@@ -166,6 +166,20 @@ export default function StaffManagement() {
                   className="w-full px-4 py-2.5 rounded-xl"
                   style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
                 />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#8899bb', display: 'block', marginBottom: 6 }}>
+                  Role *
+                </label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
+                >
+                  <option value="staff">Staff</option>
+                  <option value="field_worker">Field Worker</option>
+                </select>
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: '#8899bb', display: 'block', marginBottom: 6 }}>

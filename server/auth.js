@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 const SECRET = process.env.JWT_SECRET || 'nethra-secret-change-this-in-production';
 
 export function signToken(payload) {
-  return jwt.sign(payload, SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, SECRET, { expiresIn: '24h' });
 }
 
 export function verifyToken(token) {

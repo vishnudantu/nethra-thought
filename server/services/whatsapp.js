@@ -1,5 +1,4 @@
 import pool from '../db.js';
-
 const NEGATIVE_WORDS = ['problem', 'issue', 'complaint', 'delay', 'corruption', 'protest', 'angry', 'bad'];
 const POSITIVE_WORDS = ['thanks', 'thank you', 'good', 'happy', 'support', 'appreciate'];
 
@@ -53,9 +52,9 @@ export async function processWhatsappMessage({ politician_id, sender_phone, mess
 
   if (classification === 'grievance') {
     await pool.query(
-      `INSERT INTO grievances (ticket_number, petitioner_name, contact, category, subject, description, status, priority, location)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [`WA-${Date.now().toString().slice(-8)}`, sender_phone || 'WhatsApp', sender_phone || '', 'WhatsApp', content.slice(0, 120), content, 'Pending', 'Medium', '']
+      `INSERT INTO grievances (politician_id, ticket_number, petitioner_name, contact, category, subject, description, status, priority, location)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [politician_id || null, `WA-${Date.now().toString().slice(-8)}`, sender_phone || 'WhatsApp', sender_phone || '', 'WhatsApp', content.slice(0, 120), content, 'Pending', 'Medium', '']
     );
   }
 

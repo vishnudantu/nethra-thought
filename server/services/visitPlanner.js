@@ -1,5 +1,4 @@
 import pool from '../db.js';
-
 export async function generateVisitPlans(politicianId) {
   if (!politicianId) {
     const [rows] = await pool.query('SELECT id FROM politician_profiles WHERE is_active = 1');
@@ -9,7 +8,7 @@ export async function generateVisitPlans(politicianId) {
     return rows.length;
   }
   const [grievances] = await pool.query(
-    "SELECT location, priority, created_at FROM grievances WHERE status IN ('Pending','Escalated') AND (politician_id = ? OR politician_id IS NULL) ORDER BY created_at DESC LIMIT 100",
+    "SELECT location, priority, created_at FROM grievances WHERE status IN ('Pending','Escalated') AND politician_id = ? ORDER BY created_at DESC LIMIT 100",
     [politicianId]
   );
   const counts = {};

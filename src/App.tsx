@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { LanguageProvider } from './lib/i18n';
 import Layout from './components/layout/Layout';
@@ -52,8 +52,16 @@ import PartyIntegration from './pages/PartyIntegration';
 import DigitalTwin from './pages/DigitalTwin';
 
 function AppContent() {
-  const { user, loading, hasModule } = useAuth();
+  const { user, userRole, loading, hasModule } = useAuth();
   const [activePage, setActivePage] = useState('dashboard');
+  const isSuperAdmin = userRole?.role === 'super_admin';
+  const superAdminPages = useMemo(() => new Set(['superadmin', 'website-admin']), []);
+
+  useEffect(() => {
+    if (isSuperAdmin && !superAdminPages.has(activePage)) {
+      setActivePage('superadmin');
+    }
+  }, [activePage, isSuperAdmin, superAdminPages]);
 
   if (loading) {
     return (
@@ -72,6 +80,9 @@ function AppContent() {
   }
 
   function renderPage() {
+    if (isSuperAdmin) {
+      return activePage === 'website-admin' ? <WebsiteAdmin /> : <SuperAdmin onNavigate={setActivePage} />;
+    }
     if (!hasModule(activePage)) {
       return (
         <div className="rounded-2xl p-6 text-center" style={{ background: 'rgba(255,85,85,0.08)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
@@ -127,7 +138,7 @@ function AppContent() {
       case 'finance-compliance': return <FinancialCompliance />;
       case 'party-integration': return <PartyIntegration />;
       case 'digital-twin': return <DigitalTwin />;
-      case 'superadmin': return <SuperAdmin />;
+      case 'superadmin': return <SuperAdmin onNavigate={setActivePage} />;
       case 'ai-studio': return <AIStudio />;
       case 'staff-management': return <StaffManagement />;
       default: return <Dashboard onNavigate={setActivePage} />;

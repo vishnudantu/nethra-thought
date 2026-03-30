@@ -1,5 +1,5 @@
-import { getApiKey } from './secretStore.js';
 import pool from '../db.js';
+import { getApiKey } from './secretStore.js';
 
 function classifyTranscript(text) {
   const t = text.toLowerCase();
@@ -10,8 +10,8 @@ function classifyTranscript(text) {
   return 'General';
 }
 
-export async function transcribeAudio({ audioBase64, filename, mimeType = 'audio/webm' }) {
-  const apiKey = await getApiKey('OPENAI_API_KEY');
+export async function transcribeAudio({ audioBase64, filename, mimeType = 'audio/webm', politicianId } = {}) {
+  const apiKey = await getApiKey('OPENAI_API_KEY', { politicianId, endpoint: 'voice.transcribe' });
   if (!apiKey) return null;
   const buffer = Buffer.from(audioBase64, 'base64');
   const blob = new Blob([buffer], { type: mimeType });
@@ -61,25 +61,25 @@ export async function createVoiceReport({
 
   if (cls === 'Grievance') {
     await pool.query(
-      `INSERT INTO grievances (ticket_number, petitioner_name, contact, category, subject, description, status, priority, location)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [`VR-${Date.now().toString().slice(-8)}`, reporter_name || 'Voice Report', '', 'Voice', transcript?.slice(0, 120) || 'Voice grievance', transcript, 'Pending', 'Medium', location || '']
+      `INSERT INTO grievances (politician_id, ticket_number, petitioner_name, contact, category, subject, description, status, priority, location)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [politician_id || null, `VR-${Date.now().toString().slice(-8)}`, reporter_name || 'Voice Report', '', 'Voice', transcript?.slice(0, 120) || 'Voice grievance', transcript, 'Pending', 'Medium', location || '']
     );
   }
 
   if (cls === 'Project Update') {
     await pool.query(
-      `INSERT INTO projects (project_name, description, category, status, notes)
-       VALUES (?,?,?,?,?)`,
-      [`Field Update ${new Date().toLocaleDateString('en-IN')}`, transcript?.slice(0, 500) || '', 'Field Update', 'In Progress', transcript || '']
+      `INSERT INTO projects (politician_id, project_name, description, category, status, notes)
+       VALUES (?,?,?,?,?,?)`,
+      [politician_id || null, `Field Update ${new Date().toLocaleDateString('en-IN')}`, transcript?.slice(0, 500) || '', 'Field Update', 'In Progress', transcript || '']
     );
   }
 
   if (cls === 'Media Report') {
     await pool.query(
-      `INSERT INTO media_mentions (headline, source, source_type, sentiment, language, published_at, summary, tags, is_read, reach)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [transcript?.slice(0, 140) || 'Field media report', 'Field Report', 'Online', 'Neutral', language || 'Unknown', new Date(), transcript || '', JSON.stringify(['voice']), 0, 0]
+      `INSERT INTO media_mentions (politician_id, headline, source, source_type, sentiment, language, published_at, summary, tags, is_read, reach)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [politician_id || null, transcript?.slice(0, 140) || 'Field media report', 'Field Report', 'Online', 'Neutral', language || 'Unknown', new Date(), transcript || '', JSON.stringify(['voice']), 0, 0]
     );
   }
 

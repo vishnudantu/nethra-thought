@@ -78,6 +78,10 @@ function LoadingSkeleton() {
 
 export default function Dashboard({ onNavigate }: { onNavigate: (page: string) => void }) {
   const { activePolitician, userRole } = useAuth();
+  const role = userRole?.role || '';
+  const isSuperAdmin = role === 'super_admin';
+  const isFieldWorker = role === 'field_worker';
+  const isStaff = role === 'staff';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
   const [grievances, setGrievances] = useState<Grievance[]>([]);
@@ -97,13 +101,17 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
 
   useEffect(() => {
     async function fetchAll() {
+      if (isSuperAdmin || isFieldWorker) {
+        setLoading(false);
+        return;
+      }
       const [grievanceDataRaw, eventsDataRaw, projectsDataRaw, mediaDataRaw, teamDataRaw, finDataRaw] = await Promise.all([
         api.list('grievances', { order: 'created_at', dir: 'DESC', limit: '50' }),
         api.list('events', { order: 'start_date', dir: 'ASC', limit: '5' }),
         api.list('projects', { order: 'created_at', dir: 'DESC', limit: '5' }),
         api.list('media_mentions', { order: 'created_at', dir: 'DESC', limit: '5' }),
         api.list('team_members'),
-        api.list('finances'),
+        isStaff ? Promise.resolve([]) : api.list('finances'),
       ]);
 
       const grievanceData = grievanceDataRaw as Grievance[];
@@ -134,21 +142,23 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
       setLoading(false);
     }
     fetchAll();
-  }, []);
+  }, [isSuperAdmin, isFieldWorker, isStaff]);
 
   const fetchConstituency = useCallback(async () => {
+    if (isSuperAdmin || isFieldWorker) return;
     if (!activePolitician?.id) return;
     const all = await api.list('constituency_profiles') as ConstituencyProfile[];
     const match = all.find(cp => cp.politician_id === activePolitician.id) || null;
     setConstProfile(match);
     setConstForm(match || {});
-  }, [activePolitician?.id]);
+  }, [activePolitician?.id, isSuperAdmin, isFieldWorker]);
 
   useEffect(() => {
     fetchConstituency();
   }, [fetchConstituency]);
 
   async function saveConstituencyStats() {
+    if (isSuperAdmin || isFieldWorker) return;
     if (!activePolitician?.id) return;
     setConstSaving(true);
     const payload = {
@@ -175,11 +185,50 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
     { icon: Users, label: 'Team Members', value: loading ? '...' : stats.totalTeam.toString(), color: '#e0e0e0', bg: '#9e9e9e' },
     { icon: Calendar, label: 'Upcoming Events', value: loading ? '...' : stats.upcomingEvents.toString(), color: '#ab47bc', bg: '#ab47bc' },
     { icon: Newspaper, label: 'Positive Coverage', value: loading ? '...' : stats.positiveMedia.toString(), change: '+5%', color: '#26c6da', bg: '#26c6da' },
-    { icon: Wallet, label: 'MPLADS Funds (Cr)', value: loading ? '...' : (stats.totalBudget / 10000000).toFixed(1), change: '+0%', color: '#ef5350', bg: '#ef5350' },
+    ...(isStaff ? [] : [{ icon: Wallet, label: 'MPLADS Funds (Cr)', value: loading ? '...' : (stats.totalBudget / 10000000).toFixed(1), change: '+0%', color: '#ef5350', bg: '#ef5350' }]),
   ];
 
   const urgentGrievances = grievances.filter(g => g.priority === 'Urgent' || g.status === 'Escalated').slice(0, 4);
   const pulseScore = stats.totalGrievances ? Math.min(100, Math.round((stats.resolvedGrievances / stats.totalGrievances) * 100)) : 0;
+
+  if (isSuperAdmin) {
+    return (
+      <div className="space-y-6">
+        <div className="glass-card rounded-2xl p-6">
+          <h2 className="text-2xl font-bold" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
+            Platform Command Center
+          </h2>
+          <p style={{ color: '#8899bb', fontSize: 14, marginTop: 6 }}>
+            Super Admin is a founder role. Use Platform Admin to manage politicians, access controls, reports, and platform health.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button onClick={() => onNavigate('superadmin')} className="btn-primary">Open Platform Admin</button>
+            <button onClick={() => onNavigate('website-admin')} className="btn-secondary">Website CMS</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isFieldWorker) {
+    return (
+      <div className="space-y-6">
+        <div className="glass-card rounded-2xl p-6">
+          <h2 className="text-2xl font-bold" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
+            Field Ops Console
+          </h2>
+          <p style={{ color: '#8899bb', fontSize: 14, marginTop: 6 }}>
+            Submit on-ground intelligence, voice reports, and capture grievances assigned to your beat.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button onClick={() => onNavigate('quick-capture')} className="btn-primary">Quick Capture</button>
+            <button onClick={() => onNavigate('voice-intelligence')} className="btn-secondary">Voice Reports</button>
+            <button onClick={() => onNavigate('grievances')} className="btn-secondary">Grievance Log</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -194,6 +243,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: string) =
               {userRole?.role === 'super_admin' ? 'Super Admin' :
                userRole?.role === 'politician_admin' ? (activePolitician?.display_name || activePolitician?.full_name?.split(' ')[0] || 'Admin') + ' Ji' :
                userRole?.role === 'staff' ? 'Staff' :
+               userRole?.role === 'field_worker' ? 'Field Team' :
                'Welcome'}
             </span>
           </h2>

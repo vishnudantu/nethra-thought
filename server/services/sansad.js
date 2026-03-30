@@ -1,5 +1,4 @@
 import pool from '../db.js';
-
 export async function runSansadSync() {
   const feedUrl = process.env.SANSAD_FEED_URL;
   if (!feedUrl) return { skipped: true, reason: 'SANSAD_FEED_URL not configured' };

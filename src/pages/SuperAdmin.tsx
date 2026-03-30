@@ -100,6 +100,8 @@ interface ApiKeyRecord {
   key_hint?: string;
   is_active: number;
   updated_at?: string;
+  usage_count?: number;
+  monthly_limit?: number;
 }
 
 const API_KEY_ITEMS = [
@@ -111,7 +113,7 @@ const API_KEY_ITEMS = [
   { key_name: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key' },
 ];
 
-export default function SuperAdmin() {
+export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { refreshPoliticians } = useAuth();
   const [tab, setTab] = useState<'overview' | 'access' | 'reports' | 'users' | 'api-keys'>('overview');
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -124,10 +126,16 @@ export default function SuperAdmin() {
   const [politicianFeatureAccess, setPoliticianFeatureAccess] = useState<FeatureAccess[]>([]);
   const [roleFeatureAccess, setRoleFeatureAccess] = useState<FeatureAccess[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
+  const [founderMetrics, setFounderMetrics] = useState<{ total_politicians: number; total_users: number; open_alerts: number; recent_briefings: number; mrr: number } | null>(null);
+  const [founderFeed, setFounderFeed] = useState<{ id: string; opponent_name: string; activity_type: string; description: string; created_at: string }[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+  const [politicianKeys, setPoliticianKeys] = useState<ApiKeyRecord[]>([]);
+  const [politicianKeyInputs, setPoliticianKeyInputs] = useState<Record<string, string>>({});
+  const [politicianKeyLimits, setPoliticianKeyLimits] = useState<Record<string, string>>({});
   const [masterKeyConfigured, setMasterKeyConfigured] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState('');
+  const [presetStatus, setPresetStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [showDeploy, setShowDeploy] = useState(false);
   const [form, setForm] = useState<DeployForm>(defaultForm);
@@ -142,6 +150,7 @@ export default function SuperAdmin() {
   const [politicianType, setPoliticianType] = useState<'MP' | 'MLA'>('MP');
   const [autofillSuccess, setAutofillSuccess] = useState('');
   const [selectedAccessPolitician, setSelectedAccessPolitician] = useState<string>('');
+  const [selectedApiPolitician, setSelectedApiPolitician] = useState<string>('');
   const [reportPoliticianId, setReportPoliticianId] = useState<string>('');
   const [reportStatus, setReportStatus] = useState('');
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -158,13 +167,14 @@ export default function SuperAdmin() {
 
   async function fetchData() {
     setLoading(true);
-    const [polDataRaw, usersDataRaw, overviewData, moduleAccessData, featureAccessData, reportsData] = await Promise.all([
-      api.list('politician_profiles'),
-      api.get('/api/admin/users'),
+    const [polDataRaw, usersDataRaw, overviewData, moduleAccessData, featureAccessData, reportsData, dashboardData] = await Promise.all([
+      api.get('/api/founder/politicians'),
+      api.get('/api/founder/users'),
       api.get('/api/admin/politician-overview'),
-      api.get('/api/admin/module-access'),
-      api.get('/api/admin/feature-access'),
-      api.get('/api/admin/reports'),
+      api.get('/api/founder/module-access'),
+      api.get('/api/founder/feature-access'),
+      api.get('/api/founder/reports'),
+      api.get('/api/founder/dashboard'),
     ]);
     const polData = polDataRaw as Politician[];
     const usersData = usersDataRaw as ManagedUser[];
@@ -172,6 +182,7 @@ export default function SuperAdmin() {
     const modulePayload = moduleAccessData as { modules: FeatureModule[]; politician_access: ModuleAccess[]; role_access: ModuleAccess[] };
     const featurePayload = featureAccessData as { features: FeatureFlag[]; politician_access: FeatureAccess[]; role_access: FeatureAccess[] };
     const reportRows = reportsData as AdminReport[];
+    const dashboardPayload = dashboardData as { metrics?: { total_politicians: number; total_users: number; open_alerts: number; recent_briefings: number; mrr: number }; intelligence_feed?: { id: string; opponent_name: string; activity_type: string; description: string; created_at: string }[] };
     const enriched = usersData.map(r => ({
       ...r,
       politician_name: polData?.find(p => p.id === r.politician_id)?.full_name,
@@ -186,10 +197,13 @@ export default function SuperAdmin() {
     setPoliticianFeatureAccess(featurePayload?.politician_access || []);
     setRoleFeatureAccess(featurePayload?.role_access || []);
     setReports(reportRows || []);
+    setFounderMetrics(dashboardPayload?.metrics || null);
+    setFounderFeed(dashboardPayload?.intelligence_feed || []);
     if (!selectedAccessPolitician && polData?.length) setSelectedAccessPolitician(polData[0].id);
+    if (!selectedApiPolitician && polData?.length) setSelectedApiPolitician(polData[0].id);
     if (!reportPoliticianId && polData?.length) setReportPoliticianId(polData[0].id);
     try {
-      const keyRes = await api.get('/api/admin/api-keys') as { keys: ApiKeyRecord[]; masterKeyConfigured: boolean };
+      const keyRes = await api.get('/api/founder/api-keys') as { keys: ApiKeyRecord[]; masterKeyConfigured: boolean };
       setApiKeys(keyRes?.keys || []);
       setMasterKeyConfigured(!!keyRes?.masterKeyConfigured);
     } catch {
@@ -198,6 +212,22 @@ export default function SuperAdmin() {
     }
     setLoading(false);
   }
+
+  async function fetchPoliticianKeys(politicianId: string) {
+    if (!politicianId) return;
+    try {
+      const keys = await api.get(`/api/founder/politicians/${politicianId}/api-keys`) as ApiKeyRecord[];
+      setPoliticianKeys(keys || []);
+    } catch {
+      setPoliticianKeys([]);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedApiPolitician) {
+      fetchPoliticianKeys(selectedApiPolitician);
+    }
+  }, [selectedApiPolitician]);
 
   function generateSlug(name: string) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -212,7 +242,7 @@ export default function SuperAdmin() {
     const value = keyInputs[name];
     if (!value) return;
     try {
-      await api.post('/api/admin/api-keys', { key_name: name, value });
+      await api.post('/api/founder/api-keys', { key_name: name, value });
       setApiKeyStatus(`Saved ${name}`);
       setKeyInputs(prev => ({ ...prev, [name]: '' }));
       await fetchData();
@@ -224,12 +254,40 @@ export default function SuperAdmin() {
 
   async function deleteApiKey(name: string) {
     try {
-      await api.delete(`/api/admin/api-keys/${name}`);
+      await api.delete(`/api/founder/api-keys/${name}`);
       setApiKeyStatus(`Removed ${name}`);
       await fetchData();
       setTimeout(() => setApiKeyStatus(''), 3000);
     } catch {
       setApiKeyStatus(`Failed to remove ${name}`);
+    }
+  }
+
+  async function savePoliticianApiKey(name: string) {
+    if (!selectedApiPolitician) return;
+    const value = politicianKeyInputs[name];
+    if (!value) return;
+    const monthly_limit = Number(politicianKeyLimits[name] || 0);
+    try {
+      await api.put(`/api/founder/politicians/${selectedApiPolitician}/api-keys`, { key_name: name, value, monthly_limit });
+      setApiKeyStatus(`Saved ${name} for politician`);
+      setPoliticianKeyInputs(prev => ({ ...prev, [name]: '' }));
+      await fetchPoliticianKeys(selectedApiPolitician);
+      setTimeout(() => setApiKeyStatus(''), 3000);
+    } catch {
+      setApiKeyStatus(`Failed to save ${name} for politician`);
+    }
+  }
+
+  async function deletePoliticianApiKey(name: string) {
+    if (!selectedApiPolitician) return;
+    try {
+      await api.delete(`/api/founder/politicians/${selectedApiPolitician}/api-keys/${name}`);
+      setApiKeyStatus(`Removed ${name} for politician`);
+      await fetchPoliticianKeys(selectedApiPolitician);
+      setTimeout(() => setApiKeyStatus(''), 3000);
+    } catch {
+      setApiKeyStatus(`Failed to remove ${name} for politician`);
     }
   }
 
@@ -277,7 +335,7 @@ export default function SuperAdmin() {
 
     try {
       const slug = form.slug || generateSlug(form.full_name);
-      const polData = await api.create('politician_profiles', {
+      const polData = await api.post('/api/founder/politicians', {
         full_name: form.full_name,
         party: form.party,
         designation: form.designation,
@@ -294,7 +352,7 @@ export default function SuperAdmin() {
       });
       if (!polData?.id) throw new Error('Failed to create politician profile');
 
-      await api.post('/api/admin/users', {
+      await api.post('/api/founder/users', {
         email: form.email,
         password: form.password,
         role: 'politician_admin',
@@ -352,7 +410,24 @@ export default function SuperAdmin() {
     setTimeout(() => setCopied(''), 2000);
   }
 
-  const filteredOverview = overview.filter(p =>
+  const derivedOverview = useMemo(() => overview.map((p) => {
+    const openGrievances = p.open_grievances ?? 0;
+    const negativeMentions = p.negative_mentions ?? 0;
+    const highThreats = p.high_threats ?? 0;
+    const activeProjects = p.active_projects ?? 0;
+    const upcomingEvents = p.upcoming_events ?? 0;
+    const voiceReports = p.voice_reports ?? 0;
+    const sentiment = p.sentiment_avg ?? 50;
+    const riskScore = Math.round(openGrievances * 0.6 + negativeMentions * 1.2 + highThreats * 2);
+    const momentum = Math.round(activeProjects * 6 + upcomingEvents * 3 + voiceReports * 1.2);
+    const performance = Math.max(0, Math.min(100, Math.round(sentiment + momentum - riskScore)));
+    const winning = Math.max(0, Math.min(100, Math.round(sentiment * 0.7 + momentum * 0.4 - highThreats * 4 - negativeMentions)));
+    const health = riskScore > 80 ? 'Critical' : riskScore > 40 ? 'Watch' : 'Healthy';
+    const status = p.is_active === 1 && p.subscription_status === 'active' ? 'Live' : 'Offline';
+    return { ...p, riskScore, momentum, performance, winning, health, status };
+  }), [overview]);
+
+  const filteredOverview = derivedOverview.filter(p =>
     p.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.constituency_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.party?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -362,12 +437,29 @@ export default function SuperAdmin() {
     const total = politicians.length;
     const active = politicians.filter(p => p.is_active).length;
     const suspended = politicians.filter(p => !p.is_active).length;
-    const openGrievances = overview.reduce((sum, p) => sum + (p.open_grievances || 0), 0);
-    const highThreats = overview.reduce((sum, p) => sum + (p.high_threats || 0), 0);
-    const avgSentimentRaw = overview.filter(p => p.sentiment_avg !== null).map(p => p.sentiment_avg as number);
+    const live = derivedOverview.filter(p => p.status === 'Live').length;
+    const critical = derivedOverview.filter(p => p.health === 'Critical').length;
+    const avgPerf = derivedOverview.length ? Math.round(derivedOverview.reduce((sum, p) => sum + p.performance, 0) / derivedOverview.length) : 0;
+    const avgWinning = derivedOverview.length ? Math.round(derivedOverview.reduce((sum, p) => sum + p.winning, 0) / derivedOverview.length) : 0;
+    const openGrievances = derivedOverview.reduce((sum, p) => sum + (p.open_grievances || 0), 0);
+    const highThreats = derivedOverview.reduce((sum, p) => sum + (p.high_threats || 0), 0);
+    const avgSentimentRaw = derivedOverview.filter(p => p.sentiment_avg !== null).map(p => p.sentiment_avg as number);
     const avgSentiment = avgSentimentRaw.length ? Math.round(avgSentimentRaw.reduce((a, b) => a + b, 0) / avgSentimentRaw.length) : 0;
-    return { total, active, suspended, totalUsers: users.length, openGrievances, highThreats, avgSentiment };
-  }, [politicians, overview, users.length]);
+    return { total, active, suspended, live, critical, totalUsers: users.length, openGrievances, highThreats, avgSentiment, avgPerf, avgWinning };
+  }, [politicians, derivedOverview, users.length]);
+
+  const topPerformers = useMemo(() => (
+    [...derivedOverview].sort((a, b) => b.performance - a.performance).slice(0, 6)
+  ), [derivedOverview]);
+
+  const riskWatch = useMemo(() => (
+    [...derivedOverview].filter(p => p.health !== 'Healthy').sort((a, b) => b.riskScore - a.riskScore).slice(0, 6)
+  ), [derivedOverview]);
+
+  const futureModules = useMemo(() => modules.filter(m => m.is_future).slice(0, 6), [modules]);
+  const futureFeatures = useMemo(() => features.filter(f => f.is_future).slice(0, 6), [features]);
+  const activeModules = useMemo(() => modules.filter(m => m.is_active === 1).length, [modules]);
+  const activeFeatures = useMemo(() => features.filter(f => f.is_active === 1).length, [features]);
 
   function getPoliticianModuleValue(politicianId: string, moduleKey: string) {
     const record = politicianModuleAccess.find(r => r.politician_id === politicianId && r.module_key === moduleKey);
@@ -390,7 +482,7 @@ export default function SuperAdmin() {
   }
 
   async function updateModuleAccess(payload: { module_key: string; politician_id?: string; role?: string; is_enabled: boolean }) {
-    await api.post('/api/admin/module-access', payload);
+    await api.post('/api/founder/module-access', payload);
     if (payload.politician_id) {
       setPoliticianModuleAccess(prev => {
         const filtered = prev.filter(r => !(r.politician_id === payload.politician_id && r.module_key === payload.module_key));
@@ -405,7 +497,7 @@ export default function SuperAdmin() {
   }
 
   async function updateFeatureAccess(payload: { feature_key: string; politician_id?: string; role?: string; is_enabled: boolean }) {
-    await api.post('/api/admin/feature-access', payload);
+    await api.post('/api/founder/feature-access', payload);
     if (payload.politician_id) {
       setPoliticianFeatureAccess(prev => {
         const filtered = prev.filter(r => !(r.politician_id === payload.politician_id && r.feature_key === payload.feature_key));
@@ -419,19 +511,32 @@ export default function SuperAdmin() {
     }
   }
 
+  async function applyPreset(preset: 'starter' | 'professional' | 'intelligence' | 'warroom') {
+    if (!selectedAccessPolitician) return;
+    try {
+      await api.put(`/api/founder/politicians/${selectedAccessPolitician}/features`, { preset });
+      setPresetStatus(`Applied ${preset} preset`);
+      await fetchData();
+      setTimeout(() => setPresetStatus(''), 3000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to apply preset';
+      setPresetStatus(message);
+    }
+  }
+
   async function updateModuleStatus(moduleKey: string, isActive: boolean) {
-    const updated = await api.put(`/api/admin/feature-modules/${moduleKey}`, { is_active: isActive });
+    const updated = await api.put(`/api/founder/feature-modules/${moduleKey}`, { is_active: isActive });
     setModules(prev => prev.map(m => m.module_key === moduleKey ? updated : m));
   }
 
   async function updateFeatureStatus(featureKey: string, isActive: boolean) {
-    const updated = await api.put(`/api/admin/feature-flags/${featureKey}`, { is_active: isActive });
+    const updated = await api.put(`/api/founder/feature-flags/${featureKey}`, { is_active: isActive });
     setFeatures(prev => prev.map(f => f.feature_key === featureKey ? updated : f));
   }
 
   async function createModule() {
     if (!newModule.module_key || !newModule.label) return;
-    await api.post('/api/admin/feature-modules', { ...newModule, is_future: newModule.is_future ? 1 : 0 });
+    await api.post('/api/founder/feature-modules', { ...newModule, is_future: newModule.is_future ? 1 : 0 });
     setNewModule({ module_key: '', label: '', category: '', description: '', is_future: false });
     setShowModuleModal(false);
     fetchData();
@@ -439,7 +544,7 @@ export default function SuperAdmin() {
 
   async function createFeature() {
     if (!newFeature.feature_key || !newFeature.label || !newFeature.module_key) return;
-    await api.post('/api/admin/feature-flags', { ...newFeature, is_future: newFeature.is_future ? 1 : 0 });
+    await api.post('/api/founder/feature-flags', { ...newFeature, is_future: newFeature.is_future ? 1 : 0 });
     setNewFeature({ feature_key: '', label: '', module_key: '', description: '', is_future: false });
     setShowFeatureModal(false);
     fetchData();
@@ -449,9 +554,9 @@ export default function SuperAdmin() {
     setGeneratingReport(true);
     setReportStatus('');
     try {
-      await api.post('/api/admin/reports/weekly', reportPoliticianId ? { politician_id: reportPoliticianId } : {});
+      await api.post('/api/founder/reports/weekly', reportPoliticianId ? { politician_id: reportPoliticianId } : {});
       setReportStatus('Weekly report generated.');
-      const data = await api.get('/api/admin/reports') as AdminReport[];
+      const data = await api.get('/api/founder/reports') as AdminReport[];
       setReports(data || []);
       setTimeout(() => setReportStatus(''), 3000);
     } catch (err: unknown) {
@@ -459,6 +564,24 @@ export default function SuperAdmin() {
       setReportStatus(message);
     }
     setGeneratingReport(false);
+  }
+
+  function healthVariant(health: string) {
+    if (health === 'Critical') return 'danger';
+    if (health === 'Watch') return 'warning';
+    return 'success';
+  }
+
+  function statusVariant(status: string) {
+    return status === 'Live' ? 'teal' : 'neutral';
+  }
+
+  function handleNavigate(page: string) {
+    if (onNavigate) {
+      onNavigate(page);
+    } else {
+      window.location.href = page === 'website-admin' ? '/?page=website-admin' : '/';
+    }
   }
 
   return (
@@ -472,24 +595,51 @@ export default function SuperAdmin() {
             Platform intelligence, feature provisioning, and strategic oversight
           </p>
         </div>
-        <button
-          onClick={() => { setShowDeploy(true); setDeployError(''); setDeploySuccess(''); }}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all"
-          style={{ background: 'linear-gradient(135deg, #00d4aa, #1e88e5)', color: '#060b18', fontSize: 13 }}
-        >
-          <Plus size={16} />
-          Deploy Politician
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => handleNavigate('website-admin')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0f4ff', fontSize: 13 }}
+          >
+            <LayoutDashboard size={16} />
+            Website CMS
+          </button>
+          <button
+            onClick={() => { setShowDeploy(true); setDeployError(''); setDeploySuccess(''); }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all"
+            style={{ background: 'linear-gradient(135deg, #00d4aa, #1e88e5)', color: '#060b18', fontSize: 13 }}
+          >
+            <Plus size={16} />
+            Deploy Politician
+          </button>
+        </div>
       </div>
+
+      {founderMetrics && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {[
+            { label: 'Active Politicians', value: founderMetrics.total_politicians, color: '#00d4aa' },
+            { label: 'Live Sessions', value: founderMetrics.total_users, color: '#42a5f5' },
+            { label: 'Open Alerts', value: founderMetrics.open_alerts, color: '#ff5555' },
+            { label: 'Recent Briefings', value: founderMetrics.recent_briefings, color: '#1e88e5' },
+            { label: 'MRR (₹)', value: founderMetrics.mrr, color: '#00c864' },
+          ].map(stat => (
+            <div key={stat.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="text-xs font-semibold" style={{ color: '#8899bb' }}>{stat.label}</div>
+              <div className="text-2xl font-bold mt-1" style={{ color: stat.color, fontFamily: 'Space Grotesk, sans-serif' }}>{stat.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         {[
           { label: 'Total Politicians', value: stats.total, color: '#00d4aa', icon: Building2 },
-          { label: 'Active Accounts', value: stats.active, color: '#4caf90', icon: UserCheck },
-          { label: 'Suspended', value: stats.suspended, color: '#ff9800', icon: Shield },
-          { label: 'Open Grievances', value: stats.openGrievances, color: '#ff6b6b', icon: ClipboardCheck },
-          { label: 'High Threats', value: stats.highThreats, color: '#ff5555', icon: Ban },
-          { label: 'Avg Sentiment', value: stats.avgSentiment, color: '#1e88e5', icon: Sparkles },
+          { label: 'Live Now', value: stats.live, color: '#4caf90', icon: BadgeCheck },
+          { label: 'At Risk', value: stats.critical, color: '#ff5555', icon: Ban },
+          { label: 'Avg Performance', value: stats.avgPerf, color: '#42a5f5', icon: Sparkles },
+          { label: 'Winning Index', value: stats.avgWinning, color: '#00d4aa', icon: ClipboardCheck },
+          { label: 'High Threats', value: stats.highThreats, color: '#ff6b6b', icon: Shield },
         ].map(stat => {
           const Icon = stat.icon;
           return (
@@ -569,11 +719,11 @@ export default function SuperAdmin() {
             Loading...
           </div>
         ) : tab === 'overview' ? (
-          <div className="p-5 space-y-5">
+          <div className="p-5 space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <div className="text-lg font-semibold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Politician Command Board</div>
-                <div style={{ fontSize: 12, color: '#8899bb' }}>Real-time signals, risks, and performance snapshots</div>
+                <div className="text-lg font-semibold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Founder Command Dashboard</div>
+                <div style={{ fontSize: 12, color: '#8899bb' }}>Live ops, performance rankings, and platform control</div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => { setTab('reports'); setReportPoliticianId(''); }}
@@ -584,6 +734,150 @@ export default function SuperAdmin() {
                   className="btn-primary flex items-center gap-2">
                   <Settings2 size={14} /> Manage Access
                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Platform Health</div>
+                  <Badge variant={stats.critical > 0 ? 'danger' : 'success'}>
+                    {stats.critical > 0 ? `${stats.critical} Critical` : 'Stable'}
+                  </Badge>
+                </div>
+                <div className="space-y-3 mt-4 text-xs" style={{ color: '#8899bb' }}>
+                  <div className="flex items-center justify-between"><span>Live Politicians</span><span style={{ color: '#f0f4ff' }}>{stats.live}/{stats.total}</span></div>
+                  <div className="flex items-center justify-between"><span>Active Modules</span><span style={{ color: '#f0f4ff' }}>{activeModules}</span></div>
+                  <div className="flex items-center justify-between"><span>Active Features</span><span style={{ color: '#f0f4ff' }}>{activeFeatures}</span></div>
+                  <div className="flex items-center justify-between"><span>Open Grievances</span><span style={{ color: '#f0f4ff' }}>{stats.openGrievances}</span></div>
+                  <div className="flex items-center justify-between"><span>High Threats</span><span style={{ color: '#f0f4ff' }}>{stats.highThreats}</span></div>
+                  <div className="flex items-center justify-between"><span>Avg Sentiment</span><span style={{ color: '#f0f4ff' }}>{stats.avgSentiment}</span></div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-xs mb-1" style={{ color: '#8899bb' }}>
+                    <span>Average Performance</span><span style={{ color: '#f0f4ff' }}>{stats.avgPerf}</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${stats.avgPerf}%`, background: 'linear-gradient(135deg, #00d4aa, #1e88e5)' }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Top Performers</div>
+                  <Badge variant="info">Winning Index</Badge>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {topPerformers.map(p => (
+                    <div key={p.id} className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
+                        style={{ background: `linear-gradient(135deg, ${p.color_primary || '#00d4aa'}, ${p.color_secondary || '#1e88e5'})`, color: '#060b18' }}>
+                        {p.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-sm" style={{ color: '#f0f4ff' }}>{p.full_name}</div>
+                        <div className="text-xs truncate" style={{ color: '#8899bb' }}>{p.constituency_name}</div>
+                      </div>
+                      <div className="text-xs font-semibold" style={{ color: '#00d4aa' }}>{p.performance}</div>
+                    </div>
+                  ))}
+                  {topPerformers.length === 0 && (
+                    <div className="text-xs" style={{ color: '#8899bb' }}>No performance data yet.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Risk Watch</div>
+                  <Badge variant={riskWatch.length ? 'warning' : 'success'}>{riskWatch.length ? 'Needs Attention' : 'Clear'}</Badge>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {riskWatch.map(p => (
+                    <div key={p.id} className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
+                        style={{ background: 'rgba(255,85,85,0.15)', color: '#ff5555' }}>
+                        !
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-sm" style={{ color: '#f0f4ff' }}>{p.full_name}</div>
+                        <div className="text-xs truncate" style={{ color: '#8899bb' }}>{p.constituency_name}</div>
+                      </div>
+                      <Badge variant={healthVariant(p.health)}>{p.health}</Badge>
+                    </div>
+                  ))}
+                  {riskWatch.length === 0 && (
+                    <div className="text-xs" style={{ color: '#8899bb' }}>No high-risk profiles right now.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Platform Intelligence Feed</div>
+                <Badge variant={founderFeed.length ? 'info' : 'neutral'}>{founderFeed.length ? 'Live' : 'Idle'}</Badge>
+              </div>
+              <div className="mt-4 space-y-3 text-xs" style={{ color: '#8899bb' }}>
+                {founderFeed.map(item => (
+                  <div key={item.id} className="flex items-start gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full mt-1" style={{ background: 'rgba(0,212,170,0.7)' }} />
+                    <div>
+                      <div style={{ color: '#f0f4ff', fontSize: 12 }}>{item.opponent_name || 'Signal'} — {item.activity_type}</div>
+                      <div style={{ color: '#8899bb' }}>{item.description}</div>
+                    </div>
+                  </div>
+                ))}
+                {!founderFeed.length && (
+                  <div className="text-xs" style={{ color: '#8899bb' }}>No intelligence alerts right now.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Future Radar</div>
+                  <Badge variant="warning">10-Year Vision</Badge>
+                </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[...futureModules.map(m => m.label), ...futureFeatures.map(f => f.label)].slice(0, 8).map(item => (
+                    <div key={item} className="rounded-xl px-3 py-2 text-xs"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: '#8899bb' }}>
+                      {item}
+                    </div>
+                  ))}
+                  {futureModules.length + futureFeatures.length === 0 && (
+                    <div className="text-xs" style={{ color: '#8899bb' }}>No future-lab modules configured yet.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Founder Controls</div>
+                <div className="text-xs mt-1" style={{ color: '#8899bb' }}>Assign modules, unlock features, and generate intelligence</div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <button onClick={() => setTab('access')} className="btn-secondary text-xs flex items-center gap-2">
+                    <SlidersHorizontal size={12} /> Module Access
+                  </button>
+                  <button onClick={() => setTab('reports')} className="btn-secondary text-xs flex items-center gap-2">
+                    <FileBarChart2 size={12} /> Weekly Reports
+                  </button>
+                  <button onClick={() => setShowModuleModal(true)} className="btn-primary text-xs flex items-center gap-2">
+                    <Plus size={12} /> Add Module
+                  </button>
+                  <button onClick={() => setShowFeatureModal(true)} className="btn-primary text-xs flex items-center gap-2">
+                    <Plus size={12} /> Add Feature
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <div className="text-lg font-semibold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Politician Live Board</div>
+                <div style={{ fontSize: 12, color: '#8899bb' }}>Status, momentum, and winning analysis per constituency</div>
               </div>
             </div>
 
@@ -608,7 +902,8 @@ export default function SuperAdmin() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={p.is_active ? 'success' : 'danger'}>{p.is_active ? 'Active' : 'Suspended'}</Badge>
+                      <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+                      <Badge variant={healthVariant(p.health)}>{p.health}</Badge>
                       <button
                         onClick={() => togglePoliticianStatus(p as unknown as Politician)}
                         className="px-2.5 py-1.5 rounded-lg flex items-center gap-1"
@@ -622,10 +917,33 @@ export default function SuperAdmin() {
 
                   <div className="grid grid-cols-3 gap-3 mt-4">
                     {[
+                      { label: 'Performance', value: p.performance, color: '#00d4aa' },
+                      { label: 'Winning Index', value: p.winning, color: '#42a5f5' },
+                      { label: 'Momentum', value: p.momentum, color: '#ffa726' },
+                    ].map(metric => (
+                      <div key={metric.label} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: metric.color }}>{metric.value}</div>
+                        <div style={{ fontSize: 10, color: '#8899bb' }}>{metric.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs" style={{ color: '#8899bb' }}>
+                      <span>Performance</span>
+                      <span style={{ color: '#f0f4ff' }}>{p.performance}%</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${p.performance}%`, background: `linear-gradient(135deg, ${p.color_primary || '#00d4aa'}, ${p.color_secondary || '#1e88e5'})` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mt-4">
+                    {[
                       { label: 'Open Grievances', value: p.open_grievances ?? 0, color: '#ff6b6b' },
-                      { label: 'Active Projects', value: p.active_projects ?? 0, color: '#42a5f5' },
-                      { label: 'Upcoming Events', value: p.upcoming_events ?? 0, color: '#ffa726' },
-                      { label: 'Neg. Mentions', value: p.negative_mentions ?? 0, color: '#ff5555' },
                       { label: 'High Threats', value: p.high_threats ?? 0, color: '#ff7a59' },
                       { label: 'Sentiment Avg', value: p.sentiment_avg ?? 0, color: '#00d4aa' },
                     ].map(metric => (
@@ -682,6 +1000,49 @@ export default function SuperAdmin() {
                 <button onClick={() => setShowFeatureModal(true)} className="btn-primary flex items-center gap-2">
                   <Plus size={14} /> Add Feature
                 </button>
+              </div>
+            </div>
+
+            {presetStatus && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+                style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa' }}>
+                <Check size={14} />
+                <span style={{ fontSize: 12 }}>{presetStatus}</span>
+              </div>
+            )}
+
+            <div className="glass-card rounded-2xl p-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <div className="font-semibold" style={{ color: '#f0f4ff' }}>Tier Presets</div>
+                  <div style={{ fontSize: 11, color: '#8899bb' }}>Apply predefined access tiers per politician.</div>
+                </div>
+                <select
+                  value={selectedAccessPolitician}
+                  onChange={e => setSelectedAccessPolitician(e.target.value)}
+                  className="input-field"
+                  style={{ minWidth: 220 }}
+                >
+                  {politicians.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  { key: 'starter', label: 'Starter' },
+                  { key: 'professional', label: 'Professional' },
+                  { key: 'intelligence', label: 'Intelligence' },
+                  { key: 'warroom', label: 'War Room' },
+                ].map(preset => (
+                  <button
+                    key={preset.key}
+                    onClick={() => applyPreset(preset.key as 'starter' | 'professional' | 'intelligence' | 'warroom')}
+                    className="btn-secondary text-xs"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -759,9 +1120,11 @@ export default function SuperAdmin() {
               <div className="font-semibold" style={{ color: '#f0f4ff' }}>Role Module Access</div>
               <div style={{ fontSize: 11, color: '#8899bb' }}>Default access for each role</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {['politician_admin', 'staff'].map(role => (
+                {['politician_admin', 'staff', 'field_worker'].map(role => (
                   <div key={role} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ fontSize: 12, color: '#f0f4ff', marginBottom: 6 }}>{role === 'politician_admin' ? 'Politician Admin' : 'Staff'}</div>
+                    <div style={{ fontSize: 12, color: '#f0f4ff', marginBottom: 6 }}>
+                      {role === 'politician_admin' ? 'Politician Admin' : role === 'staff' ? 'Staff' : 'Field Worker'}
+                    </div>
                     <div className="space-y-2">
                       {modules.map(module => (
                         <div key={`${role}-${module.module_key}`} className="flex items-center justify-between">
@@ -852,9 +1215,11 @@ export default function SuperAdmin() {
                 <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ fontSize: 12, color: '#f0f4ff', marginBottom: 6 }}>Role Feature Access</div>
                   <div className="space-y-3">
-                    {['politician_admin', 'staff'].map(role => (
+                    {['politician_admin', 'staff', 'field_worker'].map(role => (
                       <div key={role} className="rounded-lg p-2" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        <div style={{ fontSize: 11, color: '#f0f4ff', marginBottom: 4 }}>{role === 'politician_admin' ? 'Politician Admin' : 'Staff'}</div>
+                        <div style={{ fontSize: 11, color: '#f0f4ff', marginBottom: 4 }}>
+                          {role === 'politician_admin' ? 'Politician Admin' : role === 'staff' ? 'Staff' : 'Field Worker'}
+                        </div>
                         {features.map(feature => (
                           <div key={`${role}-${feature.feature_key}`} className="flex items-center justify-between">
                             <span style={{ fontSize: 10, color: '#8899bb' }}>{feature.label}</span>
@@ -951,57 +1316,138 @@ export default function SuperAdmin() {
                 <span style={{ fontSize: 13 }}>{apiKeyStatus}</span>
               </div>
             )}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {API_KEY_ITEMS.map(item => {
-                const existing = apiKeys.find(k => k.key_name === item.key_name);
-                return (
-                  <div key={item.key_name} className="glass-card rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{item.label}</div>
-                        <div style={{ fontSize: 11, color: '#8899bb' }}>{item.key_name}</div>
+            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="font-semibold" style={{ color: '#f0f4ff' }}>Platform API Keys</div>
+              <div style={{ fontSize: 11, color: '#8899bb' }}>Global keys used across the platform.</div>
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {API_KEY_ITEMS.map(item => {
+                  const existing = apiKeys.find(k => k.key_name === item.key_name);
+                  return (
+                    <div key={item.key_name} className="glass-card rounded-2xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{item.label}</div>
+                          <div style={{ fontSize: 11, color: '#8899bb' }}>{item.key_name}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={existing?.is_active ? 'success' : 'neutral'}>
+                            {existing?.is_active ? 'Active' : 'Not Set'}
+                          </Badge>
+                          {existing?.key_hint && (
+                            <span style={{ fontSize: 11, color: '#8899bb' }}>{existing.key_hint}</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={existing?.is_active ? 'success' : 'neutral'}>
-                          {existing?.is_active ? 'Active' : 'Not Set'}
-                        </Badge>
-                        {existing?.key_hint && (
-                          <span style={{ fontSize: 11, color: '#8899bb' }}>{existing.key_hint}</span>
+                        <input
+                          type="password"
+                          className="input-field"
+                          placeholder="Paste new key"
+                          value={keyInputs[item.key_name] || ''}
+                          onChange={e => setKeyInputs(prev => ({ ...prev, [item.key_name]: e.target.value }))}
+                        />
+                        <button
+                          onClick={() => saveApiKey(item.key_name)}
+                          className="btn-primary"
+                          disabled={!masterKeyConfigured || !(keyInputs[item.key_name] || '').trim()}
+                        >
+                          Save
+                        </button>
+                        {existing?.is_active && (
+                          <button
+                            onClick={() => deleteApiKey(item.key_name)}
+                            className="btn-secondary"
+                          >
+                            Remove
+                          </button>
                         )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="password"
-                        className="input-field"
-                        placeholder="Paste new key"
-                        value={keyInputs[item.key_name] || ''}
-                        onChange={e => setKeyInputs(prev => ({ ...prev, [item.key_name]: e.target.value }))}
-                      />
-                      <button
-                        onClick={() => saveApiKey(item.key_name)}
-                        className="btn-primary"
-                        disabled={!masterKeyConfigured || !(keyInputs[item.key_name] || '').trim()}
-                      >
-                        Save
-                      </button>
-                      {existing?.is_active && (
-                        <button
-                          onClick={() => deleteApiKey(item.key_name)}
-                          className="btn-secondary"
-                        >
-                          Remove
-                        </button>
+                      {existing?.updated_at && (
+                        <div style={{ fontSize: 11, color: '#6677aa', marginTop: 6 }}>
+                          Updated: {new Date(existing.updated_at).toLocaleString('en-IN')}
+                        </div>
                       )}
                     </div>
-                    {existing?.updated_at && (
-                      <div style={{ fontSize: 11, color: '#6677aa', marginTop: 6 }}>
-                        Updated: {new Date(existing.updated_at).toLocaleString('en-IN')}
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <div className="font-semibold" style={{ color: '#f0f4ff' }}>Politician API Keys</div>
+                  <div style={{ fontSize: 11, color: '#8899bb' }}>Assign keys per politician with monthly limits.</div>
+                </div>
+                <select
+                  value={selectedApiPolitician}
+                  onChange={e => setSelectedApiPolitician(e.target.value)}
+                  className="input-field"
+                  style={{ maxWidth: 240 }}
+                >
+                  {politicians.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {API_KEY_ITEMS.map(item => {
+                  const existing = politicianKeys.find(k => k.key_name === item.key_name);
+                  const usage = existing ? `${existing.usage_count || 0}/${existing.monthly_limit || 0 || '∞'}` : '0/∞';
+                  return (
+                    <div key={`pol-${item.key_name}`} className="glass-card rounded-2xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{item.label}</div>
+                          <div style={{ fontSize: 11, color: '#8899bb' }}>{item.key_name}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={existing?.is_active ? 'success' : 'neutral'}>
+                            {existing?.is_active ? 'Active' : 'Not Set'}
+                          </Badge>
+                          {existing?.key_hint && (
+                            <span style={{ fontSize: 11, color: '#8899bb' }}>{existing.key_hint}</span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="password"
+                          className="input-field"
+                          placeholder="Paste key"
+                          value={politicianKeyInputs[item.key_name] || ''}
+                          onChange={e => setPoliticianKeyInputs(prev => ({ ...prev, [item.key_name]: e.target.value }))}
+                        />
+                        <input
+                          className="input-field"
+                          placeholder="Monthly limit"
+                          value={politicianKeyLimits[item.key_name] || ''}
+                          onChange={e => setPoliticianKeyLimits(prev => ({ ...prev, [item.key_name]: e.target.value }))}
+                          style={{ maxWidth: 130 }}
+                        />
+                        <button
+                          onClick={() => savePoliticianApiKey(item.key_name)}
+                          className="btn-primary"
+                          disabled={!masterKeyConfigured || !(politicianKeyInputs[item.key_name] || '').trim()}
+                        >
+                          Save
+                        </button>
+                        {existing?.is_active && (
+                          <button
+                            onClick={() => deletePoliticianApiKey(item.key_name)}
+                            className="btn-secondary"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6677aa', marginTop: 6 }}>
+                        Usage: {usage}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : tab === 'users' ? (

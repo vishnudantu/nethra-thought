@@ -1,5 +1,5 @@
-import pool from '../db.js';
 import nodemailer from 'nodemailer';
+import pool from '../db.js';
 import { getApiKey } from './secretStore.js';
 
 function formatDate(date = new Date()) {
@@ -37,45 +37,56 @@ async function fetchPolitician(politicianId) {
   return rows?.[0] || null;
 }
 
-async function fetchMentions(since) {
-  const [rows] = await pool.query(
-    'SELECT headline, source, sentiment, published_at FROM media_mentions WHERE published_at >= ? ORDER BY published_at DESC LIMIT 20',
-    [since]
-  );
+async function fetchMentions(since, politicianId) {
+  const params = [since];
+  let sql = 'SELECT headline, source, sentiment, published_at FROM media_mentions WHERE published_at >= ?';
+  if (politicianId) { sql += ' AND politician_id = ?'; params.push(politicianId); }
+  sql += ' ORDER BY published_at DESC LIMIT 20';
+  const [rows] = await pool.query(sql, params);
   return rows || [];
 }
 
-async function fetchGrievances() {
-  const [rows] = await pool.query(
-    "SELECT subject, category, priority, status, created_at FROM grievances WHERE status IN ('Pending','Escalated') ORDER BY created_at DESC LIMIT 10"
-  );
+async function fetchGrievances(politicianId) {
+  const params = [];
+  let sql = "SELECT subject, category, priority, status, created_at FROM grievances WHERE status IN ('Pending','Escalated')";
+  if (politicianId) { sql += ' AND politician_id = ?'; params.push(politicianId); }
+  sql += ' ORDER BY created_at DESC LIMIT 10';
+  const [rows] = await pool.query(sql, params);
   return rows || [];
 }
 
-async function fetchEvents() {
-  const [rows] = await pool.query(
-    "SELECT title, location, start_date, status FROM events WHERE start_date >= NOW() ORDER BY start_date ASC LIMIT 5"
-  );
+async function fetchEvents(politicianId) {
+  const params = [];
+  let sql = 'SELECT title, location, start_date, status FROM events WHERE start_date >= NOW()';
+  if (politicianId) { sql += ' AND politician_id = ?'; params.push(politicianId); }
+  sql += ' ORDER BY start_date ASC LIMIT 5';
+  const [rows] = await pool.query(sql, params);
   return rows || [];
 }
 
-async function fetchOpposition() {
-  const [rows] = await pool.query(
-    "SELECT opponent_name, activity_type, detected_at FROM opposition_intelligence ORDER BY detected_at DESC LIMIT 5"
-  );
+async function fetchOpposition(politicianId) {
+  const params = [];
+  let sql = 'SELECT opponent_name, activity_type, detected_at FROM opposition_intelligence WHERE 1=1';
+  if (politicianId) { sql += ' AND politician_id = ?'; params.push(politicianId); }
+  sql += ' ORDER BY detected_at DESC LIMIT 5';
+  const [rows] = await pool.query(sql, params);
   return rows || [];
 }
 
-async function fetchApprovals() {
-  const [darshanRows] = await pool.query(
-    "SELECT COUNT(*) as pending_darshan FROM darshan_bookings WHERE approval_status = 'pending'"
-  );
-  const [contentRows] = await pool.query(
-    "SELECT COUNT(*) as pending_content FROM ai_generated_content WHERE is_saved = 0"
-  );
-  const [grievanceRows] = await pool.query(
-    "SELECT COUNT(*) as urgent_grievances FROM grievances WHERE status IN ('Pending','Escalated') AND priority IN ('High','Urgent')"
-  );
+async function fetchApprovals(politicianId) {
+  const params = [];
+  let darshanSql = "SELECT COUNT(*) as pending_darshan FROM darshan_bookings WHERE approval_status = 'pending'";
+  let contentSql = "SELECT COUNT(*) as pending_content FROM ai_generated_content WHERE is_saved = 0";
+  let grievanceSql = "SELECT COUNT(*) as urgent_grievances FROM grievances WHERE status IN ('Pending','Escalated') AND priority IN ('High','Urgent')";
+  if (politicianId) {
+    darshanSql += ' AND politician_id = ?';
+    contentSql += ' AND politician_id = ?';
+    grievanceSql += ' AND politician_id = ?';
+    params.push(politicianId);
+  }
+  const [darshanRows] = await pool.query(darshanSql, params);
+  const [contentRows] = await pool.query(contentSql, params);
+  const [grievanceRows] = await pool.query(grievanceSql, params);
   return {
     pending_darshan: darshanRows?.[0]?.pending_darshan || 0,
     pending_content: contentRows?.[0]?.pending_content || 0,
@@ -83,8 +94,8 @@ async function fetchApprovals() {
   };
 }
 
-async function generateWithGemini(prompt) {
-  const apiKey = await getApiKey('GEMINI_API_KEY');
+async function generateWithGemini(prompt, politicianId) {
+  const apiKey = await getApiKey('GEMINI_API_KEY', { politicianId, endpoint: 'briefing.generate' });
   if (!apiKey) return null;
   const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -141,11 +152,11 @@ export async function generateMorningBrief({ politicianId, force = false } = {})
 
   const politician = await fetchPolitician(politicianId);
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const mentions = await fetchMentions(since.toISOString().slice(0, 19).replace('T', ' '));
-  const grievances = await fetchGrievances();
-  const events = await fetchEvents();
-  const opposition = await fetchOpposition();
-  const approvals = await fetchApprovals();
+  const mentions = await fetchMentions(since.toISOString().slice(0, 19).replace('T', ' '), politicianId);
+  const grievances = await fetchGrievances(politicianId);
+  const events = await fetchEvents(politicianId);
+  const opposition = await fetchOpposition(politicianId);
+  const approvals = await fetchApprovals(politicianId);
 
   const sentimentCounts = mentions.reduce((acc, m) => {
     acc[m.sentiment] = (acc[m.sentiment] || 0) + 1;
@@ -167,7 +178,7 @@ export async function generateMorningBrief({ politicianId, force = false } = {})
     `Pending approvals: darshan ${approvals.pending_darshan}, content ${approvals.pending_content}, urgent grievances ${approvals.urgent_grievances}.\n` +
     `Return crisp bullet points.`;
 
-  const aiContent = await generateWithGemini(prompt);
+  const aiContent = await generateWithGemini(prompt, politicianId);
   const content = aiContent || [
     'Executive Summary',
     `- ${summary}`,

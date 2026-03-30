@@ -1,5 +1,4 @@
 import pool from '../db.js';
-
 function normalizeSentimentScore(rows, sentimentField = 'sentiment') {
   if (!rows || rows.length === 0) return 50;
   let pos = 0, neg = 0, neutral = 0;
@@ -62,7 +61,7 @@ export async function updateSentimentScores() {
     }
     try {
       [grievances] = await pool.query(
-        "SELECT COUNT(*) as cnt FROM grievances WHERE status IN ('Pending','Escalated') AND (politician_id = ? OR politician_id IS NULL)",
+        "SELECT COUNT(*) as cnt FROM grievances WHERE status IN ('Pending','Escalated') AND politician_id = ?",
         [politicianId]
       );
     } catch {

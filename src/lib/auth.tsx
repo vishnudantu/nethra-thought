@@ -5,7 +5,7 @@ import { api } from './api';
 export interface UserRole {
   id: string;
   email?: string;
-  role: 'super_admin' | 'politician_admin' | 'staff';
+  role: 'super_admin' | 'politician_admin' | 'staff' | 'field_worker';
   politician_id: string | null;
   two_factor_enabled?: boolean;
 }
@@ -62,7 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(stored);
       api.me().then(u => {
         setUser(u);
-        api.list('politicians').then((pols: PoliticianProfile[]) => {
+        const isSuperAdmin = u.role === 'super_admin';
+        const listPromise = isSuperAdmin ? api.list('politicians') : api.list('politician_profiles');
+        listPromise.then((pols: PoliticianProfile[]) => {
           setAllPoliticians(pols);
           const storedPol = localStorage.getItem('nethra_active_politician');
           const found = storedPol ? pols.find(p => p.id === storedPol) : null;
@@ -127,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function refreshPoliticians() {
-    const pols = await api.list('politicians') as PoliticianProfile[];
+    const pols = await (user?.role === 'super_admin' ? api.list('politicians') : api.list('politician_profiles')) as PoliticianProfile[];
     setAllPoliticians(pols);
   }
 

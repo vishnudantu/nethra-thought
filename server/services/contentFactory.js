@@ -10,8 +10,8 @@ async function fetchPolitician(politicianId) {
   return rows?.[0] || null;
 }
 
-async function generateWithGemini(prompt) {
-  const apiKey = await getApiKey('GEMINI_API_KEY');
+async function generateWithGemini(prompt, politicianId) {
+  const apiKey = await getApiKey('GEMINI_API_KEY', { politicianId, endpoint: 'content.factory' });
   if (!apiKey) return null;
   const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -47,7 +47,7 @@ Create JSON array with 5 items:
 Each item fields: type, platform, title, content, tags. Keep twitter <= 280 chars.
 Return only JSON.`;
 
-  const raw = await generateWithGemini(prompt);
+  const raw = await generateWithGemini(prompt, politicianId);
   let items = raw ? safeJson(raw) : null;
   if (!Array.isArray(items)) {
     items = [
