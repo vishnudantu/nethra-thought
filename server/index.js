@@ -270,7 +270,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
     let politician = null, allPoliticians = [];
     if (user.role === 'super_admin') {
-      const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
+      const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY full_name");
       allPoliticians = pols; politician = pols[0] || null;
     } else if (user.politician_id) {
       const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
@@ -316,7 +316,7 @@ app.post('/api/auth/2fa/verify', async (req, res) => {
   const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
   let politician = null, allPoliticians = [];
   if (user.role === 'super_admin') {
-    const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
+    const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY full_name");
     allPoliticians = pols; politician = pols[0] || null;
   } else if (user.politician_id) {
     const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
@@ -333,7 +333,7 @@ app.post('/api/auth/2fa/toggle', authMiddleware, async (req, res) => {
 
 app.get('/api/politicians', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
-  const [rows] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
+  const [rows] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY full_name");
   res.json(rows);
 });
 
@@ -710,9 +710,14 @@ app.get('/api/politician_profiles', authMiddleware, async (req, res) => {
   try {
     let rows;
     if (req.user.role === 'super_admin') {
-      [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
+      // Super admin sees all politician profiles (role='politician' or NULL, NOT 'admin')
+      [rows] = await pool.query("SELECT * FROM politician_profiles WHERE role = 'politician' OR role IS NULL ORDER BY full_name");
+    } else if (req.user.politician_id) {
+      // Politician admin sees only their own profile
+      [rows] = await pool.query("SELECT * FROM politician_profiles WHERE id = ? LIMIT 1", [req.user.politician_id]);
     } else {
-      [rows] = await pool.query("SELECT * FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [req.user.politician_id]);
+      // Fallback — no politician linked, return empty
+      rows = [];
     }
     // Parse JSON fields
     rows = rows.map(r => {
@@ -1198,7 +1203,7 @@ app.get('/api/founder/dashboard', authMiddleware, async (req, res) => {
     const [[{ totalUsers }]] = await pool.query('SELECT COUNT(*) as totalUsers FROM users WHERE is_active = 1');
     const [[{ openAlerts }]] = await pool.query('SELECT COUNT(*) as openAlerts FROM notifications WHERE is_read = 0');
     const [[{ activeBriefings }]] = await pool.query('SELECT COUNT(*) as activeBriefings FROM ai_briefings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
-    const [politicians] = await pool.query("SELECT id,full_name,party,designation,state,is_active,created_at FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY created_at DESC LIMIT 12");
+    const [politicians] = await pool.query("SELECT id,full_name,party,designation,state,is_active,created_at FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY created_at DESC LIMIT 12");
     const [intelFeed] = await pool.query('SELECT id,opponent_name,activity_type,description,created_at FROM opposition_intelligence ORDER BY created_at DESC LIMIT 10');
     const [[{ mrr }]] = await pool.query("SELECT COALESCE(SUM(amount),0) as mrr FROM billing_records WHERE status = 'paid' AND billing_period = 'monthly'");
     res.json({
@@ -1220,7 +1225,7 @@ app.get('/api/founder/platform/metrics', authMiddleware, async (req, res) => {
 app.get('/api/founder/politicians', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
-    const [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY created_at DESC");
+    const [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY created_at DESC");
     res.json(rows || []);
   } catch (e) {
     console.error('[GET /api/founder/politicians]', e.message);
@@ -1876,7 +1881,7 @@ app.post('/api/admin/reports/weekly', authMiddleware, async (req, res) => {
     if (politician_id) {
       targets.push(politician_id);
     } else {
-      const [pols] = await pool.query("SELECT id FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
+      const [pols] = await pool.query("SELECT id FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY full_name");
       targets.push(...pols.map(p => p.id));
     }
     const results = [];
