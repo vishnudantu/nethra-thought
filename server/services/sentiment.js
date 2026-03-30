@@ -19,7 +19,7 @@ function grievanceScore(pendingCount) {
 }
 
 export async function updateSentimentScores() {
-  const [politicians] = await pool.query('SELECT id FROM politician_profiles WHERE is_active = 1');
+  const [politicians] = await pool.query("SELECT id FROM politician_profiles WHERE is_active = 1 AND (role = 'politician' OR role IS NULL)");
   const today = new Date().toISOString().slice(0, 10);
 
   for (const pol of politicians) {

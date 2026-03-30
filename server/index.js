@@ -254,10 +254,10 @@ app.post('/api/auth/login', async (req, res) => {
     const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
     let politician = null, allPoliticians = [];
     if (user.role === 'super_admin') {
-      const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles ORDER BY full_name');
+      const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
       allPoliticians = pols; politician = pols[0] || null;
     } else if (user.politician_id) {
-      const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ?', [user.politician_id]);
+      const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
       politician = pols[0] || null; allPoliticians = pols;
     }
     res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled }, politician, allPoliticians });
@@ -300,10 +300,10 @@ app.post('/api/auth/2fa/verify', async (req, res) => {
   const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
   let politician = null, allPoliticians = [];
   if (user.role === 'super_admin') {
-    const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles ORDER BY full_name');
+    const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
     allPoliticians = pols; politician = pols[0] || null;
   } else if (user.politician_id) {
-    const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ?', [user.politician_id]);
+    const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
     politician = pols[0] || null; allPoliticians = pols;
   }
   res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled }, politician, allPoliticians });
@@ -317,7 +317,7 @@ app.post('/api/auth/2fa/toggle', authMiddleware, async (req, res) => {
 
 app.get('/api/politicians', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
-  const [rows] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles ORDER BY full_name');
+  const [rows] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
   res.json(rows);
 });
 
@@ -676,9 +676,9 @@ app.get('/api/politician_profiles', authMiddleware, async (req, res) => {
   try {
     let rows;
     if (req.user.role === 'super_admin') {
-      [rows] = await pool.query('SELECT * FROM politician_profiles ORDER BY full_name');
+      [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
     } else {
-      [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.user.politician_id]);
+      [rows] = await pool.query("SELECT * FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [req.user.politician_id]);
     }
     // Parse JSON fields
     rows = rows.map(r => {
@@ -695,7 +695,7 @@ app.get('/api/politician_profiles', authMiddleware, async (req, res) => {
 });
 app.get('/api/politician_profiles/:id', authMiddleware, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.params.id]);
+    const [rows] = await pool.query("SELECT * FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const r = {...rows[0]};
     for (const k of Object.keys(r)) {
@@ -1070,11 +1070,11 @@ const requireSuperAdmin = (req, res) => {
 app.get('/api/founder/dashboard', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
-    const [[{ totalPoliticians }]] = await pool.query('SELECT COUNT(*) as totalPoliticians FROM politician_profiles WHERE is_active = 1');
+    const [[{ totalPoliticians }]] = await pool.query("SELECT COUNT(*) as totalPoliticians FROM politician_profiles WHERE is_active = 1 AND (role = 'politician' OR role IS NULL)");
     const [[{ totalUsers }]] = await pool.query('SELECT COUNT(*) as totalUsers FROM users WHERE is_active = 1');
     const [[{ openAlerts }]] = await pool.query('SELECT COUNT(*) as openAlerts FROM notifications WHERE is_read = 0');
     const [[{ activeBriefings }]] = await pool.query('SELECT COUNT(*) as activeBriefings FROM ai_briefings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
-    const [politicians] = await pool.query('SELECT id,full_name,party,designation,state,is_active,created_at FROM politician_profiles ORDER BY created_at DESC LIMIT 12');
+    const [politicians] = await pool.query("SELECT id,full_name,party,designation,state,is_active,created_at FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY created_at DESC LIMIT 12");
     const [intelFeed] = await pool.query('SELECT id,opponent_name,activity_type,description,created_at FROM opposition_intelligence ORDER BY created_at DESC LIMIT 10');
     const [[{ mrr }]] = await pool.query("SELECT COALESCE(SUM(amount),0) as mrr FROM billing_records WHERE status = 'paid' AND billing_period = 'monthly'");
     res.json({
@@ -1095,7 +1095,7 @@ app.get('/api/founder/platform/metrics', authMiddleware, async (req, res) => {
 
 app.get('/api/founder/politicians', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const [rows] = await pool.query('SELECT * FROM politician_profiles ORDER BY created_at DESC');
+  const [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY created_at DESC");
   res.json(rows);
 });
 
@@ -1698,6 +1698,7 @@ app.get('/api/admin/politician-overview', authMiddleware, async (req, res) => {
         (SELECT COUNT(*) FROM voice_reports v WHERE v.politician_id = p.id AND v.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS voice_reports,
         (SELECT ROUND(AVG(s.overall_score)) FROM sentiment_scores s WHERE s.politician_id = p.id AND s.score_date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)) AS sentiment_avg
       FROM politician_profiles p
+      WHERE (p.role = 'politician' OR p.role IS NULL)
       ORDER BY p.full_name
     `);
     res.json(rows);
@@ -1712,12 +1713,12 @@ app.post('/api/admin/reports/weekly', authMiddleware, async (req, res) => {
     if (politician_id) {
       targets.push(politician_id);
     } else {
-      const [pols] = await pool.query('SELECT id FROM politician_profiles ORDER BY full_name');
+      const [pols] = await pool.query("SELECT id FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY full_name");
       targets.push(...pols.map(p => p.id));
     }
     const results = [];
     for (const polId of targets) {
-      const [[pol]] = await pool.query('SELECT full_name,constituency_name,state FROM politician_profiles WHERE id = ?', [polId]);
+      const [[pol]] = await pool.query("SELECT full_name,constituency_name,state FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [polId]);
       if (!pol) continue;
       const [[grievances]] = await pool.query(
         "SELECT COUNT(*) as total, SUM(status IN ('Resolved','Closed')) as resolved FROM grievances WHERE politician_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",

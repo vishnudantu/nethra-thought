@@ -1,7 +1,7 @@
 import pool from '../db.js';
 export async function generateVisitPlans(politicianId) {
   if (!politicianId) {
-    const [rows] = await pool.query('SELECT id FROM politician_profiles WHERE is_active = 1');
+    const [rows] = await pool.query("SELECT id FROM politician_profiles WHERE is_active = 1 AND (role = 'politician' OR role IS NULL)");
     for (const row of rows) {
       await generateVisitPlans(row.id);
     }

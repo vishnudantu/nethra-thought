@@ -31,7 +31,7 @@ async function safeInsert(table, data) {
 async function fetchPolitician(politicianId) {
   if (!politicianId) return null;
   const [rows] = await pool.query(
-    'SELECT id, full_name, constituency_name, state, party, designation FROM politician_profiles WHERE id = ? LIMIT 1',
+    "SELECT id, full_name, constituency_name, state, party, designation FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL) LIMIT 1",
     [politicianId]
   );
   return rows?.[0] || null;

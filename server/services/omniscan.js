@@ -87,7 +87,7 @@ async function insertMention(mention) {
 }
 
 async function fetchPoliticians() {
-  const [rows] = await pool.query('SELECT id, full_name, display_name, constituency_name FROM politician_profiles WHERE is_active = 1');
+  const [rows] = await pool.query("SELECT id, full_name, display_name, constituency_name FROM politician_profiles WHERE is_active = 1 AND (role = 'politician' OR role IS NULL)");
   return rows || [];
 }
 
