@@ -256,6 +256,14 @@ app.post('/api/auth/login', async (req, res) => {
 
     clearLoginFailures(req);
 
+    if (!user.politician_id && user.role === 'politician_admin') {
+      const [pols] = await pool.query('SELECT id FROM politician_profiles WHERE email = ? LIMIT 1', [user.email]);
+      if (pols?.[0]?.id) {
+        await pool.query('UPDATE users SET politician_id = ? WHERE id = ?', [pols[0].id, user.id]);
+        user.politician_id = pols[0].id;
+      }
+    }
+
     if (user.two_factor_enabled) {
       const code = crypto.randomInt(100000, 999999).toString();
       const hash = await bcrypt.hash(code, 10);
@@ -311,6 +319,14 @@ app.post('/api/auth/2fa/verify', async (req, res) => {
   const ok = await bcrypt.compare(code, user.two_factor_code_hash);
   if (!ok) return res.status(401).json({ error: 'Invalid code' });
   await pool.query('UPDATE users SET two_factor_code_hash = NULL, two_factor_expires = NULL WHERE id = ?', [user.id]);
+
+  if (!user.politician_id && user.role === 'politician_admin') {
+    const [pols] = await pool.query('SELECT id FROM politician_profiles WHERE email = ? LIMIT 1', [user.email]);
+    if (pols?.[0]?.id) {
+      await pool.query('UPDATE users SET politician_id = ? WHERE id = ?', [pols[0].id, user.id]);
+      user.politician_id = pols[0].id;
+    }
+  }
 
   await pool.query('UPDATE users SET last_login_at = NOW(), last_login_ip = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [req.ip, user.id]);
   const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
