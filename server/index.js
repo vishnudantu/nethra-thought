@@ -451,20 +451,24 @@ app.get('/api/website/content/:page', async (req, res) => {
 
 app.get('/api/admin/website-content', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
-  await ensureWebsiteContent();
-  const [rows] = await pool.query('SELECT * FROM website_content ORDER BY page, section');
-  res.json(rows || []);
+  try {
+    await ensureWebsiteContent();
+    const [rows] = await pool.query('SELECT * FROM website_content ORDER BY page, section');
+    res.json(rows || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/admin/website-content', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
-  const { page, section, content } = req.body;
-  if (!page || !section) return res.status(400).json({ error: 'page and section required' });
-  await pool.query(
-    'INSERT INTO website_content (page, section, content) VALUES (?,?,?) ON DUPLICATE KEY UPDATE content=VALUES(content)',
-    [page, section, JSON.stringify(content)]
-  );
-  res.json({ success: true });
+  try {
+    const { page, section, content } = req.body;
+    if (!page || !section) return res.status(400).json({ error: 'page and section required' });
+    await pool.query(
+      'INSERT INTO website_content (page, section, content) VALUES (?,?,?) ON DUPLICATE KEY UPDATE content=VALUES(content)',
+      [page, section, JSON.stringify(content)]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── GENERIC CRUD ──────────────────────────────────────────────
@@ -1215,26 +1219,50 @@ app.get('/api/founder/platform/metrics', authMiddleware, async (req, res) => {
 
 app.get('/api/founder/politicians', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY created_at DESC");
-  res.json(rows);
+  try {
+    const [rows] = await pool.query("SELECT * FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) ORDER BY created_at DESC");
+    res.json(rows || []);
+  } catch (e) {
+    console.error('[GET /api/founder/politicians]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const payload = req.body || {};
-  if (!payload.full_name) return res.status(400).json({ error: 'full_name required' });
-  const clean = {};
-  for (const [k, v] of Object.entries(payload)) {
-    if (k === 'id') continue;
-    if (Array.isArray(v) || (v !== null && typeof v === 'object')) clean[k] = JSON.stringify(v);
-    else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
-    else clean[k] = v;
+  try {
+    const payload = req.body || {};
+    if (!payload.full_name) return res.status(400).json({ error: 'full_name required' });
+    // Allowed columns — strip anything not in schema to avoid unknown column errors
+    const ALLOWED = ['full_name','display_name','slug','photo_url','party','designation',
+      'constituency_name','state','lok_sabha_seat','bio','phone','email','office_address',
+      'website','twitter_handle','facebook_url','instagram_handle','youtube_channel',
+      'education','dob','age','languages','achievements','role','is_active','term_start',
+      'term_end','previous_terms','election_year','subscription_status','deployed_at',
+      'color_primary','color_secondary','auth_user_id'];
+    const clean = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (k === 'id') continue;
+      if (!ALLOWED.includes(k)) continue;
+      if (Array.isArray(v) || (v !== null && typeof v === 'object')) clean[k] = JSON.stringify(v);
+      else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
+      else clean[k] = v;
+    }
+    // Ensure required fields have defaults
+    if (!clean.role) clean.role = 'politician';
+    if (clean.is_active === undefined) clean.is_active = 1;
+    if (!clean.subscription_status) clean.subscription_status = 'active';
+    if (!clean.color_primary) clean.color_primary = '#00d4aa';
+    if (!clean.color_secondary) clean.color_secondary = '#1e88e5';
+    const cols = Object.keys(clean).map(k => `\`${k}\``).join(',');
+    const ph = Object.keys(clean).map(() => '?').join(',');
+    const [r] = await pool.query(`INSERT INTO politician_profiles (${cols}) VALUES (${ph})`, Object.values(clean));
+    const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [r.insertId]);
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    console.error('[POST /api/founder/politicians]', e.message);
+    res.status(500).json({ error: e.message });
   }
-  const cols = Object.keys(clean).map(k => `\`${k}\``).join(',');
-  const ph = Object.keys(clean).map(() => '?').join(',');
-  const [r] = await pool.query(`INSERT INTO politician_profiles (${cols}) VALUES (${ph})`, Object.values(clean));
-  const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [r.insertId]);
-  res.status(201).json(rows[0]);
 });
 
 app.put('/api/founder/politicians/:id', authMiddleware, async (req, res) => {
@@ -1556,16 +1584,31 @@ app.post('/api/founder/feature-access', authMiddleware, async (req, res) => {
 
 app.get('/api/founder/reports', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const [rows] = await pool.query('SELECT * FROM weekly_reports ORDER BY created_at DESC LIMIT 50');
-  res.json(rows);
+  try {
+    const [rows] = await pool.query('SELECT * FROM admin_reports ORDER BY created_at DESC LIMIT 50');
+    res.json(rows || []);
+  } catch (e) {
+    console.error('[GET /api/founder/reports]', e.message);
+    res.json([]);
+  }
 });
 
 app.post('/api/founder/reports/weekly', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const { politician_id, week_start, report_data } = req.body || {};
-  if (!politician_id || !week_start) return res.status(400).json({ error: 'politician_id and week_start required' });
-  await pool.query('INSERT INTO weekly_reports (politician_id,week_start,report_data) VALUES (?,?,?)', [politician_id, week_start, JSON.stringify(report_data || {})]);
-  res.json({ success: true });
+  try {
+    const { politician_id } = req.body || {};
+    const title = politician_id
+      ? `Weekly Report — ${new Date().toLocaleDateString('en-IN')}`
+      : `Platform Weekly Report — ${new Date().toLocaleDateString('en-IN')}`;
+    await pool.query(
+      'INSERT INTO admin_reports (politician_id, report_type, title, summary, content, created_by) VALUES (?,?,?,?,?,?)',
+      [politician_id || null, 'weekly', title, 'Auto-generated weekly report', '{}', req.user.id]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[POST /api/founder/reports/weekly]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── SUPER ADMIN — USERS ───────────────────────────────────────

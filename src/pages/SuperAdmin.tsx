@@ -326,7 +326,11 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   async function handleDeploy(e: React.FormEvent) {
     e.preventDefault();
     if (!form.full_name || !form.email || !form.password || !form.constituency_name) {
-      setDeployError('Please fill in all required fields.');
+      setDeployError('Please fill in all required fields: Name, Email, Password, Constituency.');
+      return;
+    }
+    if (form.password.length < 8) {
+      setDeployError('Password must be at least 8 characters.');
       return;
     }
     setDeploying(true);
@@ -335,23 +339,27 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
 
     try {
       const slug = form.slug || generateSlug(form.full_name);
+
+      // Step 1 — Create politician profile
       const polData = await api.post('/api/founder/politicians', {
         full_name: form.full_name,
-        party: form.party,
-        designation: form.designation,
+        party: form.party || '',
+        designation: form.designation || 'Member of Parliament',
         constituency_name: form.constituency_name,
-        state: form.state,
+        state: form.state || '',
         slug,
         subscription_status: 'active',
-        is_active: true,
-        color_primary: form.color_primary,
-        color_secondary: form.color_secondary,
+        is_active: 1,
+        color_primary: form.color_primary || '#00d4aa',
+        color_secondary: form.color_secondary || '#1e88e5',
         role: 'politician',
         email: form.email,
         deployed_at: new Date().toISOString(),
       });
-      if (!polData?.id) throw new Error('Failed to create politician profile');
 
+      if (!polData?.id) throw new Error('Server did not return a politician ID. Check server logs.');
+
+      // Step 2 — Create login account
       await api.post('/api/founder/users', {
         email: form.email,
         password: form.password,
@@ -359,7 +367,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
         politician_id: polData.id,
       });
 
-      // Save constituency stats if autofill data available
+      // Step 3 — Save constituency stats if autofill data available
       const extra = (window as AutofillWindow).__autofill_extra;
       if (extra?.constituency_stats && polData?.id) {
         const cs = extra.constituency_stats;
@@ -379,7 +387,8 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
         }).catch(() => {});
         delete (window as AutofillWindow).__autofill_extra;
       }
-      setDeploySuccess(`${form.full_name} has been deployed successfully! Login: ${form.email}`);
+
+      setDeploySuccess(`✓ ${form.full_name} deployed successfully! Login: ${form.email}`);
       setForm(defaultForm);
       setShowDeploy(false);
       await fetchData();
@@ -392,9 +401,20 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   }
 
   async function togglePoliticianStatus(politician: Politician) {
-    await api.update('politician_profiles', politician.id, { subscription_status: politician.subscription_status === 'active' ? 'suspended' : 'active', is_active: !politician.is_active });
-    setPoliticians(prev => prev.map(p => p.id === politician.id ? { ...p, is_active: !p.is_active, subscription_status: p.is_active ? 'suspended' : 'active' } : p));
-    refreshPoliticians();
+    try {
+      const newActive = !politician.is_active;
+      const newStatus = newActive ? 'active' : 'suspended';
+      await api.update('politician_profiles', politician.id, {
+        subscription_status: newStatus,
+        is_active: newActive ? 1 : 0,
+      });
+      setPoliticians(prev => prev.map(p =>
+        p.id === politician.id ? { ...p, is_active: newActive, subscription_status: newStatus } : p
+      ));
+      refreshPoliticians();
+    } catch (err: unknown) {
+      console.error('Toggle failed:', err);
+    }
   }
 
   async function deletePolitician(id: string) {
