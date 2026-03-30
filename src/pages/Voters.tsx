@@ -61,7 +61,7 @@ function VoterModal({ voter, onClose, onSave }: {
           </button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Voter ID *</label>
               <input className="input-field" placeholder="e.g., AP12345678"
@@ -73,7 +73,7 @@ function VoterModal({ voter, onClose, onSave }: {
                 value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Age</label>
               <input type="number" className="input-field" min={18} max={120}
@@ -96,7 +96,7 @@ function VoterModal({ voter, onClose, onSave }: {
             <input className="input-field" placeholder="email@example.com"
               value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Mandal</label>
               <input className="input-field" placeholder="Mandal"
@@ -113,7 +113,7 @@ function VoterModal({ voter, onClose, onSave }: {
                 value={form.booth_number} onChange={e => setForm({ ...form, booth_number: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Caste / Community</label>
               <input className="input-field" placeholder="e.g., Kamma, Reddy..."
@@ -132,7 +132,7 @@ function VoterModal({ voter, onClose, onSave }: {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Party Affiliation</label>
               <select className="input-field" value={form.party_affiliation} onChange={e => setForm({ ...form, party_affiliation: e.target.value })}>

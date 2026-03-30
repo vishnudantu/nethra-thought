@@ -256,14 +256,30 @@ body::after {
   backdrop-filter: blur(8px);
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 24px 20px;
   overflow-y: auto;
 }
 
-.modal-overlay .glass-card {
-  overflow: auto;
+.modal-overlay > .glass-card,
+.modal-overlay > .glass-card-hover {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+  overflow: hidden;
+}
+
+.modal-overlay > .glass-card > div:nth-child(2),
+.modal-overlay > .glass-card-hover > div:nth-child(2) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.modal-overlay > .glass-card > div:last-child,
+.modal-overlay > .glass-card-hover > div:last-child {
+  flex-shrink: 0;
 }
 
 .table-row {
@@ -347,5 +363,11 @@ select option {
   /* Better tap targets */
   button {
     min-height: 36px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .modal-overlay .grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
   }
 }

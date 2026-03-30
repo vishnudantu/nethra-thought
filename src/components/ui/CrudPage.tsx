@@ -187,7 +187,7 @@ export default function CrudPage({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="glass-card rounded-2xl w-full max-w-2xl overflow-y-auto max-h-[90vh]"
+              className={`glass-card rounded-2xl w-full ${fields.length > 6 ? 'max-w-3xl' : 'max-w-2xl'} max-h-[90vh] flex flex-col`}
               style={{ border: '1px solid rgba(255,255,255,0.12)' }}
               onClick={e => e.stopPropagation()}
             >
@@ -200,7 +200,7 @@ export default function CrudPage({
                   <X size={16} style={{ color: '#8899bb' }} />
                 </button>
               </div>
-              <div className={fields.length > 6 ? 'p-5 grid grid-cols-1 md:grid-cols-2 gap-4' : 'p-5 space-y-4'}>
+              <div className={`${fields.length > 6 ? 'p-5 grid grid-cols-1 md:grid-cols-2 gap-4' : 'p-5 space-y-4'} flex-1 overflow-y-auto`}>
                 {fields.map(field => (
                   <div key={field.key} className={fields.length > 6 && (field.type === 'textarea' || field.type === 'json') ? 'md:col-span-2' : ''}>
                     <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>
