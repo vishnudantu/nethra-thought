@@ -6,7 +6,7 @@ import {
   CalendarCheck, PieChart, Star, Scale, Megaphone, CircleUser as UserCircle,
   Building2, Sparkles, LogOut, ChevronDown, Shield, Check, BrainCircuit, Activity, Clock, Eye, Mic,
   Box, Flag, MessageCircleWarning, Radar, Bot, ShieldAlert, Network, LineChart, Handshake, FileCheck2,
-  Users2, Cpu, Target, Wand2, Globe
+  Users2, Cpu, Target, Wand2, Globe, AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
@@ -51,6 +51,8 @@ const navItems: NavItem[] = [
   { id: 'predictive-crisis', label: 'Predictive Crisis', icon: Radar, group: 'future', moduleKey: 'predictive-crisis' },
   { id: 'agent-system', label: 'Agent System', icon: Bot, group: 'future', moduleKey: 'agent-system' },
   { id: 'deepfake-shield', label: 'Deepfake Shield', icon: ShieldAlert, group: 'future', moduleKey: 'deepfake-shield' },
+  { id: 'coalition-forecast', label: 'Coalition Forecast', icon: Handshake, group: 'future', moduleKey: 'coalition-forecast' },
+  { id: 'crisis-war-room', label: 'Crisis War Room', icon: AlertTriangle, group: 'future', moduleKey: 'crisis-war-room' },
   { id: 'relationship-graph', label: 'Relationship Graph', icon: Network, group: 'future', moduleKey: 'relationship-graph' },
   { id: 'economic-intelligence', label: 'Economic Intelligence', icon: LineChart, group: 'future', moduleKey: 'economic-intelligence' },
   { id: 'citizen-services', label: 'Citizen Services', icon: Handshake, group: 'future', moduleKey: 'citizen-services' },

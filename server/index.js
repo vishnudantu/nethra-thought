@@ -6,13 +6,29 @@ import nodemailer from 'nodemailer';
 import 'dotenv/config';
 import pool from './db.js';
 import { signToken, authMiddleware } from './auth.js';
-import { initQueues, enqueueOmniScan, enqueueMorningBrief, enqueueSentimentUpdate, enqueueContentPack, enqueueVisitPlanner, getQueuesStatus } from './queues.js';
+import {
+  initQueues,
+  enqueueOmniScan,
+  enqueueMorningBrief,
+  enqueueSentimentUpdate,
+  enqueueContentPack,
+  enqueueVisitPlanner,
+  enqueueAgentSystem,
+  enqueueDeepfakeScan,
+  enqueueCoalitionForecast,
+  enqueueWarRoomScan,
+  getQueuesStatus,
+} from './queues.js';
 import { generateMorningBrief } from './services/briefing.js';
 import { updateSentimentScores, getCurrentSentiment, getSentimentHistory } from './services/sentiment.js';
 import { generateDailyContentPack } from './services/contentFactory.js';
 import { generateVisitPlans } from './services/visitPlanner.js';
 import { processWhatsappMessage } from './services/whatsapp.js';
 import { transcribeAudio, createVoiceReport } from './services/voice.js';
+import { agentSystemMetrics } from './services/agentSystem.js';
+import { deepfakeMetrics } from './services/deepfakeShield.js';
+import { coalitionOverview } from './services/coalitionForecast.js';
+import { warRoomMetrics } from './services/warRoom.js';
 import {
   listApiKeys,
   upsertApiKey,
@@ -464,7 +480,8 @@ const POLITICIAN_SCOPED_TABLES = [
   'deepfake_incidents','relationships','economic_indicators','citizen_service_requests',
   'election_updates','finance_compliance_reports','party_integrations','digital_twin_runs',
   'darshans','notifications','temple_registry','darshan_slots','darshan_quotas','darshan_waiting_list',
-  'darshan_requests','politician_metrics','comm_templates','mplads_tracker','grievance_timeline','villages'
+  'darshan_requests','politician_metrics','comm_templates','mplads_tracker','grievance_timeline','villages',
+  'coalition_scenarios','crisis_incidents','warroom_actions'
 ];
 
 const STAFF_DENY_TABLES = ['finances', 'voters', 'finance_compliance_reports', 'billing_records'];
@@ -671,6 +688,19 @@ app.use('/api/darshan_slots',         crud('darshan_slots',          []));
 app.use('/api/darshan_quotas',        crud('darshan_quotas',         []));
 app.use('/api/darshan_waiting_list',  crud('darshan_waiting_list',   ['pilgrim_name','status']));
 app.use('/api/darshan_requests',      crud('darshan_requests',       ['pilgrim_name','status']));
+app.use('/api/predictive_alerts',     crud('predictive_alerts',      ['alert_type','description','status']));
+app.use('/api/agent_tasks',           crud('agent_tasks',            ['agent_type','task_type','status']));
+app.use('/api/deepfake_incidents',    crud('deepfake_incidents',     ['platform','status','content_url']));
+app.use('/api/relationships',         crud('relationships',          ['entity_name','entity_type','relationship_type']));
+app.use('/api/economic_indicators',   crud('economic_indicators',    ['indicator_type','mandal']));
+app.use('/api/citizen_service_requests', crud('citizen_service_requests', ['requester_name','request_type','status']));
+app.use('/api/election_updates',      crud('election_updates',       ['update_type','status']));
+app.use('/api/finance_compliance_reports', crud('finance_compliance_reports', ['report_type','status']));
+app.use('/api/party_integrations',    crud('party_integrations',     ['party_name','integration_type']));
+app.use('/api/digital_twin_runs',     crud('digital_twin_runs',      ['scenario_name','status']));
+app.use('/api/coalition_scenarios',   crud('coalition_scenarios',    ['scenario_name','status']));
+app.use('/api/crisis_incidents',      crud('crisis_incidents',       ['title','crisis_type','status']));
+app.use('/api/warroom_actions',       crud('warroom_actions',        ['action_type','status','owner']));
 // politician_profiles — filtered by role
 app.get('/api/politician_profiles', authMiddleware, async (req, res) => {
   try {
@@ -1003,6 +1033,96 @@ app.post('/api/visit-planner/generate', authMiddleware, async (req, res) => {
     res.json({ status: 'queued', jobId: job?.id || null });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to generate visit plan' });
+  }
+});
+
+// ── FUTURE LAB PIPELINES ─────────────────────────────────────
+app.post('/api/agent-system/run', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role === 'field_worker') return res.status(403).json({ error: 'Forbidden' });
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.body?.politician_id || req.user.politician_id) : req.user.politician_id;
+    const job = await enqueueAgentSystem(politicianId);
+    res.json({ status: job?.id ? 'queued' : 'completed', jobId: job?.id || null, result: job?.created ? job : null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to run agent system' });
+  }
+});
+
+app.get('/api/agent-system/metrics', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.query.politician_id || req.user.politician_id) : req.user.politician_id;
+    if (!politicianId && !isSuperAdmin) return res.status(403).json({ error: 'Forbidden' });
+    res.json(await agentSystemMetrics(politicianId));
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load agent metrics' });
+  }
+});
+
+app.post('/api/deepfake-shield/scan', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.body?.politician_id || req.user.politician_id) : req.user.politician_id;
+    const job = await enqueueDeepfakeScan(politicianId);
+    res.json({ status: job?.id ? 'queued' : 'completed', jobId: job?.id || null, result: job?.created ? job : null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to scan deepfake incidents' });
+  }
+});
+
+app.get('/api/deepfake-shield/metrics', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.query.politician_id || req.user.politician_id) : req.user.politician_id;
+    if (!politicianId && !isSuperAdmin) return res.status(403).json({ error: 'Forbidden' });
+    res.json(await deepfakeMetrics(politicianId));
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load deepfake metrics' });
+  }
+});
+
+app.post('/api/coalition-forecast/run', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.body?.politician_id || req.user.politician_id) : req.user.politician_id;
+    const job = await enqueueCoalitionForecast(politicianId);
+    res.json({ status: job?.id ? 'queued' : 'completed', jobId: job?.id || null, result: job?.updated ? job : null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to run coalition forecast' });
+  }
+});
+
+app.get('/api/coalition-forecast/overview', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.query.politician_id || req.user.politician_id) : req.user.politician_id;
+    if (!politicianId && !isSuperAdmin) return res.status(403).json({ error: 'Forbidden' });
+    res.json(await coalitionOverview(politicianId));
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load coalition overview' });
+  }
+});
+
+app.post('/api/crisis-war-room/scan', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.body?.politician_id || req.user.politician_id) : req.user.politician_id;
+    const job = await enqueueWarRoomScan(politicianId);
+    res.json({ status: job?.id ? 'queued' : 'completed', jobId: job?.id || null, result: job?.created ? job : null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to scan crisis war room' });
+  }
+});
+
+app.get('/api/crisis-war-room/overview', authMiddleware, async (req, res) => {
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const politicianId = isSuperAdmin ? (req.query.politician_id || req.user.politician_id) : req.user.politician_id;
+    if (!politicianId && !isSuperAdmin) return res.status(403).json({ error: 'Forbidden' });
+    res.json(await warRoomMetrics(politicianId));
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to load war room metrics' });
   }
 });
 

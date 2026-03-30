@@ -43,6 +43,8 @@ import SmartVisitPlanner from './pages/SmartVisitPlanner';
 import PredictiveCrisis from './pages/PredictiveCrisis';
 import AgentSystem from './pages/AgentSystem';
 import DeepfakeShield from './pages/DeepfakeShield';
+import CoalitionForecast from './pages/CoalitionForecast';
+import CrisisWarRoom from './pages/CrisisWarRoom';
 import RelationshipGraph from './pages/RelationshipGraph';
 import EconomicIntelligence from './pages/EconomicIntelligence';
 import CitizenServices from './pages/CitizenServices';
@@ -131,6 +133,8 @@ function AppContent() {
       case 'predictive-crisis': return <PredictiveCrisis />;
       case 'agent-system': return <AgentSystem />;
       case 'deepfake-shield': return <DeepfakeShield />;
+      case 'coalition-forecast': return <CoalitionForecast />;
+      case 'crisis-war-room': return <CrisisWarRoom />;
       case 'relationship-graph': return <RelationshipGraph />;
       case 'economic-intelligence': return <EconomicIntelligence />;
       case 'citizen-services': return <CitizenServices />;

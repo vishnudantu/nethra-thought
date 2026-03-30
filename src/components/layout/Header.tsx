@@ -54,6 +54,8 @@ const pageInfo: Record<string, { title: string; subtitle: string }> = {
   'predictive-crisis': { title: 'Predictive Crisis Intelligence', subtitle: 'Early warning risk signals' },
   'agent-system': { title: 'Autonomous Agent System', subtitle: 'AI agent task orchestration' },
   'deepfake-shield': { title: 'Deepfake Shield', subtitle: 'Disinformation and deepfake defense' },
+  'coalition-forecast': { title: 'Coalition Forecasting', subtitle: 'Alliance modeling and coalition viability' },
+  'crisis-war-room': { title: 'Crisis War Room', subtitle: 'Incident response and war room playbooks' },
   'relationship-graph': { title: 'Relationship Graph', subtitle: 'Political relationship intelligence' },
   'economic-intelligence': { title: 'Economic Intelligence', subtitle: 'Local economic signals and stress' },
   'citizen-services': { title: 'Citizen Services', subtitle: 'Constituent service request hub' },
