@@ -2281,8 +2281,13 @@ app.post('/api/politician-autofill', authMiddleware, async (req, res) => {
   const { name, type = 'MP' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
 
-  const apiKey = await getApiKey('GEMINI_API_KEY', { endpoint: 'politician.autofill' });
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  const geminiKey = await getApiKey('GEMINI_API_KEY', { endpoint: 'politician.autofill' });
+  const groqKeyFirst = await getApiKey('GROQ_API_KEY', { endpoint: 'politician.autofill' });
+  const anthropicKeyFirst = await getApiKey('ANTHROPIC_API_KEY', { endpoint: 'politician.autofill' });
+  const openaiKeyFirst = await getApiKey('OPENAI_API_KEY', { endpoint: 'politician.autofill' });
+  if (!geminiKey && !groqKeyFirst && !anthropicKeyFirst && !openaiKeyFirst) {
+    return res.status(500).json({ error: 'No AI key configured. Add GROQ_API_KEY or GEMINI_API_KEY in Super Admin API Keys.' });
+  }
 
   const prompt = `You are a political data researcher for India. Search your knowledge and return detailed information about the Indian politician: "${name}" (${type}).
 
@@ -2326,38 +2331,42 @@ Required format:
 If you do not know a specific numeric value use null. If you do not recognize this politician at all return {"error": "Politician not found in knowledge base"}.`;
 
   try {
-    // Use Groq for autofill if available, fallback to Gemini
-    const groqKey = await getApiKey('GROQ_API_KEY', { endpoint: 'politician.autofill' });
     let text = '';
-
-    if (groqKey) {
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    // Try providers in order: Groq (fastest/free) → Gemini → Anthropic → OpenAI
+    if (groqKeyFirst) {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 1500,
-          temperature: 0.1,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKeyFirst}` },
+        body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
       });
-      if (!groqRes.ok) throw new Error(`Groq error: ${groqRes.status}`);
-      const groqData = await groqRes.json();
-      text = groqData.choices?.[0]?.message?.content || '';
-    } else {
+      if (!r.ok) throw new Error(`Groq error: ${r.status}: ${await r.text()}`);
+      const d = await r.json();
+      text = d.choices?.[0]?.message?.content || '';
+    } else if (geminiKey) {
       const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const geminiRes = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 1500, temperature: 0.1 },
-        }),
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1500, temperature: 0.1 } }),
       });
-      if (!geminiRes.ok) throw new Error(`Gemini error: ${geminiRes.status}`);
-      const data = await geminiRes.json();
-      text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!r.ok) throw new Error(`Gemini error: ${r.status}: ${await r.text()}`);
+      const d = await r.json();
+      text = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else if (anthropicKeyFirst) {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKeyFirst, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!r.ok) throw new Error(`Anthropic error: ${r.status}`);
+      const d = await r.json();
+      text = d.content?.[0]?.text || '';
+    } else if (openaiKeyFirst) {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKeyFirst}` },
+        body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
+      });
+      if (!r.ok) throw new Error(`OpenAI error: ${r.status}`);
+      const d = await r.json();
+      text = d.choices?.[0]?.message?.content || '';
     }
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 

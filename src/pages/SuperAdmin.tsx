@@ -1635,14 +1635,16 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}
+            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)', overflowY: 'auto', alignItems: 'flex-start', paddingTop: 24, paddingBottom: 24 }}
             onClick={e => { if (e.target === e.currentTarget) setShowDeploy(false); }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="glass-card rounded-2xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto"
+              className="glass-card rounded-2xl w-full p-6"
+              style={{ maxWidth: 760, margin: '0 auto', width: '95%' }}
+              onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 16 }}>
                 <div>
