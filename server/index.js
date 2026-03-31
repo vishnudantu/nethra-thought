@@ -24,6 +24,7 @@ import { updateSentimentScores, getCurrentSentiment, getSentimentHistory } from 
 import { generateDailyContentPack } from './services/contentFactory.js';
 import { generateVisitPlans } from './services/visitPlanner.js';
 import { processWhatsappMessage, parseAiSensyWebhook, parseWatiWebhook } from './services/whatsapp.js';
+import { aiComplete, aiJSON, aiStream } from './services/ai.js';
 import { transcribeAudio, createVoiceReport } from './services/voice.js';
 import { agentSystemMetrics } from './services/agentSystem.js';
 import { deepfakeMetrics } from './services/deepfakeShield.js';
@@ -944,122 +945,15 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
     const assignedPoliticianId = isSuperAdmin ? (politician_id || req.user.politician_id) : req.user.politician_id;
     const systemPrompt = buildPrompt(politician_context, mode);
 
-    // Try providers in order: OpenRouter → Groq → Gemini → Anthropic → OpenAI
-    const orKey     = await getApiKey('OPENROUTER_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const geminiKey = await getApiKey('GEMINI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const groqKey   = await getApiKey('GROQ_API_KEY',   { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const anthropicKey = await getApiKey('ANTHROPIC_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const openaiKey = await getApiKey('OPENAI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-
-    if (!orKey && !geminiKey && !groqKey && !anthropicKey && !openaiKey) {
-      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add OPENROUTER_API_KEY or GROQ_API_KEY.' });
-    }
-
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    let full = '';
-
-    if (orKey) {
-      // OpenRouter — OpenAI-compatible, supports 100+ models including free ones
-      // Read model from platform_settings (plain text) or fall back to default
-      let orModel = 'meta-llama/llama-3.3-70b-instruct:free';
-      try {
-        const [[modelSetting]] = await pool.query(
-          "SELECT setting_value FROM platform_settings WHERE politician_id IS NULL AND setting_key = 'openrouter_model' LIMIT 1"
-        );
-        if (modelSetting?.setting_value) orModel = modelSetting.setting_value;
-      } catch(_) {}
-      if (process.env.OPENROUTER_MODEL) orModel = process.env.OPENROUTER_MODEL;
-      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${orKey}`,
-          'HTTP-Referer': 'https://thoughtfirst.in',
-          'X-Title': 'ThoughtFirst Political Intelligence',
-        },
-        body: JSON.stringify({
-          model: orModel,
-          messages: [{ role: 'system', content: systemPrompt }, ...messages],
-          stream: true,
-          max_tokens: 2048,
-          temperature: 0.7,
-        }),
-      });
-      if (!orRes.ok) throw new Error(`OpenRouter ${orRes.status}: ${await orRes.text()}`);
-      const reader = orRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        for (const line of dec.decode(value, { stream: true }).split('\n').filter(l => l.startsWith('data: ') && l !== 'data: [DONE]')) {
-          try { const t = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content || ''; if (t) { full += t; res.write(t); } } catch (_) {}
-        }
-      }
-    } else if (geminiKey) {
-      // Gemini streaming
-      const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${geminiKey}`;
-      const contents = messages.filter(m=>m.role!=='system').map(m=>({ role:m.role==='assistant'?'model':'user', parts:[{text:m.content}] }));
-      const gemRes = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ system_instruction:{parts:[{text:systemPrompt}]}, contents, generationConfig:{maxOutputTokens:2048,temperature:0.7} }) });
-      if (!gemRes.ok) throw new Error(`Gemini ${gemRes.status}: ${await gemRes.text()}`);
-      const reader = gemRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
-          try { const t=JSON.parse(line.slice(6)).candidates?.[0]?.content?.parts?.[0]?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    } else if (groqKey) {
-      // Groq streaming (OpenAI-compatible)
-      const groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqKey}`},
-        body: JSON.stringify({ model:groqModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
-      });
-      if (!groqRes.ok) throw new Error(`Groq ${groqRes.status}: ${await groqRes.text()}`);
-      const reader = groqRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
-          try { const t=JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    } else if (anthropicKey) {
-      // Anthropic streaming
-      const anthModel = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
-      const anthRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST', headers:{'Content-Type':'application/json','x-api-key':anthropicKey,'anthropic-version':'2023-06-01'},
-        body: JSON.stringify({ model:anthModel, max_tokens:2048, system:systemPrompt, messages:messages.filter(m=>m.role!=='system'), stream:true })
-      });
-      if (!anthRes.ok) throw new Error(`Anthropic ${anthRes.status}: ${await anthRes.text()}`);
-      const reader = anthRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
-          try { const t=JSON.parse(line.slice(6)).delta?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    } else if (openaiKey) {
-      // OpenAI streaming
-      const oaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${openaiKey}`},
-        body: JSON.stringify({ model:oaiModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
-      });
-      if (!oaiRes.ok) throw new Error(`OpenAI ${oaiRes.status}: ${await oaiRes.text()}`);
-      const reader = oaiRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
-          try { const t=JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    }
-
+    const full = await aiStream({ messages, system: systemPrompt, politicianId: assignedPoliticianId, endpoint: 'ai.assistant', res });
     res.end();
+
     if (save_content && assignedPoliticianId && full) {
       const up = messages.filter(m=>m.role==='user').slice(-1)[0]?.content||'';
       await pool.query('INSERT INTO ai_generated_content (politician_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,0)', [assignedPoliticianId, content_type||mode, (prompt_summary||up).slice(0,500), full]);
     }
-  } catch (e) { console.error('[ai-assistant]',e); if(!res.headersSent) res.status(500).json({error:e.message}); }
+  } catch (e) { console.error('[ai-assistant]',e.message); if(!res.headersSent) res.status(500).json({error: e.message}); }
 });
 
 // ── OMNISCAN & MORNING BRIEF ────────────────────────────────
@@ -2341,6 +2235,249 @@ app.post('/api/founder/settings', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ══════════════════════════════════════════════════════════════
+// AI INTELLIGENCE ENDPOINTS — all sidebar modules
+// Uses central AI service — auto-fallbacks across all providers
+// ══════════════════════════════════════════════════════════════
+
+// GRIEVANCES — AI triage and response drafting
+app.post('/api/grievances/:id/ai-response', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM grievances WHERE id = ?', [req.params.id]);
+    const g = rows[0]; if (!g) return res.status(404).json({ error: 'Not found' });
+    const polId = req.user.role === 'super_admin' ? g.politician_id : req.user.politician_id;
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name FROM politician_profiles WHERE id = ?', [polId]);
+    const response = await aiComplete({
+      prompt: `Draft a compassionate, official response to this constituent grievance:
+
+Subject: ${g.subject}
+Description: ${g.description}
+Location: ${g.location}
+Priority: ${g.priority}
+
+The response is from the office of ${pol?.full_name}, ${pol?.designation} of ${pol?.constituency_name}. Keep it under 150 words. Acknowledge, empathize, state action being taken.`,
+      system: 'You draft official, empathetic grievance responses for Indian politician offices.',
+      politicianId: polId, endpoint: 'grievance.ai-response', maxTokens: 300,
+    });
+    res.json({ response });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/grievances/ai-triage', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [grievances] = await pool.query("SELECT id, subject, description, category, priority, location, created_at FROM grievances WHERE politician_id = ? AND status = 'Pending' ORDER BY created_at DESC LIMIT 20", [polId]);
+    if (!grievances.length) return res.json({ triage: [], message: 'No pending grievances' });
+    const result = await aiJSON({
+      prompt: `Triage these pending grievances for an Indian politician. Assign urgency (1-10) and category. Return JSON array: [{"id":N,"urgency":N,"category":"string","action":"string","reason":"string"}]
+
+Grievances:
+${grievances.map(g => `ID:${g.id} | ${g.subject} | ${g.location} | ${g.description?.slice(0,80)}`).join('
+')}`,
+      system: 'You are a political intelligence triage system. Return only valid JSON arrays.',
+      politicianId: polId, endpoint: 'grievance.triage', maxTokens: 1000,
+    });
+    res.json({ triage: Array.isArray(result) ? result : result.triage || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// OPPOSITION — AI threat analysis
+app.post('/api/opposition/ai-analysis', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [intel] = await pool.query("SELECT opponent_name, activity_type, description, platform, threat_level, detected_at FROM opposition_intelligence WHERE politician_id = ? ORDER BY detected_at DESC LIMIT 15", [polId]);
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name, party FROM politician_profiles WHERE id = ?', [polId]);
+    const analysis = await aiComplete({
+      prompt: `Analyze this opposition intelligence for ${pol?.full_name} (${pol?.party}) from ${pol?.constituency_name}:
+
+${intel.map(i => `[${i.activity_type}] ${i.opponent_name}: ${i.description?.slice(0,100)} (threat: ${i.threat_level}/10)`).join('
+')}
+
+Provide:
+1. OVERALL THREAT LEVEL (1-10)
+2. TOP 3 RISKS this week
+3. RECOMMENDED COUNTER-STRATEGY (3 specific actions)
+4. KEY OPPONENT TO WATCH
+
+Be direct, political, India-context aware.`,
+      system: 'You are a political intelligence analyst specializing in Indian elections and opposition tracking.',
+      politicianId: polId, endpoint: 'opposition.analysis', maxTokens: 500,
+    });
+    res.json({ analysis });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// SENTIMENT — AI sentiment summary and recommendations
+app.post('/api/sentiment/ai-summary', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [scores] = await pool.query("SELECT overall_score, positive_count, negative_count, neutral_count, score_date, top_issues FROM sentiment_scores WHERE politician_id = ? ORDER BY score_date DESC LIMIT 7", [polId]);
+    const [mentions] = await pool.query("SELECT headline, sentiment, source FROM media_mentions WHERE politician_id = ? AND published_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) ORDER BY published_at DESC LIMIT 10", [polId]);
+    const summary = await aiComplete({
+      prompt: `Analyze constituency sentiment for a politician:
+
+SENTIMENT SCORES (last 7 days): ${scores.map(s => `${s.score_date}: ${s.overall_score}/100`).join(', ')}
+
+MEDIA MENTIONS:
+${mentions.map(m => `[${m.sentiment}] ${m.source}: ${m.headline}`).join('
+')}
+
+Provide:
+1. TREND DIRECTION (improving/stable/declining)
+2. KEY CONCERN (what issue is dragging sentiment)
+3. OPPORTUNITY (what to amplify)
+4. THIS WEEK'S PRIORITY ACTION`,
+      system: 'You analyze political sentiment data for Indian politicians and provide actionable recommendations.',
+      politicianId: polId, endpoint: 'sentiment.summary', maxTokens: 400,
+    });
+    res.json({ summary });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// VOICE REPORTS — AI transcription summary
+app.post('/api/voice/ai-summary', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [reports] = await pool.query("SELECT reporter_name, reporter_role, transcript, classification, location, created_at FROM voice_reports WHERE politician_id = ? ORDER BY created_at DESC LIMIT 20", [polId]);
+    if (!reports.length) return res.json({ summary: 'No voice reports in the system yet.' });
+    const summary = await aiComplete({
+      prompt: `Summarize these field intelligence voice reports from constituency workers:
+
+${reports.map(r => `[${r.classification}] ${r.reporter_name} from ${r.location}: ${r.transcript?.slice(0,150)}`).join('
+
+')}
+
+Provide:
+1. TOP ISSUES REPORTED (top 3)
+2. GEOGRAPHIC HOTSPOTS
+3. WORKER MORALE SIGNAL
+4. IMMEDIATE ACTION REQUIRED`,
+      system: 'You analyze field intelligence reports from Indian political constituency workers.',
+      politicianId: polId, endpoint: 'voice.summary', maxTokens: 400,
+    });
+    res.json({ summary });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PROJECTS — AI risk assessment
+app.post('/api/projects/ai-risk', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [projects] = await pool.query("SELECT project_name, status, budget_allocated, budget_spent, progress_percent, expected_completion, mandal FROM projects WHERE politician_id = ? ORDER BY created_at DESC LIMIT 15", [polId]);
+    const analysis = await aiJSON({
+      prompt: `Assess risk for these constituency projects. Return JSON: {"high_risk": [{"name":"...","risk":"...","action":"..."}], "on_track": ["name1","name2"], "completion_forecast": "string", "budget_alert": "string or null"}
+
+Projects:
+${projects.map(p => `${p.project_name}: ${p.status}, ${p.progress_percent}% done, budget: ₹${p.budget_spent}L/₹${p.budget_allocated}L, due: ${p.expected_completion}`).join('
+')}`,
+      system: 'You analyze constituency development project risks for Indian politicians. Return only valid JSON.',
+      politicianId: polId, endpoint: 'projects.risk', maxTokens: 600,
+    });
+    res.json(analysis);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// WHATSAPP — AI batch analysis
+app.post('/api/whatsapp/ai-analysis', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [messages] = await pool.query("SELECT content, classification, sentiment, urgency_score, is_viral, is_misinformation, sender_phone FROM whatsapp_intelligence WHERE politician_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY urgency_score DESC LIMIT 30", [polId]);
+    if (!messages.length) return res.json({ analysis: 'No WhatsApp messages in the last 24 hours.' });
+    const analysis = await aiComplete({
+      prompt: `Analyze these WhatsApp messages received by a politician's office in the last 24 hours:
+
+${messages.map(m => `[${m.classification.toUpperCase()}, urgency:${m.urgency_score}${m.is_viral?' VIRAL':''}${m.is_misinformation?' MISINFO':''}] ${m.content?.slice(0,100)}`).join('
+')}
+
+Provide:
+1. DOMINANT CONCERN today
+2. MISINFORMATION THREAT (if any — draft counter-narrative)
+3. VIRAL CONTENT ACTION
+4. RECOMMENDED RESPONSE PRIORITY`,
+      system: 'You analyze political WhatsApp intelligence for Indian politicians.',
+      politicianId: polId, endpoint: 'whatsapp.analysis', maxTokens: 400,
+    });
+    res.json({ analysis });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// CONTENT FACTORY — generate any content type
+app.post('/api/content-factory/ai-generate', authMiddleware, async (req, res) => {
+  try {
+    const { content_type = 'social_post', context = '', language = 'english' } = req.body;
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const { generateContent } = await import('./services/contentFactory.js');
+    const result = await generateContent(polId, content_type, context + (language !== 'english' ? ` [Generate in ${language}]` : ''));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PARLIAMENTARY — AI draft question
+app.post('/api/parliamentary/ai-question', authMiddleware, async (req, res) => {
+  try {
+    const { topic, ministry, question_type = 'starred' } = req.body;
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name, state FROM politician_profiles WHERE id = ?', [polId]);
+    const question = await aiComplete({
+      prompt: `Draft a ${question_type} parliamentary question for ${pol?.full_name}, ${pol?.designation} from ${pol?.constituency_name}.
+
+TOPIC: ${topic}
+MINISTRY: ${ministry || 'relevant ministry'}
+
+Format:
+QUESTION NO: [number]
+MINISTRY: ${ministry || '...'}
+WILL THE MINISTER PLEASE STATE:
+(a) [main question]
+(b) [follow-up 1]
+(c) [follow-up 2 if needed]
+
+Make it specific to ${pol?.constituency_name || pol?.state} and politically sharp.`,
+      system: 'You draft sharp parliamentary questions for Indian MPs and MLAs following Lok Sabha/Rajya Sabha question formats.',
+      politicianId: polId, endpoint: 'parliamentary.question', maxTokens: 400,
+    });
+    res.json({ question });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POLLING — AI poll analysis
+app.post('/api/polls/ai-analysis', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [polls] = await pool.query("SELECT title, question, total_responses, options, results FROM polls WHERE politician_id = ? ORDER BY created_at DESC LIMIT 10", [polId]);
+    if (!polls.length) return res.json({ analysis: 'No poll data available yet.' });
+    const analysis = await aiComplete({
+      prompt: `Analyze these constituency polls:
+
+${polls.map(p => `POLL: ${p.title}
+Q: ${p.question}
+Responses: ${p.total_responses}
+Results: ${p.results || 'pending'}`).join('
+
+')}
+
+Provide:
+1. DOMINANT PUBLIC CONCERN
+2. POLITICAL OPPORTUNITY from poll data
+3. RECOMMENDED CAMPAIGN PIVOT`,
+      system: 'You analyze political poll data for Indian constituency-level campaigns.',
+      politicianId: polId, endpoint: 'polls.analysis', maxTokens: 350,
+    });
+    res.json({ analysis });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// MORNING BRIEF — regenerate now
+app.post('/api/briefing/ai-generate', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const { generateMorningBrief } = await import('./services/briefing.js');
+    const result = await generateMorningBrief(polId);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Gemini\n`);
@@ -2351,127 +2488,23 @@ app.listen(PORT, () => {
 app.post('/api/politician-autofill', authMiddleware, async (req, res) => {
   const { name, type = 'MP' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
-
-  const orKeyAutofill = await getApiKey('OPENROUTER_API_KEY', { endpoint: 'politician.autofill' });
-  const geminiKey = await getApiKey('GEMINI_API_KEY', { endpoint: 'politician.autofill' });
-  const groqKeyFirst = await getApiKey('GROQ_API_KEY', { endpoint: 'politician.autofill' });
-  const anthropicKeyFirst = await getApiKey('ANTHROPIC_API_KEY', { endpoint: 'politician.autofill' });
-  const openaiKeyFirst = await getApiKey('OPENAI_API_KEY', { endpoint: 'politician.autofill' });
-  if (!orKeyAutofill && !geminiKey && !groqKeyFirst && !anthropicKeyFirst && !openaiKeyFirst) {
-    return res.status(500).json({ error: 'No AI key configured. Add OPENROUTER_API_KEY or GROQ_API_KEY in Super Admin API Keys.' });
-  }
-
-  const prompt = `You are a political data researcher for India. Search your knowledge and return detailed information about the Indian politician: "${name}" (${type}).
-
-Return ONLY a valid JSON object with NO markdown, NO backticks, NO explanation. Just raw JSON.
-
-Required format:
-{
-  "full_name": "complete official name",
-  "display_name": "commonly known name",
-  "party": "party abbreviation e.g. TDP, BJP, INC, YSRCP",
-  "designation": "Member of Parliament or Member of Legislative Assembly",
-  "constituency_name": "exact constituency name",
-  "state": "state name",
-  "lok_sabha_seat": "seat name if MP",
-  "bio": "2-3 sentence biography",
-  "education": "educational qualifications",
-  "age": null,
-  "languages": ["Telugu", "English"],
-  "achievements": ["achievement 1", "achievement 2"],
-  "election_year": 2024,
-  "previous_terms": 0,
-  "winning_margin": null,
-  "vote_count": null,
-  "total_votes_polled": null,
-  "constituency_stats": {
-    "total_voters": null,
-    "registered_voters": null,
-    "area_sqkm": null,
-    "population": null,
-    "total_mandals": null,
-    "total_villages": null,
-    "total_booths": null,
-    "literacy_rate": null,
-    "sex_ratio": null
-  },
-  "twitter_handle": "",
-  "website": "",
-  "confidence": "high or medium or low"
-}
-
-If you do not know a specific numeric value use null. If you do not recognize this politician at all return {"error": "Politician not found in knowledge base"}.`;
-
   try {
-    let text = '';
-    // Try providers: OpenRouter → Groq → Gemini → Anthropic → OpenAI
-    if (orKeyAutofill) {
-      let orModel = 'meta-llama/llama-3.3-70b-instruct:free';
-      try {
-        const [[ms]] = await pool.query("SELECT setting_value FROM platform_settings WHERE politician_id IS NULL AND setting_key = 'openrouter_model' LIMIT 1");
-        if (ms?.setting_value) orModel = ms.setting_value;
-      } catch(_) {}
-      if (process.env.OPENROUTER_MODEL) orModel = process.env.OPENROUTER_MODEL;
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${orKeyAutofill}`,
-          'HTTP-Referer': 'https://thoughtfirst.in',
-          'X-Title': 'ThoughtFirst Political Intelligence',
-        },
-        body: JSON.stringify({ model: orModel, messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
-      });
-      if (!r.ok) throw new Error(`OpenRouter error: ${r.status}: ${await r.text()}`);
-      const d = await r.json();
-      text = d.choices?.[0]?.message?.content || '';
-    } else if (groqKeyFirst) {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKeyFirst}` },
-        body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
-      });
-      if (!r.ok) throw new Error(`Groq error: ${r.status}: ${await r.text()}`);
-      const d = await r.json();
-      text = d.choices?.[0]?.message?.content || '';
-    } else if (geminiKey) {
-      const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 1500, temperature: 0.1 } }),
-      });
-      if (!r.ok) throw new Error(`Gemini error: ${r.status}: ${await r.text()}`);
-      const d = await r.json();
-      text = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } else if (anthropicKeyFirst) {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKeyFirst, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
-      });
-      if (!r.ok) throw new Error(`Anthropic error: ${r.status}`);
-      const d = await r.json();
-      text = d.content?.[0]?.text || '';
-    } else if (openaiKeyFirst) {
-      const r = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKeyFirst}` },
-        body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
-      });
-      if (!r.ok) throw new Error(`OpenAI error: ${r.status}`);
-      const d = await r.json();
-      text = d.choices?.[0]?.message?.content || '';
-    }
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const prompt = `You are a political data researcher for India. Return detailed information about the Indian politician: "${name}" (${type}).
 
-    const parsed = JSON.parse(text);
+Return ONLY valid JSON, no markdown, no backticks. Format:
+{"full_name":"","display_name":"","party":"","designation":"","constituency_name":"","state":"","lok_sabha_seat":"","bio":"","education":"","age":null,"languages":["Telugu","English"],"achievements":[],"election_year":2024,"previous_terms":0,"winning_margin":null,"vote_count":null,"total_votes_polled":null,"constituency_stats":{"total_voters":null,"registered_voters":null,"area_sqkm":null,"population":null,"total_mandals":null,"total_villages":null,"total_booths":null,"literacy_rate":null,"sex_ratio":null},"twitter_handle":"","website":"","confidence":"high"}
+
+If politician unknown: {"error":"Politician not found"}`;
+    const text = await aiComplete({ prompt, system: 'You are a political data researcher for India. Return only valid JSON.', endpoint: 'politician.autofill', maxTokens: 1500, temperature: 0.1, jsonMode: true });
+    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(clean);
     if (parsed.error) return res.status(404).json({ error: parsed.error });
-
     res.json(parsed);
   } catch (err) {
-    console.error('[politician-autofill]', err);
+    console.error('[politician-autofill]', err.message);
     res.status(500).json({ error: 'Failed to fetch politician data: ' + err.message });
   }
 });
-
 // ── CHANGE PASSWORD ───────────────────────────────────────────
 app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
   const { current_password, new_password } = req.body;
