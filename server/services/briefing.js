@@ -6,7 +6,8 @@ import pool from '../db.js';
 import { getApiKey } from './secretStore.js';
 import { aiComplete } from './ai.js';
 
-export async function generateMorningBrief(politicianId) {
+export async function generateMorningBrief(politicianIdOrObj, _opts) {
+  const politicianId = (politicianIdOrObj && typeof politicianIdOrObj === 'object') ? politicianIdOrObj.politicianId : politicianIdOrObj;
   if (!politicianId) {
     const [rows] = await pool.query("SELECT id FROM politician_profiles WHERE is_active = 1 AND (role = 'politician' OR role IS NULL) AND role != 'admin'");
     for (const row of rows) await generateMorningBrief(row.id).catch(e => console.error(`Brief failed for ${row.id}:`, e.message));

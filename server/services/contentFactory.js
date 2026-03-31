@@ -54,3 +54,6 @@ export async function generateContentPack(politicianId) {
   }
   return results;
 }
+
+// Alias for backward compatibility with queues.js
+export const generateDailyContentPack = generateContentPack;
