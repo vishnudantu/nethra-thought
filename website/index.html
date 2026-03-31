@@ -1,68 +1,445 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NETHRA — Political Intelligence OS</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <div class="noise"></div>
-    <header class="hero">
-      <nav class="nav">
-        <div class="logo">NETHRA</div>
-        <div class="nav-links">
-          <a href="#modules">Modules</a>
-          <a href="#intelligence">Intelligence</a>
-          <a href="#pricing">Pricing</a>
-          <a href="#cta">Get Started</a>
-        </div>
-      </nav>
-      <div class="hero-content">
-        <div class="eyebrow">Political Intelligence Operating System</div>
-        <h1 id="hero-title">NETHRA</h1>
-        <p id="hero-subtitle">The AI brain every modern politician needs.</p>
-        <div class="hero-actions">
-          <button class="primary" id="hero-cta">Request Demo</button>
-          <button class="secondary">View Architecture</button>
-        </div>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThoughtFirst — Political Intelligence OS for Indian Politicians | MPs, MLAs, MLC</title>
+<meta name="description" content="ThoughtFirst is India's first AI-powered Political Intelligence Operating System. Constituency management, grievance tracking, WhatsApp intelligence, media monitoring and morning briefings for MPs and MLAs across India.">
+<meta name="keywords" content="political intelligence software India, MP software, MLA dashboard, constituency management software, political AI India, grievance management politicians, voter database India, WhatsApp intelligence politics, MPLADS tracker, Tirupati darshan management">
+<meta property="og:title" content="ThoughtFirst — Political Intelligence OS for Indian Politicians">
+<meta property="og:description" content="The AI brain every Indian politician needs. Manage constituents, monitor media, track grievances, and gain intelligence — all in one secure platform.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://thoughtfirst.in">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ThoughtFirst — Political Intelligence OS">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://thoughtfirst.in">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "ThoughtFirst",
+  "description": "Political Intelligence Operating System for Indian MPs, MLAs and elected representatives",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web Browser",
+  "offers": [
+    {"@type": "Offer", "name": "Starter", "priceCurrency": "INR", "price": "15000"},
+    {"@type": "Offer", "name": "Professional", "priceCurrency": "INR", "price": "35000"},
+    {"@type": "Offer", "name": "Intelligence", "priceCurrency": "INR", "price": "75000"},
+    {"@type": "Offer", "name": "War Room", "priceCurrency": "INR", "price": "150000"}
+  ],
+  "provider": {"@type": "Organization", "name": "Ideafirst.in", "url": "https://ideafirst.in"}
+}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--teal:#00d4aa;--blue:#1e88e5;--dark:#060b18;--surf:rgba(255,255,255,0.04);--bdr:rgba(255,255,255,0.08);--txt:#f0f4ff;--muted:#8899bb}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--txt);line-height:1.6}
+a{color:var(--teal);text-decoration:none}
+
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:14px 5%;backdrop-filter:blur(20px);background:rgba(6,11,24,0.88);border-bottom:1px solid var(--bdr)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--teal),var(--blue));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:var(--dark);font-family:'Space Grotesk',sans-serif}
+.logo-text{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:14px;color:var(--teal);letter-spacing:1.5px}
+.nav-links{display:flex;align-items:center;gap:24px}
+.nav-links a{color:var(--muted);font-size:13px;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:var(--txt)}
+.nav-cta{background:linear-gradient(135deg,var(--teal),var(--blue));color:var(--dark)!important;padding:8px 18px;border-radius:8px;font-weight:700;font-size:13px}
+
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 5% 80px;position:relative;overflow:hidden}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,212,170,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,170,0.03) 1px,transparent 1px);background-size:48px 48px}
+.glow1{position:absolute;top:-20%;right:-10%;width:60%;padding-top:60%;border-radius:50%;background:radial-gradient(circle,rgba(0,212,170,0.08) 0%,transparent 65%)}
+.glow2{position:absolute;bottom:-20%;left:-10%;width:50%;padding-top:50%;border-radius:50%;background:radial-gradient(circle,rgba(30,136,229,0.07) 0%,transparent 65%)}
+.hero-inner{position:relative;z-index:2;max-width:820px;margin:0 auto}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:100px;border:1px solid rgba(0,212,170,.3);background:rgba(0,212,170,.08);font-size:11px;font-weight:700;color:var(--teal);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:24px}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(38px,6vw,72px);font-weight:900;line-height:1.05;letter-spacing:-2px;margin-bottom:24px}
+.grad{background:linear-gradient(135deg,var(--teal),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:clamp(15px,2vw,19px);color:var(--muted);max-width:580px;margin:0 auto 40px;line-height:1.75}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-p{padding:14px 32px;border-radius:12px;background:linear-gradient(135deg,var(--teal),var(--blue));color:var(--dark);font-weight:700;font-size:15px;border:none;cursor:pointer;transition:opacity .2s;display:inline-block}
+.btn-p:hover{opacity:.9;color:var(--dark)}
+.btn-s{padding:14px 32px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bdr);color:var(--txt);font-weight:600;font-size:15px;cursor:pointer;transition:background .2s;display:inline-block}
+.btn-s:hover{background:rgba(255,255,255,.1);color:var(--txt)}
+.stats{display:flex;gap:48px;justify-content:center;margin-top:64px;flex-wrap:wrap}
+.stat-val{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:900;color:var(--teal)}
+.stat-lbl{font-size:12px;color:var(--muted);margin-top:4px}
+
+section{padding:80px 5%;max-width:1120px;margin:0 auto}
+.sec-label{font-size:11px;font-weight:700;color:var(--teal);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,44px);font-weight:900;letter-spacing:-1.5px;margin-bottom:16px}
+.sec-sub{font-size:17px;color:var(--muted);max-width:540px;margin-bottom:52px;line-height:1.75}
+
+.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:20px;padding:28px;position:relative;overflow:hidden;transition:border-color .3s}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--teal),var(--blue))}
+.card:hover{border-color:rgba(0,212,170,.25)}
+.card-icon{font-size:26px;margin-bottom:16px}
+.card h3{font-size:17px;font-weight:700;margin-bottom:8px}
+.card p{font-size:14px;color:var(--muted);line-height:1.7}
+
+.who-section{background:rgba(255,255,255,.02);border:1px solid var(--bdr);border-radius:28px;padding:60px 5%;margin:0 0 40px}
+.grid4{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.desig-card{background:var(--surf);border:1px solid var(--bdr);border-radius:16px;padding:24px}
+.desig-icon{font-size:28px;margin-bottom:12px}
+.desig-card h3{font-size:15px;font-weight:700;margin-bottom:10px}
+.desig-card ul{list-style:none}
+.desig-card li{font-size:13px;color:var(--muted);padding:4px 0 4px 16px;position:relative;border-bottom:1px solid rgba(255,255,255,.03)}
+.desig-card li::before{content:'→';position:absolute;left:0;color:var(--teal);font-size:11px}
+
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.price-card{background:var(--surf);border:1px solid var(--bdr);border-radius:20px;padding:28px;text-align:center;transition:all .3s}
+.price-card.featured{background:rgba(0,212,170,.06);border-color:rgba(0,212,170,.3)}
+.price-tier{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px}
+.price-amount{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:900;color:var(--teal)}
+.price-mo{font-size:13px;color:var(--muted);margin-bottom:20px}
+.price-ul{list-style:none;text-align:left;margin-bottom:24px}
+.price-ul li{font-size:13px;color:var(--muted);padding:5px 0 5px 18px;position:relative;border-bottom:1px solid rgba(255,255,255,.04)}
+.price-ul li::before{content:'✓';position:absolute;left:0;color:var(--teal);font-weight:700}
+
+.faq-item{border-bottom:1px solid var(--bdr);padding:20px 0;max-width:720px}
+.faq-q{font-size:16px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;user-select:none}
+.faq-a{font-size:14px;color:var(--muted);margin-top:14px;line-height:1.75;display:none}
+.faq-item.open .faq-a{display:block}
+.faq-arr{transition:transform .3s;flex-shrink:0}
+.faq-item.open .faq-arr{transform:rotate(180deg)}
+
+.cta-box{background:linear-gradient(135deg,rgba(0,212,170,.08),rgba(30,136,229,.08));border:1px solid rgba(0,212,170,.2);border-radius:28px;padding:60px 40px;text-align:center;margin:40px 0}
+
+footer{border-top:1px solid var(--bdr);padding:40px 5%;max-width:1120px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+.foot-links{display:flex;gap:24px}
+.foot-links a{color:var(--muted);font-size:13px}
+.foot-copy{font-size:12px;color:rgba(136,153,187,.5)}
+
+.trust-bar{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:32px 5%;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);background:rgba(255,255,255,.02);margin-top:0}
+.trust-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.trust-icon{font-size:16px}
+
+@media(max-width:768px){
+  .nav-links{display:none}
+  .stats{gap:24px}
+  section{padding:60px 5%}
+  .cta-box{padding:40px 20px}
+  footer{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">T</div>
+    <div>
+      <div class="logo-text">THOUGHTFIRST</div>
+    </div>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#who">Who Uses It</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+    <a href="https://thoughtfirst.in/login" class="nav-cta">Sign In →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-grid"></div>
+  <div class="glow1"></div>
+  <div class="glow2"></div>
+  <div class="hero-inner">
+    <div class="badge"><span class="badge-dot"></span>India's First Political Intelligence OS</div>
+    <h1>The AI brain every<br><span class="grad">Indian politician needs</span></h1>
+    <p>Manage your constituency, track grievances, monitor media, and gain AI-powered intelligence — all from one secure, self-hosted platform built for Indian MPs, MLAs, and elected representatives.</p>
+    <div class="btns">
+      <a href="mailto:hello@ideafirst.in?subject=ThoughtFirst Demo Request" class="btn-p">Request a Demo</a>
+      <a href="#features" class="btn-s">See All Features</a>
+    </div>
+    <div class="stats">
+      <div><div class="stat-val">543</div><div class="stat-lbl">Lok Sabha MPs</div></div>
+      <div><div class="stat-val">4,120</div><div class="stat-lbl">State MLAs</div></div>
+      <div><div class="stat-val">96.8 Cr</div><div class="stat-lbl">Registered Voters</div></div>
+      <div><div class="stat-val">100%</div><div class="stat-lbl">Data Sovereign</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TRUST BAR -->
+<div class="trust-bar">
+  <div class="trust-item"><span class="trust-icon">🔒</span>Self-hosted — your server, your data</div>
+  <div class="trust-item"><span class="trust-icon">🤖</span>Powered by Gemini, Claude & Groq AI</div>
+  <div class="trust-item"><span class="trust-icon">💬</span>WhatsApp-native intelligence</div>
+  <div class="trust-item"><span class="trust-icon">🇮🇳</span>Telugu, Hindi & English support</div>
+  <div class="trust-item"><span class="trust-icon">⚡</span>Live in 48 hours</div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="sec-label">Platform Features</div>
+  <h2>Everything a modern politician<br>needs in one platform</h2>
+  <p class="sec-sub">Built for Indian political realities — WhatsApp-native, Telugu-first, and 100% self-hosted on your own server.</p>
+  <div class="grid3">
+    <div class="card">
+      <div class="card-icon">📋</div>
+      <h3>Grievance Management</h3>
+      <p>Track every constituent complaint end-to-end. Auto-classify by category, assign to staff, send SMS updates. SLA alerts ensure no resolution deadline is missed.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🤖</div>
+      <h3>AI Political Assistant</h3>
+      <p>Write speeches, draft press releases, generate social posts, create parliamentary questions in English, Telugu, or Hindi. 10 AI modes. Powered by Gemini and Claude.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">💬</div>
+      <h3>WhatsApp Intelligence</h3>
+      <p>Every forwarded message classified automatically — grievance, emergency, misinformation, opposition activity, praise. Viral content flagged in minutes. AiSensy and Wati compatible.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📡</div>
+      <h3>OmniScan Media Monitor</h3>
+      <p>500+ news sources scanned every 15 minutes. YouTube channels, newspapers, online portals — know what everyone is saying about you before your office does.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🌅</div>
+      <h3>Morning Intelligence Brief</h3>
+      <p>Auto-generated at 5:30 AM every day. Overnight alerts, media summary, opposition activity, and AI-recommended top 3 actions — delivered to your WhatsApp by 6 AM.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🗳️</div>
+      <h3>Voter Database</h3>
+      <p>Complete voter intelligence — community-wise, booth-wise, support level tracking. Import from electoral rolls. Segment by caste, age, location and broadcast in one click.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⭐</div>
+      <h3>Temple Darshan Management</h3>
+      <p>Manage Tirupati, Shirdi, Vaishno Devi and 50+ temple darshan quotas. Application, approval, automatic SMS confirmation to pilgrims — fully automated.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🏛️</div>
+      <h3>Parliamentary Intelligence</h3>
+      <p>Auto-sync from Sansad.in daily. Track your questions, debates, bills, and attendance. AI drafts starred and unstarred questions targeting the right ministry automatically.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🏗️</div>
+      <h3>MPLADS Project Tracker</h3>
+      <p>Track all development projects with GPS pinning, photo evidence, budget bars, and milestones. MPLADS Rs.5 Crore annual dashboard with utilization deadline alerts.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <h3>Sentiment Dashboard</h3>
+      <p>Real-time constituency mood index — a single 0-100 score updated every hour. Geographic heatmap shows which mandals are happy or unhappy and why.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎯</div>
+      <h3>Opposition Tracker</h3>
+      <p>Monitor every opponent's social media, speeches, and rally activity. Weekly opposition intelligence report generated automatically every Monday morning.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎙️</div>
+      <h3>Voice Intelligence</h3>
+      <p>Field workers press and hold to record. Whisper AI transcribes in Telugu and Hindi. Auto-classified and routed to the correct module. Works on 2G with Rs.5000 phones.</p>
+    </div>
+  </div>
+</section>
+
+<!-- WHO USES IT -->
+<div style="max-width:1120px;margin:0 auto;padding:0 5%">
+  <div class="who-section" id="who">
+    <div class="sec-label">Built For</div>
+    <h2>Different roles.<br>Different dashboards.</h2>
+    <p class="sec-sub">ThoughtFirst auto-configures based on your designation. MPs get parliamentary tracking. MLAs get state tools. Everyone gets AI.</p>
+    <div class="grid4">
+      <div class="desig-card">
+        <div class="desig-icon">🏛️</div>
+        <h3>MP — Lok Sabha</h3>
+        <ul>
+          <li>Sansad.in sync — questions, debates, bills</li>
+          <li>MPLADS Rs.5 Cr annual tracker</li>
+          <li>Temple darshan quota management</li>
+          <li>Parliamentary question AI drafter</li>
+          <li>543-constituency level intelligence</li>
+        </ul>
       </div>
-      <div class="hero-orb orb-a"></div>
-      <div class="hero-orb orb-b"></div>
-    </header>
-
-    <section class="section" id="vision">
-      <h2 id="vision-heading">The AI brain every politician needs</h2>
-      <p id="vision-body">Nethra watches everything, knows everything, and tells you exactly what to do next.</p>
-      <div class="metrics">
-        <div class="metric-card">50+ data sources</div>
-        <div class="metric-card">24/7 intelligence</div>
-        <div class="metric-card">Multi-language</div>
+      <div class="desig-card">
+        <div class="desig-icon">🏦</div>
+        <h3>MP — Rajya Sabha</h3>
+        <ul>
+          <li>Rajya Sabha question and debate tracking</li>
+          <li>State-level intelligence monitoring</li>
+          <li>Bill tracking across both houses</li>
+          <li>Ministry response follow-up</li>
+          <li>Committee membership management</li>
+        </ul>
       </div>
-    </section>
+      <div class="desig-card">
+        <div class="desig-icon">🏢</div>
+        <h3>MLA</h3>
+        <ul>
+          <li>Assembly constituency management</li>
+          <li>State legislation tracking</li>
+          <li>MLA LAD fund utilization tracker</li>
+          <li>Booth-level voter database</li>
+          <li>District-level media monitoring</li>
+        </ul>
+      </div>
+      <div class="desig-card">
+        <div class="desig-icon">🏛️</div>
+        <h3>MLC</h3>
+        <ul>
+          <li>State council session tracking</li>
+          <li>Regional intelligence monitoring</li>
+          <li>State legislation alerts</li>
+          <li>Party coordination tools</li>
+          <li>Available in AP, TS, MH, UP, KA, BR</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <section class="section" id="modules">
-      <h2 id="modules-heading">Platform Modules</h2>
-      <div class="grid" id="modules-list"></div>
-    </section>
+<!-- PRICING -->
+<section id="pricing">
+  <div class="sec-label">Pricing</div>
+  <h2>Simple, transparent pricing</h2>
+  <p class="sec-sub">All plans include self-hosted deployment, SSL certificate, and onboarding support. No per-user fees. No hidden charges.</p>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <div class="price-tier" style="color:var(--muted)">Starter</div>
+      <div class="price-amount">₹15K</div>
+      <div class="price-mo">per month</div>
+      <ul class="price-ul">
+        <li>Dashboard & Profile</li>
+        <li>Grievance Management</li>
+        <li>Events & Appointments</li>
+        <li>Temple Darshan Module</li>
+        <li>Development Projects</li>
+        <li>Basic Team Management</li>
+        <li>Self-hosted VPS deployment</li>
+      </ul>
+      <a href="mailto:hello@ideafirst.in?subject=ThoughtFirst Starter Plan" class="btn-s" style="display:block;text-align:center;font-size:14px;padding:12px 20px">Get Started</a>
+    </div>
+    <div class="price-card featured">
+      <div class="price-tier" style="color:var(--teal)">⭐ Professional</div>
+      <div class="price-amount">₹35K</div>
+      <div class="price-mo">per month · Most Popular</div>
+      <ul class="price-ul">
+        <li>Everything in Starter</li>
+        <li>AI Studio — 10 modes</li>
+        <li>OmniScan News Monitor</li>
+        <li>Morning Intelligence Brief</li>
+        <li>Voter Database</li>
+        <li>WhatsApp Intelligence</li>
+        <li>Sentiment Dashboard</li>
+        <li>Parliamentary Intelligence</li>
+        <li>MPLADS Tracker</li>
+      </ul>
+      <a href="mailto:hello@ideafirst.in?subject=ThoughtFirst Professional Plan" class="btn-p" style="display:block;text-align:center;font-size:14px;padding:12px 20px;color:var(--dark)">Get Started</a>
+    </div>
+    <div class="price-card">
+      <div class="price-tier" style="color:var(--blue)">Intelligence</div>
+      <div class="price-amount">₹75K</div>
+      <div class="price-mo">per month</div>
+      <ul class="price-ul">
+        <li>Everything in Professional</li>
+        <li>Opposition Tracker</li>
+        <li>Voice Intelligence</li>
+        <li>Content Factory</li>
+        <li>Sansad.in Auto-Sync</li>
+        <li>Digital Twin (Beta)</li>
+        <li>Deepfake Shield</li>
+        <li>Priority Support</li>
+      </ul>
+      <a href="mailto:hello@ideafirst.in?subject=ThoughtFirst Intelligence Plan" class="btn-s" style="display:block;text-align:center;font-size:14px;padding:12px 20px">Contact Us</a>
+    </div>
+    <div class="price-card">
+      <div class="price-tier" style="color:#a78bfa">War Room</div>
+      <div class="price-amount">₹1.5L</div>
+      <div class="price-mo">per month</div>
+      <ul class="price-ul">
+        <li>Everything in Intelligence</li>
+        <li>Election War Room</li>
+        <li>Booth Management System</li>
+        <li>Micro-Targeting Engine</li>
+        <li>Rapid Response Unit</li>
+        <li>Crisis Command Center</li>
+        <li>Dedicated Account Manager</li>
+        <li>24/7 Priority Support</li>
+      </ul>
+      <a href="mailto:hello@ideafirst.in?subject=ThoughtFirst War Room Plan" class="btn-s" style="display:block;text-align:center;font-size:14px;padding:12px 20px">Contact Us</a>
+    </div>
+  </div>
+</section>
 
-    <section class="section" id="intelligence">
-      <h2 id="intelligence-heading">Intelligence Layer</h2>
-      <div class="grid" id="intelligence-list"></div>
-    </section>
+<!-- FAQ -->
+<section id="faq">
+  <div class="sec-label">FAQ</div>
+  <h2>Common questions</h2>
+  <div class="faq-item open">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Is my constituency data secure and private?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">Yes. ThoughtFirst is fully self-hosted on your own dedicated VPS server — we never store your data on our servers. Voter records, grievances, WhatsApp messages, financial data — everything stays on your private server in Singapore or India. We have no access to your political data at any time.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Does it work in Telugu and Hindi?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">Yes. The AI assistant generates content in English, Telugu, and Hindi. WhatsApp messages in Telugu are automatically detected and processed. Field workers can submit voice reports in Telugu and Hindi — automatically transcribed by Whisper AI. The morning brief can be delivered in Telugu on WhatsApp.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does the WhatsApp Intelligence work?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">Your party workers and staff forward WhatsApp messages to a dedicated intelligence number linked to AiSensy or Wati. The platform automatically classifies each message — grievance, emergency, misinformation, opposition activity, or praise — and routes it to the right module. Viral content (same message from 5 or more different people) is flagged immediately with an urgent notification.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What is the Temple Darshan module?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">MPs and MLAs have a quota for VIP darshan at Tirupati, Shirdi, Vaishno Devi, Char Dham, and other major temples. ThoughtFirst manages the entire process — constituent applications, eligibility and cooldown checks, approval workflow, automatic SMS confirmation to pilgrims, and booking letter generation. Covers 50+ temples across India with temple-specific rules and quota management.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How quickly can we get started?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">Within 48 hours of payment confirmation. We deploy the platform on a dedicated server, configure SSL, set up your profile with AI auto-fill from public data, and train your team. WhatsApp integration takes one additional day. SMS setup is immediate once you share your Fast2SMS key.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Does it work for MLAs and Mayors too, not just MPs?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">Yes. The platform auto-configures based on designation — MP (Lok Sabha), MP (Rajya Sabha), MLA, MLC, Mayor, or Municipal Councillor. Each gets different modules and widgets. An MLA's dashboard focuses on state legislation and assembly constituency; an MP's focuses on Sansad.in and MPLADS. MLCs in AP, Telangana, Maharashtra, UP, Karnataka, and Bihar are fully supported.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What AI models power the platform?<span class="faq-arr">▼</span></div>
+    <div class="faq-a">The platform supports Gemini (Google), Claude (Anthropic), GPT-4o (OpenAI), and Llama 3.3 via Groq. You bring your own API key — there is no additional AI billing from us. The Starter plan uses Groq (free tier), which is fast and reliable. Professional and above plans typically use Gemini 1.5 Flash or Claude Haiku for best results.</div>
+  </div>
+</section>
 
-    <section class="section" id="pricing">
-      <h2 id="pricing-heading">Plans</h2>
-      <div class="grid" id="pricing-list"></div>
-    </section>
+<!-- CTA -->
+<div style="max-width:1120px;margin:0 auto;padding:0 5% 80px">
+  <div class="cta-box">
+    <div style="font-size:11px;color:var(--teal);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">Get Started</div>
+    <h2 style="font-size:clamp(28px,4vw,44px);margin-bottom:16px">Ready to run a smarter constituency?</h2>
+    <p style="color:var(--muted);font-size:17px;max-width:520px;margin:0 auto 32px;line-height:1.75">Join the politicians already using ThoughtFirst. Deployed in 48 hours. Onboarding included. Your data, your server, your intelligence.</p>
+    <div class="btns">
+      <a href="mailto:hello@ideafirst.in?subject=ThoughtFirst Demo Request" class="btn-p">Request a Demo</a>
+      <a href="https://thoughtfirst.in/login" class="btn-s">Sign In</a>
+    </div>
+    <p style="font-size:12px;color:rgba(136,153,187,.4);margin-top:24px">Powered by Ideafirst.in &nbsp;·&nbsp; Built in India &nbsp;·&nbsp; For Indian Politics</p>
+  </div>
+</div>
 
-    <section class="section cta" id="cta">
-      <h2 id="cta-heading">Build your political edge</h2>
-      <button class="primary" id="cta-button">Get Started</button>
-    </section>
+<footer>
+  <div class="logo">
+    <div class="logo-icon">T</div>
+    <div>
+      <div class="logo-text">THOUGHTFIRST</div>
+      <div style="font-size:10px;color:var(--muted)">Political Intelligence OS</div>
+    </div>
+  </div>
+  <div class="foot-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+    <a href="mailto:hello@ideafirst.in">Contact</a>
+    <a href="https://thoughtfirst.in/login">Sign In</a>
+  </div>
+  <div class="foot-copy">© 2026 Ideafirst.in &nbsp;·&nbsp; thoughtfirst.in &nbsp;·&nbsp; All rights reserved</div>
+</footer>
 
-    <footer class="footer">NETHRA © Ideafirst.in</footer>
-
-    <script src="./main.js"></script>
-  </body>
+</body>
 </html>

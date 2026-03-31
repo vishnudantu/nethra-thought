@@ -61,19 +61,90 @@ interface DeployForm {
   full_name: string;
   party: string;
   designation: string;
+  designation_type: 'mp_lok_sabha' | 'mp_rajya_sabha' | 'mla' | 'mlc' | 'mayor' | 'councillor';
   constituency_name: string;
   state: string;
+  lok_sabha_seat: string;
+  assembly_segment: string;
   email: string;
   password: string;
   slug: string;
   color_primary: string;
   color_secondary: string;
+  election_year: string;
+  term_start: string;
+  previous_terms: string;
 }
 
+const DESIGNATION_CONFIG = {
+  mp_lok_sabha: {
+    label: 'MP — Lok Sabha',
+    designation: 'Member of Parliament (Lok Sabha)',
+    icon: '🏛️',
+    color: '#00d4aa',
+    fields: ['constituency_name','state','lok_sabha_seat','election_year','term_start','previous_terms'],
+    modules: ['parliamentary_intelligence','mplads','lok_sabha_questions','lok_sabha_bills','darshan'],
+    constituency_label: 'Lok Sabha Constituency',
+    hint: 'Manages 543 Lok Sabha constituency. Gets MPLADS Rs.5 Cr/year. Parliamentary question tracking, darshan quota.',
+  },
+  mp_rajya_sabha: {
+    label: 'MP — Rajya Sabha',
+    designation: 'Member of Parliament (Rajya Sabha)',
+    icon: '🏦',
+    color: '#1e88e5',
+    fields: ['state','election_year','term_start','previous_terms'],
+    modules: ['parliamentary_intelligence','rajya_sabha_questions','rajya_sabha_bills'],
+    constituency_label: 'State Represented',
+    hint: 'Represents a state in the upper house. No constituency. No MPLADS. No darshan quota by default.',
+  },
+  mla: {
+    label: 'MLA — State Assembly',
+    designation: 'Member of Legislative Assembly',
+    icon: '🏢',
+    color: '#ffa726',
+    fields: ['constituency_name','state','assembly_segment','election_year','term_start','previous_terms'],
+    modules: ['constituency_management','mlalads','state_legislation','darshan'],
+    constituency_label: 'Assembly Constituency',
+    hint: 'State-level legislator. Manages Assembly constituency. Gets MLA LAD fund (varies by state). Local development focus.',
+  },
+  mlc: {
+    label: 'MLC — State Council',
+    designation: 'Member of Legislative Council',
+    icon: '🏛️',
+    color: '#a78bfa',
+    fields: ['state','election_year','term_start'],
+    modules: ['state_legislation','constituency_management'],
+    constituency_label: 'State / Region',
+    hint: 'Upper house of state legislature. Exists in select states (UP, Bihar, Maharashtra, Karnataka, Telangana, AP). No direct constituency.',
+  },
+  mayor: {
+    label: 'Mayor',
+    designation: 'Mayor',
+    icon: '🏙️',
+    color: '#00c864',
+    fields: ['constituency_name','state','election_year','term_start'],
+    modules: ['constituency_management','civic_infrastructure','darshan'],
+    constituency_label: 'City / Municipality',
+    hint: 'Urban local body head. City-level governance. Focus on civic infrastructure, sanitation, roads, water.',
+  },
+  councillor: {
+    label: 'Councillor',
+    designation: 'Municipal Councillor',
+    icon: '🏘️',
+    color: '#64b5f6',
+    fields: ['constituency_name','state','assembly_segment','election_year'],
+    modules: ['constituency_management','civic_infrastructure'],
+    constituency_label: 'Ward / Division',
+    hint: 'Ward-level representative. Hyper-local focus. Drainage, streetlights, parks, waste management.',
+  },
+};
+
 const defaultForm: DeployForm = {
-  full_name: '', party: '', designation: 'Member of Parliament',
-  constituency_name: '', state: '', email: '', password: '',
-  slug: '', color_primary: '#00d4aa', color_secondary: '#1e88e5',
+  full_name: '', party: '', designation: 'Member of Parliament (Lok Sabha)',
+  designation_type: 'mp_lok_sabha',
+  constituency_name: '', state: '', lok_sabha_seat: '', assembly_segment: '',
+  email: '', password: '', slug: '', color_primary: '#00d4aa', color_secondary: '#1e88e5',
+  election_year: '', term_start: '', previous_terms: '0',
 };
 
 interface AutofillExtra {
@@ -358,9 +429,10 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
       const polData = await api.post('/api/founder/politicians', {
         full_name: form.full_name,
         party: form.party || '',
-        designation: form.designation || 'Member of Parliament',
+        designation: form.designation || DESIGNATION_CONFIG[form.designation_type].designation,
         constituency_name: form.constituency_name,
         state: form.state || '',
+        lok_sabha_seat: form.lok_sabha_seat || '',
         slug,
         subscription_status: 'active',
         is_active: 1,
@@ -368,6 +440,9 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
         color_secondary: form.color_secondary || '#1e88e5',
         role: 'politician',
         email: form.email,
+        election_year: form.election_year ? parseInt(form.election_year) : null,
+        term_start: form.term_start || null,
+        previous_terms: parseInt(form.previous_terms) || 0,
         deployed_at: new Date().toISOString(),
       });
 
@@ -1560,25 +1635,58 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }}
+            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}
             onClick={e => { if (e.target === e.currentTarget) setShowDeploy(false); }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-2xl rounded-2xl overflow-hidden"
-              style={{ background: '#0d1628', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh', overflowY: 'auto' }}
+              className="glass-card rounded-2xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between p-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center justify-between mb-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 16 }}>
                 <div>
                   <h2 className="font-bold text-lg" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk, sans-serif' }}>Deploy New Politician</h2>
-                  <p style={{ fontSize: 12, color: '#8899bb', marginTop: 2 }}>Create a new politician account on the platform</p>
+                  <p style={{ fontSize: 12, color: '#8899bb', marginTop: 2 }}>Select designation first — fields auto-configure based on role</p>
                 </div>
                 <button onClick={() => setShowDeploy(false)} style={{ color: '#8899bb' }}><X size={20} /></button>
               </div>
 
-              <form onSubmit={handleDeploy} className="p-6 space-y-5">
+              {/* STEP 1 — Designation Type Selector */}
+              <div className="mb-6">
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
+                  Designation *
+                </label>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {(Object.entries(DESIGNATION_CONFIG) as [string, typeof DESIGNATION_CONFIG[keyof typeof DESIGNATION_CONFIG]][]).map(([key, cfg]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, designation_type: key as DeployForm['designation_type'], designation: cfg.designation }))}
+                      className="rounded-xl p-3 text-left transition-all"
+                      style={{
+                        background: form.designation_type === key ? `${cfg.color}18` : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${form.designation_type === key ? cfg.color + '55' : 'rgba(255,255,255,0.08)'}`,
+                      }}
+                    >
+                      <div style={{ fontSize: 18, marginBottom: 4 }}>{cfg.icon}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: form.designation_type === key ? cfg.color : '#f0f4ff' }}>{cfg.label}</div>
+                    </button>
+                  ))}
+                </div>
+                {/* Designation hint */}
+                <div className="mt-3 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <p style={{ fontSize: 11, color: '#8899bb' }}>
+                    <strong style={{ color: '#00d4aa' }}>Auto-enabled modules: </strong>
+                    {DESIGNATION_CONFIG[form.designation_type].modules.join(' · ')}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'rgba(136,153,187,0.6)', marginTop: 4 }}>
+                    {DESIGNATION_CONFIG[form.designation_type].hint}
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleDeploy} className="space-y-5">
                 {deployError && (
                   <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
                     <AlertCircle size={15} />
@@ -1586,119 +1694,123 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                   </div>
                 )}
 
-                {/* ── AUTO-FILL SECTION ── */}
-                <div className="rounded-xl p-4 mb-2" style={{ background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.15)' }}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#00d4aa' }}>⚡ AI Auto-Fill</span>
-                    <span style={{ fontSize: 11, color: '#8899bb' }}>— Enter name below, select type, click Auto-Fill</span>
-                  </div>
-                  <div className="flex gap-2 mb-2">
-                    <button type="button" onClick={() => setPoliticianType('MP')}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: politicianType === 'MP' ? 'rgba(0,212,170,0.2)' : 'rgba(255,255,255,0.06)', color: politicianType === 'MP' ? '#00d4aa' : '#8899bb', border: `1px solid ${politicianType === 'MP' ? 'rgba(0,212,170,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
-                      MP (Lok Sabha)
+                {/* AI Auto-Fill */}
+                <div className="rounded-xl p-4" style={{ background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.15)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#00d4aa', marginBottom: 8 }}>⚡ AI Auto-Fill — type name and click</div>
+                  <div className="flex gap-2">
+                    <input
+                      value={form.full_name}
+                      onChange={e => {
+                        const name = e.target.value;
+                        setForm(f => ({ ...f, full_name: name, slug: generateSlug(name) }));
+                        setAutofillError('');
+                        setAutofillSuccess('');
+                      }}
+                      placeholder="e.g. GM Harish Balayogi"
+                      className="flex-1 input-field"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAutoFill}
+                      disabled={autofilling || !form.full_name.trim()}
+                      className="px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 flex-shrink-0"
+                      style={{
+                        background: autofilling ? 'rgba(0,212,170,0.3)' : 'linear-gradient(135deg, #00d4aa, #1e88e5)',
+                        color: '#060b18', cursor: autofilling || !form.full_name.trim() ? 'not-allowed' : 'pointer',
+                        opacity: !form.full_name.trim() ? 0.5 : 1, border: 'none', minWidth: 100,
+                      }}
+                    >
+                      {autofilling ? <><div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} />Filling...</> : '⚡ Auto-Fill'}
                     </button>
-                    <button type="button" onClick={() => setPoliticianType('MLA')}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: politicianType === 'MLA' ? 'rgba(0,212,170,0.2)' : 'rgba(255,255,255,0.06)', color: politicianType === 'MLA' ? '#00d4aa' : '#8899bb', border: `1px solid ${politicianType === 'MLA' ? 'rgba(0,212,170,0.3)' : 'rgba(255,255,255,0.1)'}` }}>
-                      MLA (State Assembly)
-                    </button>
                   </div>
-                  {autofillError && <div style={{ fontSize: 11, color: '#ff7777', marginBottom: 6 }}>⚠ {autofillError}</div>}
-                  {autofillSuccess && <div style={{ fontSize: 11, color: '#00d4aa', marginBottom: 6 }}>✓ {autofillSuccess}</div>}
+                  {autofillError && <p style={{ fontSize: 11, color: '#ff7777', marginTop: 6 }}>⚠ {autofillError}</p>}
+                  {autofillSuccess && <p style={{ fontSize: 11, color: '#00d4aa', marginTop: 6 }}>✓ {autofillSuccess}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Full Name *</label>
-                    <div className="flex gap-2">
-                      <input
-                        value={form.full_name}
-                        onChange={e => {
-                          const name = e.target.value;
-                          setForm(f => ({ ...f, full_name: name, slug: generateSlug(name) }));
-                          setAutofillError('');
-                          setAutofillSuccess('');
-                        }}
-                        placeholder="e.g. GM Harish Balayogi"
-                        className="flex-1 px-4 py-2.5 rounded-xl"
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAutoFill}
-                        disabled={autofilling || !form.full_name.trim()}
-                        className="px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 flex-shrink-0"
-                        style={{
-                          background: autofilling ? 'rgba(0,212,170,0.3)' : 'linear-gradient(135deg, #00d4aa, #1e88e5)',
-                          color: '#060b18',
-                          cursor: autofilling || !form.full_name.trim() ? 'not-allowed' : 'pointer',
-                          opacity: !form.full_name.trim() ? 0.5 : 1,
-                          border: 'none',
-                          minWidth: 100,
-                        }}
-                      >
-                        {autofilling ? (
-                          <><div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} /> Searching...</>
-                        ) : (
-                          <>⚡ Auto-Fill</>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
+                  {/* Party */}
                   <div>
                     <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Political Party *</label>
-                    <input
-                      value={form.party}
-                      onChange={e => setForm(f => ({ ...f, party: e.target.value }))}
-                      placeholder="e.g. Telugu Desam Party"
-                      className="w-full px-4 py-2.5 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
-                    />
+                    <select value={form.party} onChange={e => setForm(f => ({ ...f, party: e.target.value }))} className="input-field w-full">
+                      <option value="">Select Party</option>
+                      {['BJP','INC','TDP','YSRCP','AAP','TMC','SP','BSP','NCP','JDU','RJD','DMK','AIADMK','Shiv Sena','BRS','Independent','Other'].map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
                   </div>
 
+                  {/* State */}
                   <div>
-                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Designation</label>
-                    <input
-                      value={form.designation}
-                      onChange={e => setForm(f => ({ ...f, designation: e.target.value }))}
-                      placeholder="e.g. Member of Parliament"
-                      className="w-full px-4 py-2.5 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
-                    />
+                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>State *</label>
+                    <select value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} className="input-field w-full">
+                      <option value="">Select State</option>
+                      {['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi','Jammu & Kashmir','Ladakh','Puducherry'].map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   </div>
 
+                  {/* Constituency — only for MP LS, MLA, Mayor, Councillor */}
+                  {['mp_lok_sabha','mla','mayor','councillor'].includes(form.designation_type) && (
+                    <div>
+                      <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>
+                        {DESIGNATION_CONFIG[form.designation_type].constituency_label} *
+                      </label>
+                      <input value={form.constituency_name} onChange={e => setForm(f => ({ ...f, constituency_name: e.target.value }))}
+                        placeholder={form.designation_type === 'mp_lok_sabha' ? 'e.g. Amalapuram' : form.designation_type === 'mla' ? 'e.g. Kakinada' : 'e.g. Hyderabad'}
+                        className="input-field w-full" />
+                    </div>
+                  )}
+
+                  {/* Lok Sabha Seat — MP only */}
+                  {form.designation_type === 'mp_lok_sabha' && (
+                    <div>
+                      <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Lok Sabha Seat Number</label>
+                      <input value={form.lok_sabha_seat} onChange={e => setForm(f => ({ ...f, lok_sabha_seat: e.target.value }))}
+                        placeholder="e.g. 7 (AP-07)" className="input-field w-full" />
+                    </div>
+                  )}
+
+                  {/* Assembly Segment — MLA / Councillor */}
+                  {['mla','councillor'].includes(form.designation_type) && (
+                    <div>
+                      <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Assembly Segment</label>
+                      <input value={form.assembly_segment} onChange={e => setForm(f => ({ ...f, assembly_segment: e.target.value }))}
+                        placeholder="e.g. Kakinada City" className="input-field w-full" />
+                    </div>
+                  )}
+
+                  {/* Election Year */}
                   <div>
-                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Constituency *</label>
-                    <input
-                      value={form.constituency_name}
-                      onChange={e => setForm(f => ({ ...f, constituency_name: e.target.value }))}
-                      placeholder="e.g. Guntur"
-                      className="w-full px-4 py-2.5 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
-                    />
+                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Election Year</label>
+                    <select value={form.election_year} onChange={e => setForm(f => ({ ...f, election_year: e.target.value }))} className="input-field w-full">
+                      <option value="">Select Year</option>
+                      {[2024,2023,2022,2021,2020,2019,2018].map(y => <option key={y} value={String(y)}>{y}</option>)}
+                    </select>
                   </div>
 
+                  {/* Term Start */}
                   <div>
-                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>State</label>
-                    <input
-                      value={form.state}
-                      onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
-                      placeholder="e.g. Andhra Pradesh"
-                      className="w-full px-4 py-2.5 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
-                    />
+                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Term Start Date</label>
+                    <input type="date" value={form.term_start} onChange={e => setForm(f => ({ ...f, term_start: e.target.value }))} className="input-field w-full" />
                   </div>
 
+                  {/* Previous Terms */}
+                  <div>
+                    <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Previous Terms</label>
+                    <select value={form.previous_terms} onChange={e => setForm(f => ({ ...f, previous_terms: e.target.value }))} className="input-field w-full">
+                      {[0,1,2,3,4,5].map(n => <option key={n} value={String(n)}>{n === 0 ? 'First Term' : `${n} Previous ${n === 1 ? 'Term' : 'Terms'}`}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Colors */}
                   <div>
                     <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Primary Color</label>
                     <div className="flex gap-2">
                       <input type="color" value={form.color_primary} onChange={e => setForm(f => ({ ...f, color_primary: e.target.value }))}
                         className="h-10 w-12 rounded-lg cursor-pointer" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
                       <input value={form.color_primary} onChange={e => setForm(f => ({ ...f, color_primary: e.target.value }))}
-                        className="flex-1 px-4 py-2.5 rounded-xl"
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none', fontFamily: 'monospace' }} />
+                        className="flex-1 input-field" style={{ fontFamily: 'monospace' }} />
                     </div>
                   </div>
 
@@ -1708,25 +1820,19 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                       <input type="color" value={form.color_secondary} onChange={e => setForm(f => ({ ...f, color_secondary: e.target.value }))}
                         className="h-10 w-12 rounded-lg cursor-pointer" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
                       <input value={form.color_secondary} onChange={e => setForm(f => ({ ...f, color_secondary: e.target.value }))}
-                        className="flex-1 px-4 py-2.5 rounded-xl"
-                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none', fontFamily: 'monospace' }} />
+                        className="flex-1 input-field" style={{ fontFamily: 'monospace' }} />
                     </div>
                   </div>
 
+                  {/* Credentials section */}
                   <div className="sm:col-span-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-                    <p className="text-xs font-semibold mb-3" style={{ color: '#8899bb', letterSpacing: '0.5px' }}>LOGIN CREDENTIALS</p>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>Login Credentials</p>
                   </div>
 
                   <div className="sm:col-span-2">
                     <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 600, color: '#8899bb' }}>Login Email *</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                      placeholder="politician@example.com"
-                      className="w-full px-4 py-2.5 rounded-xl"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
-                    />
+                    <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="politician@example.com" className="input-field w-full" />
                   </div>
 
                   <div className="sm:col-span-2">
@@ -1738,52 +1844,30 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                           value={form.password}
                           onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                           placeholder="Min 8 characters"
-                          className="w-full px-4 py-2.5 pr-10 rounded-xl"
-                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, outline: 'none' }}
+                          className="input-field w-full pr-10"
                         />
                         <button type="button" onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }}>
                           {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, password: generatePassword() }))}
-                        className="px-3 py-2.5 rounded-xl flex items-center gap-1.5 transition-all"
-                        style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa', fontSize: 12 }}
-                      >
-                        <Key size={13} />
-                        Generate
+                      <button type="button" onClick={() => setForm(f => ({ ...f, password: generatePassword() }))}
+                        className="px-3 py-2.5 rounded-xl flex items-center gap-1.5"
+                        style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa', fontSize: 12 }}>
+                        <Key size={13} /> Generate
                       </button>
                     </div>
-                    <p style={{ fontSize: 11, color: 'rgba(136,153,187,0.5)', marginTop: 5 }}>
-                      Share these credentials securely with the politician.
-                    </p>
+                    <p style={{ fontSize: 11, color: 'rgba(136,153,187,0.5)', marginTop: 5 }}>Share credentials securely with the politician.</p>
                   </div>
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setShowDeploy(false)}
-                    className="flex-1 py-2.5 rounded-xl font-medium transition-all"
-                    style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb', fontSize: 13 }}>
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={deploying}
-                    className="flex-1 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
-                    style={{ background: deploying ? 'rgba(0,212,170,0.4)' : 'linear-gradient(135deg, #00d4aa, #1e88e5)', color: '#060b18', fontSize: 13, cursor: deploying ? 'not-allowed' : 'pointer' }}
-                  >
+                  <button type="button" onClick={() => setShowDeploy(false)} className="btn-secondary flex-1">Cancel</button>
+                  <button type="submit" disabled={deploying} className="btn-primary flex-1 flex items-center justify-center gap-2">
                     {deploying ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} />
-                        Deploying...
-                      </>
+                      <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} />Deploying...</>
                     ) : (
-                      <>
-                        <Plus size={15} />
-                        Deploy Account
-                      </>
+                      <><Plus size={15} />Deploy {DESIGNATION_CONFIG[form.designation_type].label}</>
                     )}
                   </button>
                 </div>

@@ -23,7 +23,7 @@ import { generateMorningBrief } from './services/briefing.js';
 import { updateSentimentScores, getCurrentSentiment, getSentimentHistory } from './services/sentiment.js';
 import { generateDailyContentPack } from './services/contentFactory.js';
 import { generateVisitPlans } from './services/visitPlanner.js';
-import { processWhatsappMessage } from './services/whatsapp.js';
+import { processWhatsappMessage, parseAiSensyWebhook, parseWatiWebhook } from './services/whatsapp.js';
 import { transcribeAudio, createVoiceReport } from './services/voice.js';
 import { agentSystemMetrics } from './services/agentSystem.js';
 import { deepfakeMetrics } from './services/deepfakeShield.js';
@@ -939,24 +939,85 @@ function buildPrompt(ctx, mode) {
 app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
   const { messages, politician_context, mode='chat', politician_id, save_content, content_type, prompt_summary } = req.body;
   if (!messages?.length) return res.status(400).json({ error: 'No messages provided' });
-  const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   try {
     const isSuperAdmin = req.user.role === 'super_admin';
     const assignedPoliticianId = isSuperAdmin ? (politician_id || req.user.politician_id) : req.user.politician_id;
-    const apiKey = await getApiKey('GEMINI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
-    const contents = messages.filter(m=>m.role!=='system').map(m=>({ role:m.role==='assistant'?'model':'user', parts:[{text:m.content}] }));
-    const gemRes = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ system_instruction:{parts:[{text:buildPrompt(politician_context,mode)}]}, contents, generationConfig:{maxOutputTokens:2048,temperature:0.7} }) });
-    if (!gemRes.ok) throw new Error(`Gemini ${gemRes.status}: ${await gemRes.text()}`);
-    res.setHeader('Content-Type','text/plain; charset=utf-8');
-    const reader = gemRes.body.getReader(); const dec = new TextDecoder(); let full = '';
-    while (true) {
-      const {done,value} = await reader.read(); if (done) break;
-      for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
-        try { const t=JSON.parse(line.slice(6)).candidates?.[0]?.content?.parts?.[0]?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
+    const systemPrompt = buildPrompt(politician_context, mode);
+
+    // Try providers in order: Gemini → Groq → Anthropic → OpenAI
+    const geminiKey = await getApiKey('GEMINI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
+    const groqKey   = await getApiKey('GROQ_API_KEY',   { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
+    const anthropicKey = await getApiKey('ANTHROPIC_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
+    const openaiKey = await getApiKey('OPENAI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
+
+    if (!geminiKey && !groqKey && !anthropicKey && !openaiKey) {
+      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add GEMINI_API_KEY or GROQ_API_KEY.' });
+    }
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    let full = '';
+
+    if (geminiKey) {
+      // Gemini streaming
+      const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${geminiKey}`;
+      const contents = messages.filter(m=>m.role!=='system').map(m=>({ role:m.role==='assistant'?'model':'user', parts:[{text:m.content}] }));
+      const gemRes = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ system_instruction:{parts:[{text:systemPrompt}]}, contents, generationConfig:{maxOutputTokens:2048,temperature:0.7} }) });
+      if (!gemRes.ok) throw new Error(`Gemini ${gemRes.status}: ${await gemRes.text()}`);
+      const reader = gemRes.body.getReader(); const dec = new TextDecoder();
+      while (true) {
+        const {done,value} = await reader.read(); if (done) break;
+        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
+          try { const t=JSON.parse(line.slice(6)).candidates?.[0]?.content?.parts?.[0]?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
+        }
+      }
+    } else if (groqKey) {
+      // Groq streaming (OpenAI-compatible)
+      const groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqKey}`},
+        body: JSON.stringify({ model:groqModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
+      });
+      if (!groqRes.ok) throw new Error(`Groq ${groqRes.status}: ${await groqRes.text()}`);
+      const reader = groqRes.body.getReader(); const dec = new TextDecoder();
+      while (true) {
+        const {done,value} = await reader.read(); if (done) break;
+        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
+          try { const t=JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||''; if(t){full+=t;res.write(t);} } catch(_){}
+        }
+      }
+    } else if (anthropicKey) {
+      // Anthropic streaming
+      const anthModel = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
+      const anthRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST', headers:{'Content-Type':'application/json','x-api-key':anthropicKey,'anthropic-version':'2023-06-01'},
+        body: JSON.stringify({ model:anthModel, max_tokens:2048, system:systemPrompt, messages:messages.filter(m=>m.role!=='system'), stream:true })
+      });
+      if (!anthRes.ok) throw new Error(`Anthropic ${anthRes.status}: ${await anthRes.text()}`);
+      const reader = anthRes.body.getReader(); const dec = new TextDecoder();
+      while (true) {
+        const {done,value} = await reader.read(); if (done) break;
+        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
+          try { const t=JSON.parse(line.slice(6)).delta?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
+        }
+      }
+    } else if (openaiKey) {
+      // OpenAI streaming
+      const oaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${openaiKey}`},
+        body: JSON.stringify({ model:oaiModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
+      });
+      if (!oaiRes.ok) throw new Error(`OpenAI ${oaiRes.status}: ${await oaiRes.text()}`);
+      const reader = oaiRes.body.getReader(); const dec = new TextDecoder();
+      while (true) {
+        const {done,value} = await reader.read(); if (done) break;
+        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
+          try { const t=JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||''; if(t){full+=t;res.write(t);} } catch(_){}
+        }
       }
     }
+
     res.end();
     if (save_content && assignedPoliticianId && full) {
       const up = messages.filter(m=>m.role==='user').slice(-1)[0]?.content||'';
@@ -1152,26 +1213,75 @@ app.get('/api/crisis-war-room/overview', authMiddleware, async (req, res) => {
 });
 
 // ── WHATSAPP WEBHOOK (optional) ─────────────────────────────
+// WhatsApp webhook — supports AiSensy, Wati, and generic payloads
+// Webhook URL: https://thoughtfirst.in/api/whatsapp/webhook?politician_id=X
+// AiSensy:  set this URL in AiSensy webhook settings, add x-webhook-secret header
+// Wati:     set this URL in Wati webhook settings
 app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
+    // Always acknowledge immediately — WhatsApp providers retry if no quick 200
+    res.json({ ok: true });
+
     const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
-    if (secret && req.headers['x-webhook-secret'] !== secret) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (secret && req.headers['x-webhook-secret'] !== secret &&
+        req.headers['x-hub-signature-256'] === undefined) {
+      console.warn('[whatsapp] Unauthorized webhook attempt');
+      return;
     }
+
     const payload = req.body || {};
-    const content = payload.message || payload.text || payload?.message?.text || '';
-    if (!content) return res.json({ ok: true, skipped: true });
+    const politician_id = req.query.politician_id || payload.politician_id || null;
+
+    // Detect provider and parse
+    let parsed;
+    const ua = req.headers['user-agent'] || '';
+    if (ua.includes('AiSensy') || payload?.app_id || payload?.contact?.wa_id) {
+      parsed = parseAiSensyWebhook(payload);
+    } else if (payload?.waId || payload?.senderWaId) {
+      parsed = parseWatiWebhook(payload);
+    } else {
+      // Generic / manual test
+      parsed = {
+        sender_phone: payload.sender || payload.from || payload.phone || '',
+        message_type: payload.type || 'text',
+        content: String(payload.message || payload.text || payload.content || ''),
+      };
+    }
+
+    if (!parsed.content || parsed.content.trim().length < 2) return;
+
     await processWhatsappMessage({
-      politician_id: payload.politician_id || null,
-      sender_phone: payload.sender || payload.from || '',
-      message_type: payload.type || 'text',
-      content: String(content),
+      politician_id,
+      sender_phone: parsed.sender_phone,
+      message_type: parsed.message_type,
+      content: parsed.content,
       transcription: payload.transcription || '',
     });
-    res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message || 'Failed to ingest webhook' });
+    console.error('[whatsapp webhook]', e.message);
   }
+});
+
+// WhatsApp webhook GET — for verification (AiSensy/Meta challenge)
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const challenge = req.query['hub.challenge'];
+  const verify = req.query['hub.verify_token'];
+  if (verify === (process.env.WHATSAPP_WEBHOOK_SECRET || 'thoughtfirst')) {
+    return res.send(challenge || 'OK');
+  }
+  res.send('OK');
+});
+
+// Manual WhatsApp message injection (for testing)
+app.post('/api/whatsapp/inject', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin' && req.user.role !== 'politician_admin') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { sender_phone, content, message_type = 'text' } = req.body;
+    if (!content) return res.status(400).json({ error: 'content required' });
+    const politician_id = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const id = await processWhatsappMessage({ politician_id, sender_phone: sender_phone || '+91TEST', message_type, content });
+    res.json({ success: true, id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── VOICE INTELLIGENCE ─────────────────────────────────────
@@ -1628,6 +1738,59 @@ app.post('/api/founder/feature-access', authMiddleware, async (req, res) => {
       await pool.query(
         'INSERT INTO feature_flag_changes (politician_id, changed_by, flag_key, change_type, new_value) VALUES (?,?,?,?,?)',
         [null, req.user.id, feature_key, `role:${role}`, is_enabled ? 'enabled' : 'disabled'],
+      );
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── SMS TEST ENDPOINT (founder) ───────────────────────────────
+app.post('/api/founder/sms/test', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const { phone, politician_id, message } = req.body;
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+    const smsKey = await getApiKey('FAST2SMS_API_KEY', { politicianId: politician_id, endpoint: 'sms.test' })
+      || process.env.FAST2SMS_API_KEY;
+    if (!smsKey) return res.status(500).json({ error: 'FAST2SMS_API_KEY not configured. Add it in API Keys.' });
+    const testMsg = message || 'ThoughtFirst SMS test message. Your political intelligence platform is configured correctly.';
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
+    const r = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+      method: 'POST',
+      headers: { authorization: smsKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ route: 'q', message: testMsg, language: 'english', flash: 0, numbers: cleanPhone }),
+    });
+    const d = await r.json();
+    res.json({ success: d.return === true, response: d, phone: `+91${cleanPhone}` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DARSHAN SMS CONFIG PER POLITICIAN (founder) ───────────────
+app.get('/api/founder/politicians/:id/sms-config', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const smsKey = await getApiKey('FAST2SMS_API_KEY', { politicianId: req.params.id });
+    const [settings] = await pool.query(
+      "SELECT setting_key, setting_value FROM platform_settings WHERE politician_id = ? AND setting_key LIKE 'darshan_%'",
+      [req.params.id]
+    );
+    const config = {};
+    for (const row of settings) config[row.setting_key] = row.setting_value;
+    res.json({ sms_configured: !!smsKey, sms_key_hint: smsKey ? '••••' + smsKey.slice(-4) : null, ...config });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/founder/politicians/:id/sms-config', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const { darshan_contact_person, darshan_contact_phone, darshan_pickup_point, darshan_shrine_contacts } = req.body;
+    const settings = { darshan_contact_person, darshan_contact_phone, darshan_pickup_point, darshan_shrine_contacts };
+    for (const [key, value] of Object.entries(settings)) {
+      if (value === undefined) continue;
+      await pool.query(
+        'INSERT INTO platform_settings (politician_id, setting_key, setting_value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+        [req.params.id, key, value]
       );
     }
     res.json({ success: true });
