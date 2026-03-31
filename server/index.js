@@ -944,20 +944,59 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
     const assignedPoliticianId = isSuperAdmin ? (politician_id || req.user.politician_id) : req.user.politician_id;
     const systemPrompt = buildPrompt(politician_context, mode);
 
-    // Try providers in order: Gemini → Groq → Anthropic → OpenAI
+    // Try providers in order: OpenRouter → Groq → Gemini → Anthropic → OpenAI
+    const orKey     = await getApiKey('OPENROUTER_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const geminiKey = await getApiKey('GEMINI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const groqKey   = await getApiKey('GROQ_API_KEY',   { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const anthropicKey = await getApiKey('ANTHROPIC_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const openaiKey = await getApiKey('OPENAI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
 
-    if (!geminiKey && !groqKey && !anthropicKey && !openaiKey) {
-      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add GEMINI_API_KEY or GROQ_API_KEY.' });
+    if (!orKey && !geminiKey && !groqKey && !anthropicKey && !openaiKey) {
+      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add OPENROUTER_API_KEY or GROQ_API_KEY.' });
     }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     let full = '';
 
-    if (geminiKey) {
+    if (orKey) {
+      // OpenRouter — OpenAI-compatible, supports 100+ models including free ones
+      const [orModelRow] = await pool.query("SELECT * FROM api_keys WHERE key_name = 'OPENROUTER_MODEL' AND is_active = 1 LIMIT 1").catch(() => [[]]);
+      let orModel = 'meta-llama/llama-3.3-70b-instruct:free';
+      if (orModelRow?.[0]) {
+        try {
+          const { decrypt } = await import('./services/secretStore.js');
+          // Try to get saved model preference
+        } catch(_) {}
+      }
+      // Read saved model from api_keys table as plain value
+      const [modelRows] = await pool.query("SELECT key_name FROM api_keys WHERE key_name = 'OPENROUTER_MODEL' LIMIT 1").catch(() => [[]]);
+      // Use env override or default
+      if (process.env.OPENROUTER_MODEL) orModel = process.env.OPENROUTER_MODEL;
+      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${orKey}`,
+          'HTTP-Referer': 'https://thoughtfirst.in',
+          'X-Title': 'ThoughtFirst Political Intelligence',
+        },
+        body: JSON.stringify({
+          model: orModel,
+          messages: [{ role: 'system', content: systemPrompt }, ...messages],
+          stream: true,
+          max_tokens: 2048,
+          temperature: 0.7,
+        }),
+      });
+      if (!orRes.ok) throw new Error(`OpenRouter ${orRes.status}: ${await orRes.text()}`);
+      const reader = orRes.body.getReader(); const dec = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        for (const line of dec.decode(value, { stream: true }).split('\n').filter(l => l.startsWith('data: ') && l !== 'data: [DONE]')) {
+          try { const t = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content || ''; if (t) { full += t; res.write(t); } } catch (_) {}
+        }
+      }
+    } else if (geminiKey) {
       // Gemini streaming
       const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${geminiKey}`;
@@ -2281,12 +2320,13 @@ app.post('/api/politician-autofill', authMiddleware, async (req, res) => {
   const { name, type = 'MP' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
 
+  const orKeyAutofill = await getApiKey('OPENROUTER_API_KEY', { endpoint: 'politician.autofill' });
   const geminiKey = await getApiKey('GEMINI_API_KEY', { endpoint: 'politician.autofill' });
   const groqKeyFirst = await getApiKey('GROQ_API_KEY', { endpoint: 'politician.autofill' });
   const anthropicKeyFirst = await getApiKey('ANTHROPIC_API_KEY', { endpoint: 'politician.autofill' });
   const openaiKeyFirst = await getApiKey('OPENAI_API_KEY', { endpoint: 'politician.autofill' });
-  if (!geminiKey && !groqKeyFirst && !anthropicKeyFirst && !openaiKeyFirst) {
-    return res.status(500).json({ error: 'No AI key configured. Add GROQ_API_KEY or GEMINI_API_KEY in Super Admin API Keys.' });
+  if (!orKeyAutofill && !geminiKey && !groqKeyFirst && !anthropicKeyFirst && !openaiKeyFirst) {
+    return res.status(500).json({ error: 'No AI key configured. Add OPENROUTER_API_KEY or GROQ_API_KEY in Super Admin API Keys.' });
   }
 
   const prompt = `You are a political data researcher for India. Search your knowledge and return detailed information about the Indian politician: "${name}" (${type}).
@@ -2332,8 +2372,23 @@ If you do not know a specific numeric value use null. If you do not recognize th
 
   try {
     let text = '';
-    // Try providers in order: Groq (fastest/free) → Gemini → Anthropic → OpenAI
-    if (groqKeyFirst) {
+    // Try providers: OpenRouter → Groq → Gemini → Anthropic → OpenAI
+    if (orKeyAutofill) {
+      const orModel = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${orKeyAutofill}`,
+          'HTTP-Referer': 'https://thoughtfirst.in',
+          'X-Title': 'ThoughtFirst Political Intelligence',
+        },
+        body: JSON.stringify({ model: orModel, messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
+      });
+      if (!r.ok) throw new Error(`OpenRouter error: ${r.status}: ${await r.text()}`);
+      const d = await r.json();
+      text = d.choices?.[0]?.message?.content || '';
+    } else if (groqKeyFirst) {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKeyFirst}` },

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Trash2, Check, X, AlertCircle, UserCheck, Shield, Building2, Search, ToggleLeft,
   ToggleRight, Key, RefreshCw, Eye, EyeOff, LayoutDashboard, SlidersHorizontal,
-  FileBarChart2, Sparkles, ClipboardCheck, Settings2, BadgeCheck, Ban
+  FileBarChart2, Sparkles, ClipboardCheck, Settings2, BadgeCheck, Ban, Send
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -176,12 +176,29 @@ interface ApiKeyRecord {
 }
 
 const API_KEY_ITEMS = [
-  { key_name: 'GEMINI_API_KEY', label: 'Gemini API Key' },
-  { key_name: 'YOUTUBE_API_KEY', label: 'YouTube Data API Key' },
-  { key_name: 'TWITTER_BEARER_TOKEN', label: 'X (Twitter) Bearer Token' },
-  { key_name: 'WHATSAPP_WEBHOOK_SECRET', label: 'WhatsApp Webhook Secret' },
-  { key_name: 'OPENAI_API_KEY', label: 'OpenAI API Key' },
-  { key_name: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key' },
+  { key_name: 'OPENROUTER_API_KEY', label: 'OpenRouter API Key', desc: 'Access 100+ free models via one key' },
+  { key_name: 'GROQ_API_KEY', label: 'Groq API Key', desc: 'Fast free inference — Llama 3.3' },
+  { key_name: 'GEMINI_API_KEY', label: 'Gemini API Key', desc: 'Google Gemini 1.5 Flash' },
+  { key_name: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', desc: 'Claude Haiku / Sonnet' },
+  { key_name: 'OPENAI_API_KEY', label: 'OpenAI API Key', desc: 'GPT-4o Mini' },
+  { key_name: 'YOUTUBE_API_KEY', label: 'YouTube Data API Key', desc: 'Video intelligence monitoring' },
+  { key_name: 'TWITTER_BEARER_TOKEN', label: 'X (Twitter) Bearer Token', desc: 'Social media monitoring' },
+  { key_name: 'FAST2SMS_API_KEY', label: 'Fast2SMS API Key', desc: 'SMS for darshan confirmations' },
+  { key_name: 'WHATSAPP_WEBHOOK_SECRET', label: 'WhatsApp Webhook Secret', desc: 'AiSensy / Wati webhook verification' },
+];
+
+// Free models available on OpenRouter
+const OPENROUTER_FREE_MODELS = [
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B', provider: 'Meta', speed: 'Fast', quality: 'Excellent' },
+  { id: 'meta-llama/llama-3.1-8b-instruct:free', label: 'Llama 3.1 8B', provider: 'Meta', speed: 'Very Fast', quality: 'Good' },
+  { id: 'google/gemma-2-9b-it:free', label: 'Gemma 2 9B', provider: 'Google', speed: 'Fast', quality: 'Good' },
+  { id: 'mistralai/mistral-7b-instruct:free', label: 'Mistral 7B', provider: 'Mistral', speed: 'Very Fast', quality: 'Good' },
+  { id: 'microsoft/phi-3-mini-128k-instruct:free', label: 'Phi-3 Mini', provider: 'Microsoft', speed: 'Very Fast', quality: 'Good' },
+  { id: 'qwen/qwen-2-7b-instruct:free', label: 'Qwen 2 7B', provider: 'Alibaba', speed: 'Fast', quality: 'Good' },
+  { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1', provider: 'DeepSeek', speed: 'Medium', quality: 'Excellent' },
+  { id: 'deepseek/deepseek-chat:free', label: 'DeepSeek Chat', provider: 'DeepSeek', speed: 'Fast', quality: 'Very Good' },
+  { id: 'google/gemma-3-12b-it:free', label: 'Gemma 3 12B', provider: 'Google', speed: 'Fast', quality: 'Very Good' },
+  { id: 'nousresearch/hermes-3-llama-3.1-70b:free', label: 'Hermes 3 70B', provider: 'NousResearch', speed: 'Medium', quality: 'Excellent' },
 ];
 
 export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string) => void }) {
@@ -227,6 +244,11 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   const [generatingReport, setGeneratingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<AdminReport | null>(null);
   const [showModuleModal, setShowModuleModal] = useState(false);
+  const [orModel, setOrModel] = useState('meta-llama/llama-3.3-70b-instruct:free');
+  const [orTestPrompt, setOrTestPrompt] = useState('');
+  const [orTestResponse, setOrTestResponse] = useState('');
+  const [orTesting, setOrTesting] = useState(false);
+  const [orTestStatus, setOrTestStatus] = useState('');
   const [showFeatureModal, setShowFeatureModal] = useState(false);
   const [newModule, setNewModule] = useState({ module_key: '', label: '', category: '', description: '', is_future: false });
   const [newFeature, setNewFeature] = useState({ feature_key: '', label: '', module_key: '', description: '', is_future: false });
@@ -684,6 +706,44 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
       setReportStatus(message);
     }
     setGeneratingReport(false);
+  }
+
+  async function testOpenRouter() {
+    const key = keyInputs['OPENROUTER_API_KEY'] || apiKeys.find(k => k.key_name === 'OPENROUTER_API_KEY')?.key_hint;
+    if (!key || key.startsWith('••••')) {
+      setOrTestStatus('Save your OpenRouter API key first, then test.');
+      return;
+    }
+    if (!orTestPrompt.trim()) { setOrTestStatus('Enter a test prompt first.'); return; }
+    setOrTesting(true);
+    setOrTestResponse('');
+    setOrTestStatus('');
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`,
+          'HTTP-Referer': 'https://thoughtfirst.in',
+          'X-Title': 'ThoughtFirst Political Intelligence',
+        },
+        body: JSON.stringify({
+          model: orModel,
+          messages: [{ role: 'user', content: orTestPrompt }],
+          max_tokens: 500,
+          temperature: 0.7,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      const text = data.choices?.[0]?.message?.content || 'No response';
+      setOrTestResponse(text);
+      setOrTestStatus('success');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Test failed';
+      setOrTestStatus('error: ' + msg);
+    }
+    setOrTesting(false);
   }
 
   function healthVariant(health: string) {
@@ -1512,6 +1572,113 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* ── OPENROUTER SECTION ── */}
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(0,212,170,0.04)', border: '1px solid rgba(0,212,170,0.15)' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg, rgba(0,212,170,0.2), rgba(30,136,229,0.2))' }}>
+                  <Sparkles size={18} style={{ color: '#00d4aa' }} />
+                </div>
+                <div>
+                  <div className="font-semibold" style={{ color: '#f0f4ff', fontSize: 15 }}>OpenRouter — 100+ Free AI Models</div>
+                  <div style={{ fontSize: 11, color: '#8899bb' }}>One API key. Access Llama, DeepSeek, Gemma, Mistral and more — most are free.</div>
+                </div>
+                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer"
+                  className="ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa', whiteSpace: 'nowrap' }}>
+                  Get API Key →
+                </a>
+              </div>
+
+              {/* Model selector grid */}
+              <div className="mb-4">
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Select Active Model</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {OPENROUTER_FREE_MODELS.map(m => (
+                    <button key={m.id} onClick={() => setOrModel(m.id)}
+                      className="rounded-xl p-3 text-left transition-all"
+                      style={{
+                        background: orModel === m.id ? 'rgba(0,212,170,0.12)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${orModel === m.id ? 'rgba(0,212,170,0.4)' : 'rgba(255,255,255,0.07)'}`,
+                      }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span style={{ fontSize: 12, fontWeight: 700, color: orModel === m.id ? '#00d4aa' : '#f0f4ff' }}>{m.label}</span>
+                        <span style={{ fontSize: 9, color: '#8899bb', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 100 }}>FREE</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#8899bb' }}>{m.provider} · {m.speed} · {m.quality}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: 10, color: '#8899bb', marginBottom: 4 }}>Selected model ID</div>
+                  <code style={{ fontSize: 11, color: '#00d4aa', fontFamily: 'monospace' }}>{orModel}</code>
+                </div>
+              </div>
+
+              {/* Live test chat */}
+              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+                  Live Test — runs directly from browser using your saved key
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    value={orTestPrompt}
+                    onChange={e => setOrTestPrompt(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); testOpenRouter(); } }}
+                    placeholder="Ask anything — e.g. Write a 2-line speech about farmers in Andhra Pradesh"
+                    className="input-field flex-1"
+                    style={{ fontSize: 13 }}
+                  />
+                  <button onClick={testOpenRouter} disabled={orTesting || !orTestPrompt.trim()}
+                    className="btn-primary flex items-center gap-2 flex-shrink-0"
+                    style={{ opacity: orTesting || !orTestPrompt.trim() ? 0.5 : 1 }}>
+                    {orTesting
+                      ? <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} />Testing...</>
+                      : <><Send size={14} />Test</>}
+                  </button>
+                </div>
+                {orTestStatus && orTestStatus !== 'success' && (
+                  <div className="px-3 py-2 rounded-lg mb-3" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777', fontSize: 12 }}>
+                    {orTestStatus}
+                  </div>
+                )}
+                {orTestResponse && (
+                  <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(0,212,170,0.2)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#00d4aa,#1e88e5)' }}>
+                        <Sparkles size={11} color="#060b18" />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#00d4aa' }}>
+                        {OPENROUTER_FREE_MODELS.find(m => m.id === orModel)?.label || orModel}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#8899bb' }}>via OpenRouter</span>
+                    </div>
+                    <p style={{ fontSize: 13, color: '#e0e8ff', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{orTestResponse}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Save selected model to backend */}
+              <div className="mt-3 flex items-center gap-3">
+                <div style={{ fontSize: 12, color: '#8899bb', flex: 1 }}>
+                  Selected model is used for all AI features (chat, autofill, briefings) when OpenRouter key is active.
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.post('/api/founder/api-keys', { key_name: 'OPENROUTER_MODEL', value: orModel });
+                      setApiKeyStatus('OpenRouter model saved: ' + orModel);
+                      setTimeout(() => setApiKeyStatus(''), 3000);
+                    } catch (e: unknown) {
+                      setApiKeyStatus('Failed to save model');
+                    }
+                  }}
+                  className="btn-secondary flex-shrink-0 text-xs flex items-center gap-1.5">
+                  <Check size={12} /> Save Model Choice
+                </button>
               </div>
             </div>
 
