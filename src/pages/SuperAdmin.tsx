@@ -6,6 +6,7 @@ import {
   FileBarChart2, Sparkles, ClipboardCheck, Settings2, BadgeCheck, Ban, Send
 } from 'lucide-react';
 import { api } from '../lib/api';
+import ApiKeysTab from '../components/ApiKeysTab';
 import { useAuth } from '../lib/auth';
 import Badge from '../components/ui/Badge';
 import type { AdminReport, FeatureAccess, FeatureFlag, FeatureModule, ModuleAccess } from '../lib/types';
@@ -1522,262 +1523,25 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             </div>
           </div>
         ) : tab === 'api-keys' ? (
-          <div className="p-5 space-y-4">
-            {!masterKeyConfigured && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
-                style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
-                <AlertCircle size={15} />
-                <span style={{ fontSize: 13 }}>API_KEYS_MASTER_KEY is not configured on the server.</span>
-              </div>
-            )}
-            {apiKeyStatus && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
-                style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa' }}>
-                <Check size={14} />
-                <span style={{ fontSize: 13 }}>{apiKeyStatus}</span>
-              </div>
-            )}
-            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="font-semibold" style={{ color: '#f0f4ff' }}>Platform API Keys</div>
-              <div style={{ fontSize: 11, color: '#8899bb' }}>Global keys used across the platform.</div>
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {API_KEY_ITEMS.map(item => {
-                  const existing = apiKeys.find(k => k.key_name === item.key_name);
-                  return (
-                    <div key={item.key_name} className="glass-card rounded-2xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{item.label}</div>
-                          <div style={{ fontSize: 11, color: '#8899bb' }}>{item.key_name}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={existing?.is_active ? 'success' : 'neutral'}>
-                            {existing?.is_active ? 'Active' : 'Not Set'}
-                          </Badge>
-                          {existing?.key_hint && (
-                            <span style={{ fontSize: 11, color: '#8899bb' }}>{existing.key_hint}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="password"
-                          className="input-field"
-                          placeholder="Paste new key"
-                          value={keyInputs[item.key_name] || ''}
-                          onChange={e => setKeyInputs(prev => ({ ...prev, [item.key_name]: e.target.value }))}
-                        />
-                        <button
-                          onClick={() => saveApiKey(item.key_name)}
-                          className="btn-primary"
-                          disabled={!masterKeyConfigured || !(keyInputs[item.key_name] || '').trim()}
-                        >
-                          Save
-                        </button>
-                        {existing?.is_active && (
-                          <button
-                            onClick={() => deleteApiKey(item.key_name)}
-                            className="btn-secondary"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      {existing?.updated_at && (
-                        <div style={{ fontSize: 11, color: '#6677aa', marginTop: 6 }}>
-                          Updated: {new Date(existing.updated_at).toLocaleString('en-IN')}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ── OPENROUTER SECTION ── */}
-            <div className="rounded-2xl p-5" style={{ background: 'rgba(0,212,170,0.04)', border: '1px solid rgba(0,212,170,0.15)' }}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, rgba(0,212,170,0.2), rgba(30,136,229,0.2))' }}>
-                  <Sparkles size={18} style={{ color: '#00d4aa' }} />
-                </div>
-                <div>
-                  <div className="font-semibold" style={{ color: '#f0f4ff', fontSize: 15 }}>OpenRouter — 100+ Free AI Models</div>
-                  <div style={{ fontSize: 11, color: '#8899bb' }}>One API key. Access Llama, DeepSeek, Gemma, Mistral and more — most are free.</div>
-                </div>
-                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer"
-                  className="ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold"
-                  style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa', whiteSpace: 'nowrap' }}>
-                  Get API Key →
-                </a>
-              </div>
-
-              {/* Model selector grid */}
-              <div className="mb-4">
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Select Active Model</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {OPENROUTER_FREE_MODELS.map(m => (
-                    <button key={m.id} onClick={() => setOrModel(m.id)}
-                      className="rounded-xl p-3 text-left transition-all"
-                      style={{
-                        background: orModel === m.id ? 'rgba(0,212,170,0.12)' : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${orModel === m.id ? 'rgba(0,212,170,0.4)' : 'rgba(255,255,255,0.07)'}`,
-                      }}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span style={{ fontSize: 12, fontWeight: 700, color: orModel === m.id ? '#00d4aa' : '#f0f4ff' }}>{m.label}</span>
-                        <span style={{ fontSize: 9, color: '#8899bb', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 100 }}>FREE</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: '#8899bb' }}>{m.provider} · {m.speed} · {m.quality}</div>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: 10, color: '#8899bb', marginBottom: 4 }}>Selected model ID</div>
-                  <code style={{ fontSize: 11, color: '#00d4aa', fontFamily: 'monospace' }}>{orModel}</code>
-                </div>
-              </div>
-
-              {/* Live test chat */}
-              <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
-                  Live Test — runs directly from browser using your saved key
-                </div>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    value={orTestPrompt}
-                    onChange={e => setOrTestPrompt(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); testOpenRouter(); } }}
-                    placeholder="Ask anything — e.g. Write a 2-line speech about farmers in Andhra Pradesh"
-                    className="input-field flex-1"
-                    style={{ fontSize: 13 }}
-                  />
-                  <button onClick={testOpenRouter} disabled={orTesting || !orTestPrompt.trim()}
-                    className="btn-primary flex items-center gap-2 flex-shrink-0"
-                    style={{ opacity: orTesting || !orTestPrompt.trim() ? 0.5 : 1 }}>
-                    {orTesting
-                      ? <><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} />Testing...</>
-                      : <><Send size={14} />Test</>}
-                  </button>
-                </div>
-                {orTestStatus && orTestStatus !== 'success' && (
-                  <div className="px-3 py-2 rounded-lg mb-3" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777', fontSize: 12 }}>
-                    {orTestStatus}
-                  </div>
-                )}
-                {orTestResponse && (
-                  <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(0,212,170,0.2)' }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#00d4aa,#1e88e5)' }}>
-                        <Sparkles size={11} color="#060b18" />
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#00d4aa' }}>
-                        {OPENROUTER_FREE_MODELS.find(m => m.id === orModel)?.label || orModel}
-                      </span>
-                      <span style={{ fontSize: 10, color: '#8899bb' }}>via OpenRouter</span>
-                    </div>
-                    <p style={{ fontSize: 13, color: '#e0e8ff', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{orTestResponse}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Save selected model to backend */}
-              <div className="mt-3 flex items-center gap-3">
-                <div style={{ fontSize: 12, color: '#8899bb', flex: 1 }}>
-                  Selected model is used for all AI features (chat, autofill, briefings) when OpenRouter key is active.
-                </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      await api.post('/api/founder/settings', { key: 'openrouter_model', value: orModel });
-                      setApiKeyStatus('✓ Model saved: ' + OPENROUTER_FREE_MODELS.find(m => m.id === orModel)?.label || orModel);
-                      setTimeout(() => setApiKeyStatus(''), 3000);
-                    } catch (e: unknown) {
-                      setApiKeyStatus('Failed to save model preference');
-                    }
-                  }}
-                  className="btn-secondary flex-shrink-0 text-xs flex items-center gap-1.5">
-                  <Check size={12} /> Save Model Choice
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <div className="font-semibold" style={{ color: '#f0f4ff' }}>Politician API Keys</div>
-                  <div style={{ fontSize: 11, color: '#8899bb' }}>Assign keys per politician with monthly limits.</div>
-                </div>
-                <select
-                  value={selectedApiPolitician}
-                  onChange={e => setSelectedApiPolitician(e.target.value)}
-                  className="input-field"
-                  style={{ maxWidth: 240 }}
-                >
-                  {politicians.map(p => (
-                    <option key={p.id} value={p.id}>{p.full_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {API_KEY_ITEMS.map(item => {
-                  const existing = politicianKeys.find(k => k.key_name === item.key_name);
-                  const usage = existing ? `${existing.usage_count || 0}/${existing.monthly_limit || 0 || '∞'}` : '0/∞';
-                  return (
-                    <div key={`pol-${item.key_name}`} className="glass-card rounded-2xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{item.label}</div>
-                          <div style={{ fontSize: 11, color: '#8899bb' }}>{item.key_name}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={existing?.is_active ? 'success' : 'neutral'}>
-                            {existing?.is_active ? 'Active' : 'Not Set'}
-                          </Badge>
-                          {existing?.key_hint && (
-                            <span style={{ fontSize: 11, color: '#8899bb' }}>{existing.key_hint}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="password"
-                          className="input-field"
-                          placeholder="Paste key"
-                          value={politicianKeyInputs[item.key_name] || ''}
-                          onChange={e => setPoliticianKeyInputs(prev => ({ ...prev, [item.key_name]: e.target.value }))}
-                        />
-                        <input
-                          className="input-field"
-                          placeholder="Monthly limit"
-                          value={politicianKeyLimits[item.key_name] || ''}
-                          onChange={e => setPoliticianKeyLimits(prev => ({ ...prev, [item.key_name]: e.target.value }))}
-                          style={{ maxWidth: 130 }}
-                        />
-                        <button
-                          onClick={() => savePoliticianApiKey(item.key_name)}
-                          className="btn-primary"
-                          disabled={!masterKeyConfigured || !(politicianKeyInputs[item.key_name] || '').trim()}
-                        >
-                          Save
-                        </button>
-                        {existing?.is_active && (
-                          <button
-                            onClick={() => deletePoliticianApiKey(item.key_name)}
-                            className="btn-secondary"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#6677aa', marginTop: 6 }}>
-                        Usage: {usage}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <ApiKeysTab
+            apiKeys={apiKeys}
+            politicians={politicians}
+            masterKeyConfigured={masterKeyConfigured}
+            apiKeyStatus={apiKeyStatus}
+            setApiKeyStatus={setApiKeyStatus}
+            onRefresh={fetchData}
+            orModel={orModel}
+            setOrModel={setOrModel}
+            orTestPrompt={orTestPrompt}
+            setOrTestPrompt={setOrTestPrompt}
+            orTestResponse={orTestResponse}
+            setOrTestResponse={setOrTestResponse}
+            orTesting={orTesting}
+            setOrTesting={setOrTesting}
+            orTestStatus={orTestStatus}
+            setOrTestStatus={setOrTestStatus}
+            testOpenRouter={testOpenRouter}
+          />
         ) : tab === 'users' ? (
           <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
             {users.length === 0 ? (
