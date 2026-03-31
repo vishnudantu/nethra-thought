@@ -709,9 +709,28 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   }
 
   async function testOpenRouter() {
-    const key = keyInputs['OPENROUTER_API_KEY'] || apiKeys.find(k => k.key_name === 'OPENROUTER_API_KEY')?.key_hint;
-    if (!key || key.startsWith('••••')) {
-      setOrTestStatus('Save your OpenRouter API key first, then test.');
+    // Check key is saved (hint means it exists in DB)
+    const savedKey = apiKeys.find(k => k.key_name === 'OPENROUTER_API_KEY');
+    const rawInput = keyInputs['OPENROUTER_API_KEY'];
+    if (!savedKey?.is_active && !rawInput) {
+      setOrTestStatus('Save your OpenRouter API key first using the field above, then test.');
+      return;
+    }
+    // Use raw input if just typed, otherwise test via backend proxy
+    const key = rawInput || null;
+    if (!key && savedKey?.is_active) {
+      // Key is saved in DB - test via backend instead
+      try {
+        const r = await api.post('/api/ai-assistant', {
+          messages: [{ role: 'user', content: orTestPrompt }],
+          mode: 'chat',
+        }) as any;
+        setOrTestResponse(typeof r === 'string' ? r : JSON.stringify(r));
+        setOrTestStatus('success');
+      } catch(e: unknown) {
+        setOrTestStatus('error: ' + (e instanceof Error ? e.message : 'Failed'));
+      }
+      setOrTesting(false);
       return;
     }
     if (!orTestPrompt.trim()) { setOrTestStatus('Enter a test prompt first.'); return; }
@@ -1669,11 +1688,11 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                 <button
                   onClick={async () => {
                     try {
-                      await api.post('/api/founder/api-keys', { key_name: 'OPENROUTER_MODEL', value: orModel });
-                      setApiKeyStatus('OpenRouter model saved: ' + orModel);
+                      await api.post('/api/founder/settings', { key: 'openrouter_model', value: orModel });
+                      setApiKeyStatus('✓ Model saved: ' + OPENROUTER_FREE_MODELS.find(m => m.id === orModel)?.label || orModel);
                       setTimeout(() => setApiKeyStatus(''), 3000);
                     } catch (e: unknown) {
-                      setApiKeyStatus('Failed to save model');
+                      setApiKeyStatus('Failed to save model preference');
                     }
                   }}
                   className="btn-secondary flex-shrink-0 text-xs flex items-center gap-1.5">

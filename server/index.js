@@ -960,17 +960,14 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
 
     if (orKey) {
       // OpenRouter — OpenAI-compatible, supports 100+ models including free ones
-      const [orModelRow] = await pool.query("SELECT * FROM api_keys WHERE key_name = 'OPENROUTER_MODEL' AND is_active = 1 LIMIT 1").catch(() => [[]]);
+      // Read model from platform_settings (plain text) or fall back to default
       let orModel = 'meta-llama/llama-3.3-70b-instruct:free';
-      if (orModelRow?.[0]) {
-        try {
-          const { decrypt } = await import('./services/secretStore.js');
-          // Try to get saved model preference
-        } catch(_) {}
-      }
-      // Read saved model from api_keys table as plain value
-      const [modelRows] = await pool.query("SELECT key_name FROM api_keys WHERE key_name = 'OPENROUTER_MODEL' LIMIT 1").catch(() => [[]]);
-      // Use env override or default
+      try {
+        const [[modelSetting]] = await pool.query(
+          "SELECT setting_value FROM platform_settings WHERE politician_id IS NULL AND setting_key = 'openrouter_model' LIMIT 1"
+        );
+        if (modelSetting?.setting_value) orModel = modelSetting.setting_value;
+      } catch(_) {}
       if (process.env.OPENROUTER_MODEL) orModel = process.env.OPENROUTER_MODEL;
       const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -2294,6 +2291,15 @@ app.get('/api/public/ticker', async (req, res) => {
 });
 
 // ── NEWS CACHE TABLE (auto-create if not exists) ──────────────
+pool.query(`CREATE TABLE IF NOT EXISTS platform_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  politician_id INT UNSIGNED DEFAULT NULL,
+  setting_key VARCHAR(120) NOT NULL,
+  setting_value TEXT DEFAULT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_setting (politician_id, setting_key)
+) ENGINE=InnoDB`).catch(() => {});
+
 pool.query(`CREATE TABLE IF NOT EXISTS news_cache (
   id INT AUTO_INCREMENT PRIMARY KEY,
   headline VARCHAR(500) NOT NULL,
@@ -2308,6 +2314,32 @@ pool.query(`CREATE TABLE IF NOT EXISTS news_cache (
   INDEX idx_published (published_at),
   INDEX idx_category (category)
 ) ENGINE=InnoDB`).catch(() => {});
+
+// ── PLATFORM SETTINGS (plain text, not encrypted) ────────────
+app.get('/api/founder/settings', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const [rows] = await pool.query(
+      "SELECT setting_key, setting_value, updated_at FROM platform_settings WHERE politician_id IS NULL ORDER BY setting_key"
+    );
+    const settings = {};
+    for (const r of rows) settings[r.setting_key] = r.setting_value;
+    res.json(settings);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/founder/settings', authMiddleware, async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const { key, value } = req.body;
+    if (!key) return res.status(400).json({ error: 'key required' });
+    await pool.query(
+      "INSERT INTO platform_settings (politician_id, setting_key, setting_value) VALUES (NULL, ?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)",
+      [key, value || '']
+    );
+    res.json({ success: true, key, value });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
@@ -2374,7 +2406,12 @@ If you do not know a specific numeric value use null. If you do not recognize th
     let text = '';
     // Try providers: OpenRouter → Groq → Gemini → Anthropic → OpenAI
     if (orKeyAutofill) {
-      const orModel = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+      let orModel = 'meta-llama/llama-3.3-70b-instruct:free';
+      try {
+        const [[ms]] = await pool.query("SELECT setting_value FROM platform_settings WHERE politician_id IS NULL AND setting_key = 'openrouter_model' LIMIT 1");
+        if (ms?.setting_value) orModel = ms.setting_value;
+      } catch(_) {}
+      if (process.env.OPENROUTER_MODEL) orModel = process.env.OPENROUTER_MODEL;
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
