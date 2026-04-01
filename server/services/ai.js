@@ -298,3 +298,4 @@ async function streamProvider(name, key, system, messages, res) {
     return full;
   }
 }
+export { callProvider };
