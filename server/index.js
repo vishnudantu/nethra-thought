@@ -1,4 +1,4 @@
-﻿import express from 'express';
+﻿﻿import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -2273,8 +2273,7 @@ app.post('/api/grievances/ai-triage', authMiddleware, async (req, res) => {
       prompt: `Triage these pending grievances for an Indian politician. Assign urgency (1-10) and category. Return JSON array: [{"id":N,"urgency":N,"category":"string","action":"string","reason":"string"}]
 
 Grievances:
-${grievances.map(g => `ID:${g.id} | ${g.subject} | ${g.location} | ${g.description?.slice(0,80)}`).join('
-')}`,
+${grievances.map(g => `ID:${g.id} | ${g.subject} | ${g.location} | ${g.description?.slice(0,80)}`).join('\n')}`,
       system: 'You are a political intelligence triage system. Return only valid JSON arrays.',
       politicianId: polId, endpoint: 'grievance.triage', maxTokens: 1000,
     });
@@ -2291,8 +2290,7 @@ app.post('/api/opposition/ai-analysis', authMiddleware, async (req, res) => {
     const analysis = await aiComplete({
       prompt: `Analyze this opposition intelligence for ${pol?.full_name} (${pol?.party}) from ${pol?.constituency_name}:
 
-${intel.map(i => `[${i.activity_type}] ${i.opponent_name}: ${i.description?.slice(0,100)} (threat: ${i.threat_level}/10)`).join('
-')}
+${intel.map(i => `[${i.activity_type}] ${i.opponent_name}: ${i.description?.slice(0,100)} (threat: ${i.threat_level}/10)`).join('\n')}
 
 Provide:
 1. OVERALL THREAT LEVEL (1-10)
@@ -2320,8 +2318,7 @@ app.post('/api/sentiment/ai-summary', authMiddleware, async (req, res) => {
 SENTIMENT SCORES (last 7 days): ${scores.map(s => `${s.score_date}: ${s.overall_score}/100`).join(', ')}
 
 MEDIA MENTIONS:
-${mentions.map(m => `[${m.sentiment}] ${m.source}: ${m.headline}`).join('
-')}
+${mentions.map(m => `[${m.sentiment}] ${m.source}: ${m.headline}`).join('\n')}
 
 Provide:
 1. TREND DIRECTION (improving/stable/declining)
@@ -2344,8 +2341,7 @@ app.post('/api/voice/ai-summary', authMiddleware, async (req, res) => {
     const summary = await aiComplete({
       prompt: `Summarize these field intelligence voice reports from constituency workers:
 
-${reports.map(r => `[${r.classification}] ${r.reporter_name} from ${r.location}: ${r.transcript?.slice(0,150)}`).join('
-
+${reports.map(r => `[${r.classification}] ${r.reporter_name} from ${r.location}: ${r.transcript?.slice(0,150)}`).join('\n
 ')}
 
 Provide:
@@ -2369,8 +2365,7 @@ app.post('/api/projects/ai-risk', authMiddleware, async (req, res) => {
       prompt: `Assess risk for these constituency projects. Return JSON: {"high_risk": [{"name":"...","risk":"...","action":"..."}], "on_track": ["name1","name2"], "completion_forecast": "string", "budget_alert": "string or null"}
 
 Projects:
-${projects.map(p => `${p.project_name}: ${p.status}, ${p.progress_percent}% done, budget: â‚¹${p.budget_spent}L/â‚¹${p.budget_allocated}L, due: ${p.expected_completion}`).join('
-')}`,
+${projects.map(p => `${p.project_name}: ${p.status}, ${p.progress_percent}% done, budget: â‚¹${p.budget_spent}L/â‚¹${p.budget_allocated}L, due: ${p.expected_completion}`).join('\n')}`,
       system: 'You analyze constituency development project risks for Indian politicians. Return only valid JSON.',
       politicianId: polId, endpoint: 'projects.risk', maxTokens: 600,
     });
@@ -2387,8 +2382,7 @@ app.post('/api/whatsapp/ai-analysis', authMiddleware, async (req, res) => {
     const analysis = await aiComplete({
       prompt: `Analyze these WhatsApp messages received by a politician's office in the last 24 hours:
 
-${messages.map(m => `[${m.classification.toUpperCase()}, urgency:${m.urgency_score}${m.is_viral?' VIRAL':''}${m.is_misinformation?' MISINFO':''}] ${m.content?.slice(0,100)}`).join('
-')}
+${messages.map(m => `[${m.classification.toUpperCase()}, urgency:${m.urgency_score}${m.is_viral?' VIRAL':''}${m.is_misinformation?' MISINFO':''}] ${m.content?.slice(0,100)}`).join('\n')}
 
 Provide:
 1. DOMINANT CONCERN today
@@ -2453,8 +2447,7 @@ app.post('/api/polls/ai-analysis', authMiddleware, async (req, res) => {
 ${polls.map(p => `POLL: ${p.title}
 Q: ${p.question}
 Responses: ${p.total_responses}
-Results: ${p.results || 'pending'}`).join('
-
+Results: ${p.results || 'pending'}`).join('\n
 ')}
 
 Provide:
