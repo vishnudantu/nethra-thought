@@ -121,7 +121,7 @@ async function callProvider(name, key, system, messages, maxTokens, temperature,
   }
 
   if (name === 'gemini') {
-    const model = (await getSavedModel('gemini')) || process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const model = (await getSavedModel('gemini')) || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
     const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + key, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -246,7 +246,7 @@ async function streamProvider(name, key, system, messages, res) {
   }
 
   if (name === 'gemini') {
-    const model = (await getSavedModel('gemini')) || 'gemini-1.5-flash';
+    const model = (await getSavedModel('gemini')) || 'gemini-2.0-flash';
     const upstream = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + key, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
