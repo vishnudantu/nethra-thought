@@ -2453,3 +2453,4 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
