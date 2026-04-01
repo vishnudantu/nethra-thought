@@ -2478,6 +2478,49 @@ app.post('/api/briefing/ai-generate', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── AI DEBUG ENDPOINT — test all providers ──────────────────
+app.post('/api/ai-debug', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const results = {};
+  const providerTests = [
+    { name: 'GROQ',       keys: ['GROQ_API_KEY','GROQ'],       url: 'https://api.groq.com/openai/v1/chat/completions',         model: 'llama-3.3-70b-versatile', auth: 'Bearer' },
+    { name: 'MISTRAL',    keys: ['MISTRAL_API_KEY','MISTRAL'],  url: 'https://api.mistral.ai/v1/chat/completions',              model: 'mistral-small-latest',     auth: 'Bearer' },
+    { name: 'GEMINI',     keys: ['GEMINI_API_KEY','GEMINI'],    url: null,                                                      model: 'gemini-1.5-flash',         auth: 'key' },
+    { name: 'NVIDIA',     keys: ['NVIDIA_API_KEY','NVIDIA','NVIDIABUILD'], url: 'https://integrate.api.nvidia.com/v1/chat/completions', model: 'meta/llama-3.3-70b-instruct', auth: 'Bearer' },
+    { name: 'OPENROUTER', keys: ['OPENROUTER_API_KEY'],         url: 'https://openrouter.ai/api/v1/chat/completions',          model: 'mistralai/mistral-7b-instruct:free', auth: 'Bearer' },
+  ];
+
+  for (const p of providerTests) {
+    let key = null;
+    for (const kn of p.keys) { key = await getApiKey(kn, {}); if (key) break; }
+    if (!key) { results[p.name] = { status: 'NO_KEY', message: `No key found for ${p.keys.join('/')}` }; continue; }
+    try {
+      let r;
+      if (p.name === 'GEMINI') {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${key}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Say OK' }] }], generationConfig: { maxOutputTokens: 10 } }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error?.message || `${r.status}`);
+        results[p.name] = { status: 'OK', response: d.candidates?.[0]?.content?.parts?.[0]?.text?.slice(0,50) };
+      } else {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` };
+        if (p.name === 'OPENROUTER') { headers['HTTP-Referer'] = 'https://thoughtfirst.in'; headers['X-Title'] = 'ThoughtFirst'; }
+        r = await fetch(p.url, {
+          method: 'POST', headers,
+          body: JSON.stringify({ model: p.model, messages: [{ role: 'user', content: 'Say OK' }], max_tokens: 10 }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error?.message || d.message || d.detail || `${r.status}`);
+        results[p.name] = { status: 'OK', response: d.choices?.[0]?.message?.content?.slice(0,50) };
+      }
+    } catch (e) { results[p.name] = { status: 'ERROR', message: e.message?.slice(0,200) }; }
+  }
+  res.json({ results });
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Gemini\n`);
