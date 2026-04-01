@@ -3,7 +3,7 @@
  * Providers: OpenRouter → Groq → Gemini → Mistral → Anthropic → Nvidia → OpenAI
  * Flexible key names — accepts any variant the user may have saved
  */
-import pool from './db.js';
+import pool from '../db.js';
 import { getApiKey } from './secretStore.js';
 
 async function getSavedModel(provider) {
