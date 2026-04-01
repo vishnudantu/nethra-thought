@@ -1,4 +1,4 @@
-﻿﻿import express from 'express';
+?import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -237,7 +237,7 @@ async function ensureDefaultFeatures() {
   );
 }
 
-// â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AUTH ──────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -369,7 +369,7 @@ app.get('/api/search', authMiddleware, async (req, res) => {
       `SELECT id, subject, category, status FROM grievances WHERE (subject LIKE ? OR petitioner_name LIKE ?)${scopeWhere} ORDER BY created_at DESC LIMIT 5`,
       [q, q, ...scopeParams],
     );
-    grievances.forEach(r => results.push({ id: r.id, type: 'grievance', title: r.subject, subtitle: `${r.category} â€¢ ${r.status}`, page: 'grievances' }));
+    grievances.forEach(r => results.push({ id: r.id, type: 'grievance', title: r.subject, subtitle: `${r.category} • ${r.status}`, page: 'grievances' }));
   } catch {}
   try {
     if (req.user.role === 'staff') throw new Error('skip');
@@ -377,35 +377,35 @@ app.get('/api/search', authMiddleware, async (req, res) => {
       `SELECT id, name, voter_id, mandal FROM voters WHERE (name LIKE ? OR voter_id LIKE ?)${scopeWhere} ORDER BY created_at DESC LIMIT 5`,
       [q, q, ...scopeParams],
     );
-    voters.forEach(r => results.push({ id: r.id, type: 'voter', title: r.name, subtitle: `${r.voter_id} â€¢ ${r.mandal || 'â€”'}`, page: 'voters' }));
+    voters.forEach(r => results.push({ id: r.id, type: 'voter', title: r.name, subtitle: `${r.voter_id} • ${r.mandal || '—'}`, page: 'voters' }));
   } catch {}
   try {
     const [projects] = await pool.query(
       `SELECT id, project_name, status FROM projects WHERE project_name LIKE ?${scopeWhere} ORDER BY created_at DESC LIMIT 5`,
       [q, ...scopeParams],
     );
-    projects.forEach(r => results.push({ id: r.id, type: 'project', title: r.project_name, subtitle: r.status || 'â€”', page: 'projects' }));
+    projects.forEach(r => results.push({ id: r.id, type: 'project', title: r.project_name, subtitle: r.status || '—', page: 'projects' }));
   } catch {}
   try {
     const [events] = await pool.query(
       `SELECT id, title, event_type FROM events WHERE title LIKE ?${scopeWhere} ORDER BY start_date DESC LIMIT 5`,
       [q, ...scopeParams],
     );
-    events.forEach(r => results.push({ id: r.id, type: 'event', title: r.title, subtitle: r.event_type || 'â€”', page: 'events' }));
+    events.forEach(r => results.push({ id: r.id, type: 'event', title: r.title, subtitle: r.event_type || '—', page: 'events' }));
   } catch {}
   try {
     const [media] = await pool.query(
       `SELECT id, headline, source FROM media_mentions WHERE headline LIKE ?${scopeWhere} ORDER BY created_at DESC LIMIT 5`,
       [q, ...scopeParams],
     );
-    media.forEach(r => results.push({ id: r.id, type: 'media', title: r.headline, subtitle: r.source || 'â€”', page: 'media' }));
+    media.forEach(r => results.push({ id: r.id, type: 'media', title: r.headline, subtitle: r.source || '—', page: 'media' }));
   } catch {}
   try {
     const [documents] = await pool.query(
       `SELECT id, title, category FROM documents WHERE title LIKE ?${scopeWhere} ORDER BY created_at DESC LIMIT 5`,
       [q, ...scopeParams],
     );
-    documents.forEach(r => results.push({ id: r.id, type: 'document', title: r.title, subtitle: r.category || 'â€”', page: 'documents' }));
+    documents.forEach(r => results.push({ id: r.id, type: 'document', title: r.title, subtitle: r.category || '—', page: 'documents' }));
   } catch {}
   res.json(results.slice(0, 25));
 });
@@ -488,7 +488,7 @@ app.put('/api/admin/website-content', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€ GENERIC CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── GENERIC CRUD ──────────────────────────────────────────────
 // Tables that are isolated per politician
 const POLITICIAN_SCOPED_TABLES = [
   'grievances','events','team_members','voters','projects','media_mentions',
@@ -722,7 +722,7 @@ app.use('/api/digital_twin_runs',     crud('digital_twin_runs',      ['scenario_
 app.use('/api/coalition_scenarios',   crud('coalition_scenarios',    ['scenario_name','status']));
 app.use('/api/crisis_incidents',      crud('crisis_incidents',       ['title','crisis_type','status']));
 app.use('/api/warroom_actions',       crud('warroom_actions',        ['action_type','status','owner']));
-// politician_profiles â€” filtered by role
+// politician_profiles — filtered by role
 app.get('/api/politician_profiles', authMiddleware, async (req, res) => {
   try {
     let rows;
@@ -733,7 +733,7 @@ app.get('/api/politician_profiles', authMiddleware, async (req, res) => {
       // Politician admin sees only their own profile
       [rows] = await pool.query("SELECT * FROM politician_profiles WHERE id = ? LIMIT 1", [req.user.politician_id]);
     } else {
-      // Fallback â€” no politician linked, return empty
+      // Fallback — no politician linked, return empty
       rows = [];
     }
     // Parse JSON fields
@@ -814,7 +814,7 @@ app.use('/api/sentiment_scores',      crud('sentiment_scores',       []));
 app.use('/api/opposition_intelligence', crud('opposition_intelligence', ['opponent_name','activity_type','description']));
 app.use('/api/voice_reports',         crud('voice_reports',          ['reporter_name','classification','transcript']));
 
-// â”€â”€ TEMPLE DARSHAN API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── TEMPLE DARSHAN API ───────────────────────────────────────
 app.get('/api/temples', authMiddleware, async (req, res) => {
   const isSuperAdmin = req.user.role === 'super_admin';
   if (!isSuperAdmin && !req.user.politician_id) return res.status(403).json({ error: 'Forbidden' });
@@ -887,7 +887,7 @@ app.get('/api/darshan/quota/:temple_id', authMiddleware, async (req, res) => {
   res.json(rows || []);
 });
 
-// â”€â”€ DARSHAN SMS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── DARSHAN SMS ───────────────────────────────────────────────
 app.post('/api/darshan-sms', authMiddleware, async (req, res) => {
   try {
     const { booking_id, approved_by, approval_notes, contact_person, contact_phone, ticket_pickup_point, shrine_contact_numbers } = req.body;
@@ -920,7 +920,7 @@ app.post('/api/darshan-sms', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
 });
 
-// â”€â”€ AI ASSISTANT â€” GEMINI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AI ASSISTANT — GEMINI ─────────────────────────────────────
 function buildPrompt(ctx, mode) {
   const n=ctx?.name||'the politician',p=ctx?.party||'their party',c=ctx?.constituency||'their constituency',s=ctx?.state||'their state',d=ctx?.designation||'Member of Parliament';
   const base=`You are NETHRA AI, a highly intelligent political assistant for ${n}, ${d} from ${c}, ${s}, representing ${p}. Deep expertise in Indian politics, parliamentary procedures, constituency management. Always professional, factual, culturally sensitive.`;
@@ -956,7 +956,7 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
   } catch (e) { console.error('[ai-assistant]',e.message); if(!res.headersSent) res.status(500).json({error: e.message}); }
 });
 
-// â”€â”€ OMNISCAN & MORNING BRIEF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── OMNISCAN & MORNING BRIEF ────────────────────────────────
 app.post('/api/omniscan/trigger', authMiddleware, async (req, res) => {
   try {
     const job = await enqueueOmniScan();
@@ -1052,7 +1052,7 @@ app.post('/api/visit-planner/generate', authMiddleware, async (req, res) => {
   }
 });
 
-// â”€â”€ FUTURE LAB PIPELINES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── FUTURE LAB PIPELINES ─────────────────────────────────────
 app.post('/api/agent-system/run', authMiddleware, async (req, res) => {
   try {
     if (req.user.role === 'field_worker') return res.status(403).json({ error: 'Forbidden' });
@@ -1142,14 +1142,14 @@ app.get('/api/crisis-war-room/overview', authMiddleware, async (req, res) => {
   }
 });
 
-// â”€â”€ WHATSAPP WEBHOOK (optional) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// WhatsApp webhook â€” supports AiSensy, Wati, and generic payloads
+// ── WHATSAPP WEBHOOK (optional) ─────────────────────────────
+// WhatsApp webhook — supports AiSensy, Wati, and generic payloads
 // Webhook URL: https://thoughtfirst.in/api/whatsapp/webhook?politician_id=X
 // AiSensy:  set this URL in AiSensy webhook settings, add x-webhook-secret header
 // Wati:     set this URL in Wati webhook settings
 app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
-    // Always acknowledge immediately â€” WhatsApp providers retry if no quick 200
+    // Always acknowledge immediately — WhatsApp providers retry if no quick 200
     res.json({ ok: true });
 
     const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
@@ -1192,7 +1192,7 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
   }
 });
 
-// WhatsApp webhook GET â€” for verification (AiSensy/Meta challenge)
+// WhatsApp webhook GET — for verification (AiSensy/Meta challenge)
 app.get('/api/whatsapp/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
   const verify = req.query['hub.verify_token'];
@@ -1214,7 +1214,7 @@ app.post('/api/whatsapp/inject', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€ VOICE INTELLIGENCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── VOICE INTELLIGENCE ─────────────────────────────────────
 app.post('/api/voice/transcribe', authMiddleware, async (req, res) => {
   try {
     const { audio_base64, filename, mimeType, transcript, reporter_name, reporter_role, language, location, gps_lat, gps_lng, classification, politician_id } = req.body;
@@ -1243,7 +1243,7 @@ app.post('/api/voice/transcribe', authMiddleware, async (req, res) => {
   }
 });
 
-// â”€â”€ FOUNDER COMMAND CENTER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── FOUNDER COMMAND CENTER ───────────────────────────────────
 const requireSuperAdmin = (req, res) => {
   if (req.user.role !== 'super_admin') {
     res.status(403).json({ error: 'Forbidden' });
@@ -1294,7 +1294,7 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
   try {
     const payload = req.body || {};
     if (!payload.full_name) return res.status(400).json({ error: 'full_name required' });
-    // Allowed columns â€” strip anything not in schema to avoid unknown column errors
+    // Allowed columns — strip anything not in schema to avoid unknown column errors
     const ALLOWED = ['full_name','display_name','slug','photo_url','party','designation',
       'constituency_name','state','lok_sabha_seat','bio','phone','email','office_address',
       'website','twitter_handle','facebook_url','instagram_handle','youtube_channel',
@@ -1674,7 +1674,7 @@ app.post('/api/founder/feature-access', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€ SMS TEST ENDPOINT (founder) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SMS TEST ENDPOINT (founder) ───────────────────────────────
 app.post('/api/founder/sms/test', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
@@ -1696,7 +1696,7 @@ app.post('/api/founder/sms/test', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€ DARSHAN SMS CONFIG PER POLITICIAN (founder) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── DARSHAN SMS CONFIG PER POLITICIAN (founder) ───────────────
 app.get('/api/founder/politicians/:id/sms-config', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
@@ -1707,7 +1707,7 @@ app.get('/api/founder/politicians/:id/sms-config', authMiddleware, async (req, r
     );
     const config = {};
     for (const row of settings) config[row.setting_key] = row.setting_value;
-    res.json({ sms_configured: !!smsKey, sms_key_hint: smsKey ? 'â€¢â€¢â€¢â€¢' + smsKey.slice(-4) : null, ...config });
+    res.json({ sms_configured: !!smsKey, sms_key_hint: smsKey ? '••••' + smsKey.slice(-4) : null, ...config });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1743,8 +1743,8 @@ app.post('/api/founder/reports/weekly', authMiddleware, async (req, res) => {
   try {
     const { politician_id } = req.body || {};
     const title = politician_id
-      ? `Weekly Report â€” ${new Date().toLocaleDateString('en-IN')}`
-      : `Platform Weekly Report â€” ${new Date().toLocaleDateString('en-IN')}`;
+      ? `Weekly Report — ${new Date().toLocaleDateString('en-IN')}`
+      : `Platform Weekly Report — ${new Date().toLocaleDateString('en-IN')}`;
     await pool.query(
       'INSERT INTO admin_reports (politician_id, report_type, title, summary, content, created_by) VALUES (?,?,?,?,?,?)',
       [politician_id || null, 'weekly', title, 'Auto-generated weekly report', '{}', req.user.id]
@@ -1756,7 +1756,7 @@ app.post('/api/founder/reports/weekly', authMiddleware, async (req, res) => {
   }
 });
 
-// â”€â”€ SUPER ADMIN â€” USERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SUPER ADMIN — USERS ───────────────────────────────────────
 app.post('/api/admin/users', authMiddleware, async (req, res) => {
   const callerRole = req.user.role;
   if (callerRole !== 'super_admin' && callerRole !== 'politician_admin') return res.status(403).json({ error: 'Forbidden' });
@@ -1811,7 +1811,7 @@ app.delete('/api/admin/users/:id', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€ SUPER ADMIN â€” API KEYS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SUPER ADMIN — API KEYS ──────────────────────────────────
 app.get('/api/admin/api-keys', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   try {
@@ -1845,7 +1845,7 @@ app.delete('/api/admin/api-keys/:name', authMiddleware, async (req, res) => {
   }
 });
 
-// â”€â”€ SUPER ADMIN â€” FEATURE MODULES & ACCESS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SUPER ADMIN — FEATURE MODULES & ACCESS ────────────────────
 app.get('/api/admin/feature-modules', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   try {
@@ -2044,18 +2044,18 @@ app.post('/api/admin/reports/weekly', authMiddleware, async (req, res) => {
         "SELECT COUNT(*) as active FROM projects WHERE politician_id = ? AND status IN ('In Progress','Planning','Tendering')",
         [polId],
       );
-      const title = `Weekly Performance Report â€” ${pol.full_name}`;
+      const title = `Weekly Performance Report — ${pol.full_name}`;
       const summary = `Grievances: ${grievances?.total || 0} (Resolved ${grievances?.resolved || 0}). Sentiment: ${sentiment?.avg_score ?? 0}. Opposition threats: ${opposition?.threats || 0}. Active projects: ${projects?.active || 0}.`;
       const content = [
         `Politician: ${pol.full_name}`,
         `Constituency: ${pol.constituency_name || 'N/A'}, ${pol.state || 'N/A'}`,
         '',
         'Highlights:',
-        `â€¢ New grievances: ${grievances?.total || 0}`,
-        `â€¢ Resolved grievances: ${grievances?.resolved || 0}`,
-        `â€¢ Average sentiment score: ${sentiment?.avg_score ?? 0}`,
-        `â€¢ High-threat opposition activity: ${opposition?.threats || 0}`,
-        `â€¢ Active projects: ${projects?.active || 0}`,
+        `• New grievances: ${grievances?.total || 0}`,
+        `• Resolved grievances: ${grievances?.resolved || 0}`,
+        `• Average sentiment score: ${sentiment?.avg_score ?? 0}`,
+        `• High-threat opposition activity: ${opposition?.threats || 0}`,
+        `• Active projects: ${projects?.active || 0}`,
       ].join('\n');
       const [result] = await pool.query(
         'INSERT INTO admin_reports (politician_id,report_type,title,summary,content,created_by) VALUES (?,?,?,?,?,?)',
@@ -2083,7 +2083,7 @@ app.get('/api/admin/reports', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€ ACCESS SUMMARY (ROLE + POLITICIAN) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── ACCESS SUMMARY (ROLE + POLITICIAN) ────────────────────────
 app.get('/api/access/summary', authMiddleware, async (req, res) => {
   try {
     await ensureDefaultModules();
@@ -2140,7 +2140,7 @@ app.get('/api/access/summary', authMiddleware, async (req, res) => {
   }
 });
 
-// â”€â”€ PUBLIC NEWS API â€” no auth required â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PUBLIC NEWS API — no auth required ────────────────────────
 // Feeds the login screen live news ticker
 app.get('/api/public/news', async (req, res) => {
   try {
@@ -2184,7 +2184,7 @@ app.get('/api/public/ticker', async (req, res) => {
   } catch (e) { res.json([]); }
 });
 
-// â”€â”€ NEWS CACHE TABLE (auto-create if not exists) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── NEWS CACHE TABLE (auto-create if not exists) ──────────────
 pool.query(`CREATE TABLE IF NOT EXISTS platform_settings (
   id INT AUTO_INCREMENT PRIMARY KEY,
   politician_id INT UNSIGNED DEFAULT NULL,
@@ -2209,7 +2209,7 @@ pool.query(`CREATE TABLE IF NOT EXISTS news_cache (
   INDEX idx_category (category)
 ) ENGINE=InnoDB`).catch(() => {});
 
-// â”€â”€ PLATFORM SETTINGS (plain text, not encrypted) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PLATFORM SETTINGS (plain text, not encrypted) ────────────
 app.get('/api/founder/settings', authMiddleware, async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
@@ -2236,12 +2236,12 @@ app.post('/api/founder/settings', authMiddleware, async (req, res) => {
 });
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// AI INTELLIGENCE ENDPOINTS â€” all sidebar modules
-// Uses central AI service â€” auto-fallbacks across all providers
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════════════════
+// AI INTELLIGENCE ENDPOINTS — all sidebar modules
+// Uses central AI service — auto-fallbacks across all providers
+// ══════════════════════════════════════════════════════════════
 
-// GRIEVANCES â€” AI triage and response drafting
+// GRIEVANCES — AI triage and response drafting
 app.post('/api/grievances/:id/ai-response', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM grievances WHERE id = ?', [req.params.id]);
@@ -2281,7 +2281,7 @@ ${grievances.map(g => `ID:${g.id} | ${g.subject} | ${g.location} | ${g.descripti
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// OPPOSITION â€” AI threat analysis
+// OPPOSITION — AI threat analysis
 app.post('/api/opposition/ai-analysis', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2306,7 +2306,7 @@ Be direct, political, India-context aware.`,
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// SENTIMENT â€” AI sentiment summary and recommendations
+// SENTIMENT — AI sentiment summary and recommendations
 app.post('/api/sentiment/ai-summary', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2332,7 +2332,7 @@ Provide:
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// VOICE REPORTS â€” AI transcription summary
+// VOICE REPORTS — AI transcription summary
 app.post('/api/voice/ai-summary', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2356,7 +2356,7 @@ Provide:
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PROJECTS â€” AI risk assessment
+// PROJECTS — AI risk assessment
 app.post('/api/projects/ai-risk', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2365,7 +2365,7 @@ app.post('/api/projects/ai-risk', authMiddleware, async (req, res) => {
       prompt: `Assess risk for these constituency projects. Return JSON: {"high_risk": [{"name":"...","risk":"...","action":"..."}], "on_track": ["name1","name2"], "completion_forecast": "string", "budget_alert": "string or null"}
 
 Projects:
-${projects.map(p => `${p.project_name}: ${p.status}, ${p.progress_percent}% done, budget: â‚¹${p.budget_spent}L/â‚¹${p.budget_allocated}L, due: ${p.expected_completion}`).join('\n')}`,
+${projects.map(p => `${p.project_name}: ${p.status}, ${p.progress_percent}% done, budget: ₹${p.budget_spent}L/₹${p.budget_allocated}L, due: ${p.expected_completion}`).join('\n')}`,
       system: 'You analyze constituency development project risks for Indian politicians. Return only valid JSON.',
       politicianId: polId, endpoint: 'projects.risk', maxTokens: 600,
     });
@@ -2373,7 +2373,7 @@ ${projects.map(p => `${p.project_name}: ${p.status}, ${p.progress_percent}% done
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// WHATSAPP â€” AI batch analysis
+// WHATSAPP — AI batch analysis
 app.post('/api/whatsapp/ai-analysis', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2386,7 +2386,7 @@ ${messages.map(m => `[${m.classification.toUpperCase()}, urgency:${m.urgency_sco
 
 Provide:
 1. DOMINANT CONCERN today
-2. MISINFORMATION THREAT (if any â€” draft counter-narrative)
+2. MISINFORMATION THREAT (if any — draft counter-narrative)
 3. VIRAL CONTENT ACTION
 4. RECOMMENDED RESPONSE PRIORITY`,
       system: 'You analyze political WhatsApp intelligence for Indian politicians.',
@@ -2396,7 +2396,7 @@ Provide:
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// CONTENT FACTORY â€” generate any content type
+// CONTENT FACTORY — generate any content type
 app.post('/api/content-factory/ai-generate', authMiddleware, async (req, res) => {
   try {
     const { content_type = 'social_post', context = '', language = 'english' } = req.body;
@@ -2407,7 +2407,7 @@ app.post('/api/content-factory/ai-generate', authMiddleware, async (req, res) =>
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PARLIAMENTARY â€” AI draft question
+// PARLIAMENTARY — AI draft question
 app.post('/api/parliamentary/ai-question', authMiddleware, async (req, res) => {
   try {
     const { topic, ministry, question_type = 'starred' } = req.body;
@@ -2435,7 +2435,7 @@ Make it specific to ${pol?.constituency_name || pol?.state} and politically shar
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POLLING â€” AI poll analysis
+// POLLING — AI poll analysis
 app.post('/api/polls/ai-analysis', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2461,7 +2461,7 @@ Provide:
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// MORNING BRIEF â€” regenerate now
+// MORNING BRIEF — regenerate now
 app.post('/api/briefing/ai-generate', authMiddleware, async (req, res) => {
   try {
     const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
@@ -2472,7 +2472,7 @@ app.post('/api/briefing/ai-generate', authMiddleware, async (req, res) => {
 });
 
 
-// â”€â”€ AI DEBUG ENDPOINT â€” test all providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AI DEBUG ENDPOINT — test all providers ──────────────────
 app.post('/api/ai-debug', authMiddleware, async (req, res) => {
   if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const results = {};
@@ -2515,11 +2515,11 @@ app.post('/api/ai-debug', authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\nâœ… Nethra API running on http://localhost:${PORT}`);
+  console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Gemini\n`);
 });
 
-// â”€â”€ POLITICIAN AUTO-FILL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── POLITICIAN AUTO-FILL ─────────────────────────────────────
 // Uses Gemini to search public data and return structured politician profile
 app.post('/api/politician-autofill', authMiddleware, async (req, res) => {
   const { name, type = 'MP' } = req.body;
@@ -2541,7 +2541,7 @@ If politician unknown: {"error":"Politician not found"}`;
     res.status(500).json({ error: 'Failed to fetch politician data: ' + err.message });
   }
 });
-// â”€â”€ CHANGE PASSWORD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CHANGE PASSWORD ───────────────────────────────────────────
 app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
   const { current_password, new_password } = req.body;
   if (!current_password || !new_password) return res.status(400).json({ error: 'Both fields required' });
