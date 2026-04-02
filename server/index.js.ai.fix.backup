@@ -937,7 +937,7 @@ function buildPrompt(ctx, mode) {
 }
 
 app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
-  const { messages, provider, politician_context, mode='chat', politician_id, save_content, content_type, prompt_summary } = req.body;
+  const { messages, politician_context, mode='chat', politician_id, save_content, content_type, prompt_summary } = req.body;
   if (!messages?.length) return res.status(400).json({ error: 'No messages provided' });
   try {
     const isSuperAdmin = req.user.role === 'super_admin';
@@ -957,54 +957,6 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     let full = '';
-    // Use specific provider if requested and available
-    if (provider) {
-      const providerMap = {
-        nvidia: () => getApiKey("NVIDIA_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        mistral: () => getApiKey("MISTRAL_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        groq: () => getApiKey("GROQ_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        gemini: () => getApiKey("GEMINI_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        openrouter: () => getApiKey("OPENROUTER_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" })
-      };
-      
-      const getKey = providerMap[provider.toLowerCase()];
-      if (getKey) {
-        const key = await getKey();
-        if (key) {
-          try {
-            const text = await callProvider(provider.toLowerCase(), key, systemPrompt, messages, 2048, 0.7, false);
-            return res.send(text);
-          } catch (e) {
-            console.warn("[ai] " + provider + " failed:", e.message);
-          }
-        }
-      }
-    }
-
-    // Use specific provider if requested and available
-    if (provider) {
-      const providerMap = {
-        nvidia: () => getApiKey("NVIDIA_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        mistral: () => getApiKey("MISTRAL_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        groq: () => getApiKey("GROQ_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        gemini: () => getApiKey("GEMINI_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        openrouter: () => getApiKey("OPENROUTER_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" })
-      };
-      
-      const getKey = providerMap[provider.toLowerCase()];
-      if (getKey) {
-        const key = await getKey();
-        if (key) {
-          try {
-            const text = await callProvider(provider.toLowerCase(), key, systemPrompt, messages, 2048, 0.7, false);
-            return res.send(text);
-          } catch (e) {
-            console.warn("[ai] " + provider + " failed:", e.message);
-          }
-        }
-      }
-    }
-
 
     if (orKey) {
       // OpenRouter — OpenAI-compatible, supports 100+ models including free ones
