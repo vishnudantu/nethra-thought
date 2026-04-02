@@ -936,48 +936,23 @@ function buildPrompt(ctx, mode) {
   return m[mode]||m.chat;
 }
 
-app.post('/api/ai-assistant', async (req, res) => {
-// QUICK FIX: Ensure user context exists
-  if (!req.user) req.user = { role: "politician", politician_id: 1, user_id: 1 };
-  if (!req.user.role) req.user.role = "politician";
-
+app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
   const { messages, provider, politician_context, mode='chat', politician_id, save_content, content_type, prompt_summary } = req.body;
-// Ensure user context exists for all requests
-if (!req.user) {
-req.user = { role: 'politician', politician_id: 1, user_id: 1 };
-}
-if (!req.user.role) req.user.role = 'politician';
-// SKIP TO MISTRAL ONLY
-  if (mistralKey) {
-    try {
-      const text = await callProvider("mistral", mistralKey, systemPrompt, messages, 2048, 0.7, false);
-      return res.send(text);
-    } catch (e) {
-      console.error("[ai-assistant] Mistral failed:", e.message);
-      return res.status(500).json({ error: e.message });
-    }
-  }
-// Universal user context fallback - works for all users
-const safeUser = req.user || { role: "politician", politician_id: 1, user_id: 1 };
-req.user = safeUser;
-if (!req.user.role) req.user.role = "politician";
   if (!messages?.length) return res.status(400).json({ error: 'No messages provided' });
-// Fallback for missing user context (temporary fix for testing)
-req.user = req.user || { role: "politician", politician_id: 1, user_id: 1 };
   try {
     const isSuperAdmin = req.user.role === 'super_admin';
     const assignedPoliticianId = isSuperAdmin ? (politician_id || req.user.politician_id) : req.user.politician_id;
     const systemPrompt = buildPrompt(politician_context, mode);
 
-    // Try providers in order: OpenRouter → Grok → Gemini → Anthropic → OpenAI
+    // Try providers in order: OpenRouter → Groq → Gemini → Anthropic → OpenAI
     const orKey     = await getApiKey('OPENROUTER_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const geminiKey = await getApiKey('GEMINI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const mistralKey   = await getApiKey('MISTRAL_API_KEY',   { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
+    const groqKey   = await getApiKey('GROQ_API_KEY',   { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const anthropicKey = await getApiKey('ANTHROPIC_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
     const openaiKey = await getApiKey('OPENAI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
 
-    if (!orKey && !geminiKey && !mistralKey && !anthropicKey && !openaiKey) {
-      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add OPENROUTER_API_KEY or MISTRAL_API_KEY.' });
+    if (!orKey && !geminiKey && !groqKey && !anthropicKey && !openaiKey) {
+      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add OPENROUTER_API_KEY or GROQ_API_KEY.' });
     }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -987,6 +962,8 @@ req.user = req.user || { role: "politician", politician_id: 1, user_id: 1 };
       const providerMap = {
         nvidia: () => getApiKey("NVIDIA_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
         mistral: () => getApiKey("MISTRAL_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
+        groq: () => getApiKey("GROQ_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
+        gemini: () => getApiKey("GEMINI_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
         openrouter: () => getApiKey("OPENROUTER_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" })
       };
       
@@ -1009,7 +986,9 @@ req.user = req.user || { role: "politician", politician_id: 1, user_id: 1 };
       const providerMap = {
         nvidia: () => getApiKey("NVIDIA_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
         mistral: () => getApiKey("MISTRAL_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
+        groq: () => getApiKey("GROQ_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
         gemini: () => getApiKey("GEMINI_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
+        openrouter: () => getApiKey("OPENROUTER_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" })
       };
       
       const getKey = providerMap[provider.toLowerCase()];
@@ -1079,15 +1058,15 @@ req.user = req.user || { role: "politician", politician_id: 1, user_id: 1 };
           try { const t=JSON.parse(line.slice(6)).candidates?.[0]?.content?.parts?.[0]?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
         }
       }
-    } else if (mistralKey) {
-      // Grok streaming (OpenAI-compatible)
-      const mistralModel = process.env.MISTRAL_MODEL || 'mistral-large-latest';
-      const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${'6z87gOvz3u4TTVmLqTIUbP3QoL2c7GOT'}`},
-        body: JSON.stringify({ model:mistralModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
+    } else if (groqKey) {
+      // Groq streaming (OpenAI-compatible)
+      const groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqKey}`},
+        body: JSON.stringify({ model:groqModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
       });
-      if (!mistralRes.ok) throw new Error(`Grok ${mistralRes.status}: ${await mistralRes.text()}`);
-      const reader = mistralRes.body.getReader(); const dec = new TextDecoder();
+      if (!groqRes.ok) throw new Error(`Groq ${groqRes.status}: ${await groqRes.text()}`);
+      const reader = groqRes.body.getReader(); const dec = new TextDecoder();
       while (true) {
         const {done,value} = await reader.read(); if (done) break;
         for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
@@ -1135,7 +1114,7 @@ req.user = req.user || { role: "politician", politician_id: 1, user_id: 1 };
 });
 
 // ── OMNISCAN & MORNING BRIEF ────────────────────────────────
-app.post('/api/omniscan/trigger', async (req, res, next) => { req.user = { role: "super_admin", politician_id: 1 }; next(); }, async (req, res) => {
+app.post('/api/omniscan/trigger', authMiddleware, async (req, res) => {
   try {
     const job = await enqueueOmniScan();
     res.json({ status: 'queued', jobId: job?.id || null, queues: getQueuesStatus() });
@@ -2380,7 +2359,7 @@ pool.query(`CREATE TABLE IF NOT EXISTS news_cache (
 
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
-  console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Mistral\n`);
+  console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Gemini\n`);
 });
 
 // ── POLITICIAN AUTO-FILL ─────────────────────────────────────
@@ -2391,11 +2370,11 @@ app.post('/api/politician-autofill', authMiddleware, async (req, res) => {
 
   const orKeyAutofill = await getApiKey('OPENROUTER_API_KEY', { endpoint: 'politician.autofill' });
   const geminiKey = await getApiKey('GEMINI_API_KEY', { endpoint: 'politician.autofill' });
-  const mistralKeyFirst = await getApiKey('MISTRAL_API_KEY', { endpoint: 'politician.autofill' });
+  const groqKeyFirst = await getApiKey('GROQ_API_KEY', { endpoint: 'politician.autofill' });
   const anthropicKeyFirst = await getApiKey('ANTHROPIC_API_KEY', { endpoint: 'politician.autofill' });
   const openaiKeyFirst = await getApiKey('OPENAI_API_KEY', { endpoint: 'politician.autofill' });
-  if (!orKeyAutofill && !geminiKey && !mistralKeyFirst && !anthropicKeyFirst && !openaiKeyFirst) {
-    return res.status(500).json({ error: 'No AI key configured. Add OPENROUTER_API_KEY or MISTRAL_API_KEY in Super Admin API Keys.' });
+  if (!orKeyAutofill && !geminiKey && !groqKeyFirst && !anthropicKeyFirst && !openaiKeyFirst) {
+    return res.status(500).json({ error: 'No AI key configured. Add OPENROUTER_API_KEY or GROQ_API_KEY in Super Admin API Keys.' });
   }
 
   const prompt = `You are a political data researcher for India. Search your knowledge and return detailed information about the Indian politician: "${name}" (${type}).
@@ -2441,7 +2420,7 @@ If you do not know a specific numeric value use null. If you do not recognize th
 
   try {
     let text = '';
-    // Try providers: OpenRouter → Grok → Gemini → Anthropic → OpenAI
+    // Try providers: OpenRouter → Groq → Gemini → Anthropic → OpenAI
     if (orKeyAutofill) {
       const orModel = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2457,13 +2436,13 @@ If you do not know a specific numeric value use null. If you do not recognize th
       if (!r.ok) throw new Error(`OpenRouter error: ${r.status}: ${await r.text()}`);
       const d = await r.json();
       text = d.choices?.[0]?.message?.content || '';
-    } else if (mistralKeyFirst) {
-      const r = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    } else if (groqKeyFirst) {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${'6z87gOvz3u4TTVmLqTIUbP3QoL2c7GOT'}` },
-        body: JSON.stringify({ model: process.env.MISTRAL_MODEL || 'mistral-large-latest', messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKeyFirst}` },
+        body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 1500, temperature: 0.1 }),
       });
-      if (!r.ok) throw new Error(`Mistral error: ${r.status}: ${await r.text()}`);
+      if (!r.ok) throw new Error(`Groq error: ${r.status}: ${await r.text()}`);
       const d = await r.json();
       text = d.choices?.[0]?.message?.content || '';
     } else if (geminiKey) {
@@ -2555,50 +2534,3 @@ app.get('/api/state/:state/dashboard', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch state dashboard' });
   }
 });
-
-// AI Provider Calling Function
-
-// AI Provider Calling Function
-async function callProvider(provider, apiKey, systemPrompt, messages, maxTokens = 1500, temperature = 0.7, stream = false) {
-  console.log('[ai] Calling provider:', provider);
-  
-  try {
-    switch (provider.toLowerCase()) {
-      case 'mistral':
-        const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: process.env.MISTRAL_MODEL || 'mistral-large-latest',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...messages
-            ],
-            max_tokens: maxTokens,
-            temperature: temperature,
-            stream: false
-          })
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Mistral API error: ${response.status} ${response.statusText} - ${errorText}`);
-        }
-        
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content || '';
-        
-      default:
-        throw new Error(`Unsupported AI provider: ${provider}`);
-    }
-  } catch (error) {
-    console.error(`[ai] ${provider} call failed:`, error.message);
-    throw error;
-  }
-}
-
-
-
