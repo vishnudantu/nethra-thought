@@ -1148,6 +1148,33 @@ app.get('/api/omniscan/status', authMiddleware, async (req, res) => {
   res.json(getQueuesStatus());
 });
 
+// MEDIA SCRAPER API
+app.post('/api/media/scrape', authMiddleware, async (req, res) => {
+  try {
+    const { url, name } = req.body;
+    
+    if (!url && !name) {
+      return res.status(400).json({ error: 'Either URL or politician name required' });
+    }
+    
+    if (url) {
+      // Scrape a specific URL
+      // TODO: Implement URL scraping
+      return res.status(200).json({ message: 'URL scraping not yet implemented', url });
+    } else if (name) {
+      // Scrape politician profile
+      const scrapedData = await scrapePoliticianProfile(name);
+      if (scrapedData.error) {
+        return res.status(404).json(scrapedData);
+      }
+      return res.json(scrapedData);
+    }
+  } catch (error) {
+    console.error('[media-scrape]', error);
+    res.status(500).json({ error: 'Failed to scrape: ' + error.message });
+  }
+});
+
 app.post('/api/sentiment/update', authMiddleware, async (req, res) => {
   try {
     const job = await enqueueSentimentUpdate();

@@ -504,4 +504,13 @@ function consolidatePoliticianData(sources, originalName) {
     }
   });
 
-  // Set
+  // Set confidence based on sources
+  consolidated.confidence = consolidated.sources_scraped > 0 ? 'high' : 'low';
+  
+  return consolidated;
+}
+
+export {
+  scrapePoliticianProfile,
+  scrapeRegionalPoliticians
+};
