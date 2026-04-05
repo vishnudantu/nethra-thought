@@ -1,78 +1,59 @@
+/**
+ * Content Factory — generates social media, speeches, press releases
+ * Uses central AI — auto-fallback across all providers
+ */
 import pool from '../db.js';
-import { getApiKey } from './secretStore.js';
+import { aiComplete } from './ai.js';
 
-async function fetchPolitician(politicianId) {
-  if (!politicianId) return null;
-  const [rows] = await pool.query(
-    "SELECT id, full_name, constituency_name, state, party, designation FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL) LIMIT 1",
-    [politicianId]
+const CONTENT_TYPES = {
+  social_post: { label: 'Social Media Post', maxTokens: 300, system: 'You write punchy, shareable social media posts for Indian politicians. Telugu and Hindi friendly.' },
+  speech:      { label: 'Speech Excerpt',    maxTokens: 800, system: 'You write powerful political speeches for Indian politicians. Emotional, local-context aware.' },
+  press_release: { label: 'Press Release',  maxTokens: 600, system: 'You write professional press releases for Indian politician offices.' },
+  whatsapp_broadcast: { label: 'WhatsApp Broadcast', maxTokens: 350, system: 'You write concise, impactful WhatsApp broadcast messages for political communication.' },
+  grievance_response: { label: 'Grievance Response',  maxTokens: 300, system: 'You write empathetic, official responses to constituent grievances.' },
+  project_update: { label: 'Project Update', maxTokens: 400, system: 'You write clear project progress updates for constituency communications.' },
+};
+
+export async function generateContent(politicianId, contentType = 'social_post', context = '') {
+  const [[pol]] = await pool.query("SELECT full_name, designation, constituency_name, state, party FROM politician_profiles WHERE id = ?", [politicianId]);
+  if (!pol) throw new Error('Politician not found');
+
+  const cfg = CONTENT_TYPES[contentType] || CONTENT_TYPES.social_post;
+
+  const [recentGrievances] = await pool.query("SELECT subject, category, location FROM grievances WHERE politician_id = ? ORDER BY created_at DESC LIMIT 5", [politicianId]);
+  const [recentProjects]   = await pool.query("SELECT project_name, status, location FROM projects WHERE politician_id = ? ORDER BY updated_at DESC LIMIT 3", [politicianId]);
+
+  const prompt = `Generate a ${cfg.label} for ${pol.full_name}, ${pol.designation} from ${pol.constituency_name}, ${pol.state} (${pol.party}).
+
+${context ? `SPECIFIC CONTEXT: ${context}\n` : ''}
+RECENT GRIEVANCE THEMES: ${recentGrievances.map(g => `${g.subject} (${g.location})`).join(', ') || 'None'}
+ACTIVE PROJECTS: ${recentProjects.map(p => `${p.project_name} — ${p.status}`).join(', ') || 'None'}
+
+Generate ONLY the content, no explanations. Make it authentic and locally relevant.`;
+
+  const content = await aiComplete({ prompt, system: cfg.system, politicianId, endpoint: `content.${contentType}`, maxTokens: cfg.maxTokens });
+
+  const [r] = await pool.query(
+    "INSERT INTO ai_generated_content (politician_id, content_type, prompt, content, is_saved) VALUES (?,?,?,?,0)",
+    [politicianId, contentType, (context || 'auto-generated').slice(0, 500), content]
   );
-  return rows?.[0] || null;
+
+  return { id: r.insertId, content_type: contentType, content, label: cfg.label };
 }
 
-async function generateWithGemini(prompt, politicianId) {
-  const apiKey = await getApiKey('GEMINI_API_KEY', { politicianId, endpoint: 'content.factory' });
-  if (!apiKey) return null;
-  const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1500, temperature: 0.6 },
-    }),
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-}
-
-function safeJson(text) {
-  try { return JSON.parse(text); } catch { return null; }
-}
-
-export async function generateDailyContentPack(politicianId) {
-  if (!politicianId) {
-    const [rows] = await pool.query("SELECT id FROM politician_profiles WHERE is_active = 1 AND (role = 'politician' OR role IS NULL)");
-    for (const row of rows) {
-      await generateDailyContentPack(row.id);
-    }
-    return rows.length;
-  }
-  const pol = await fetchPolitician(politicianId);
-  const prompt = `You are a political content generator for ${pol?.full_name || 'the politician'} (${pol?.party || ''}, ${pol?.constituency_name || ''}). 
-Create JSON array with 5 items: 
-1) twitter post, 2) facebook post, 3) instagram post, 4) whatsapp broadcast, 5) press statement.
-Each item fields: type, platform, title, content, tags. Keep twitter <= 280 chars.
-Return only JSON.`;
-
-  const raw = await generateWithGemini(prompt, politicianId);
-  let items = raw ? safeJson(raw) : null;
-  if (!Array.isArray(items)) {
-    items = [
-      { type: 'social_post', platform: 'twitter', title: 'Daily Update', content: 'Working for the constituency with focus on development and citizen services. #Nethra', tags: ['daily', 'twitter'] },
-      { type: 'social_post', platform: 'facebook', title: 'Community Update', content: 'Today we reviewed key grievances and project updates. Your feedback matters.', tags: ['facebook'] },
-      { type: 'social_post', platform: 'instagram', title: 'Progress Snapshot', content: 'Development work continues across the constituency. #Progress', tags: ['instagram'] },
-      { type: 'whatsapp', platform: 'whatsapp', title: 'WhatsApp Broadcast', content: 'We are addressing pending grievances and monitoring local issues. Reach out for support.', tags: ['whatsapp'] },
-      { type: 'press_statement', platform: 'print', title: 'Press Statement', content: 'We remain committed to timely resolution of citizen issues and transparent governance.', tags: ['press'] },
-    ];
-  }
-
-  const createdIds = [];
-  for (const item of items) {
-    const [res] = await pool.query(
-      'INSERT INTO ai_generated_content (politician_id, content_type, prompt, content, is_saved, tags) VALUES (?,?,?,?,0,?)',
-      [politicianId || null, item.type || 'social_post', item.title || 'Content', item.content || '', JSON.stringify(item.tags || [])]
-    );
-    const contentId = res?.insertId;
-    createdIds.push(contentId);
-    if (contentId) {
-      await pool.query(
-        'INSERT INTO content_calendar (politician_id, content_id, scheduled_date, platform, status) VALUES (?,?,?,?,?)',
-        [politicianId || null, contentId, new Date().toISOString().slice(0, 10), item.platform || 'whatsapp', 'scheduled']
-      );
+export async function generateContentPack(politicianId) {
+  const types = ['social_post', 'whatsapp_broadcast', 'press_release'];
+  const results = [];
+  for (const type of types) {
+    try {
+      const r = await generateContent(politicianId, type);
+      results.push(r);
+    } catch (e) {
+      console.error(`Content pack ${type} failed:`, e.message);
     }
   }
-  return createdIds;
+  return results;
 }
+
+// Alias for backward compatibility with queues.js
+export const generateDailyContentPack = generateContentPack;
