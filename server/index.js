@@ -42,6 +42,8 @@ import {
 } from './services/secretStore.js';
 
 const app = express();
+// Make pool available to all route files via req.app.locals.pool
+app.locals.pool = pool;
 const PORT = process.env.PORT || 3002;
 
 app.use(cors({ origin: process.env.FRONTEND_URL || '*', methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
@@ -49,7 +51,7 @@ app.use(express.json({ limit: '15mb' }));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-initQueues();
+try { initQueues(); } catch(e) { console.warn('[queues] Init failed, server continues:', e.message); }
 
 const LOGIN_ATTEMPTS = new Map();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
