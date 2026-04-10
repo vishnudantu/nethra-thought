@@ -318,18 +318,20 @@ app.post('/api/auth/login', async (req, res) => {
       return res.json({ requires_2fa: true, email: user.email });
     }
 
-    await pool.query('UPDATE users SET last_login_at = NOW(), last_login_ip = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [req.ip, user.id]);
+    try { await pool.query('UPDATE users SET last_login_at = NOW(), last_login_ip = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [req.ip, user.id]); } catch(_){}
     const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
     let politician = null, allPoliticians = [];
-    if (user.role === 'super_admin') {
-      const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY full_name");
-      allPoliticians = pols; politician = pols[0] || null;
-    } else if (user.politician_id) {
-      const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
-      politician = pols[0] || null; allPoliticians = pols;
-    }
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled, display_name: user.display_name }, politician, allPoliticians });
-  } catch (err) { console.error('[login]', err); res.status(500).json({ error: 'Server error' }); }
+    try {
+      if (user.role === 'super_admin') {
+        const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,is_active FROM politician_profiles WHERE role = ? ORDER BY full_name', ['politician']);
+        allPoliticians = pols; politician = pols[0] || null;
+      } else if (user.politician_id) {
+        const [pols] = await pool.query('SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,is_active FROM politician_profiles WHERE id = ? AND role = ?', [user.politician_id, 'politician']);
+        politician = pols[0] || null; allPoliticians = pols;
+      }
+    } catch(polErr) { console.warn('[login] politician fetch failed:', polErr.message); }
+    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled || 0, display_name: user.display_name }, politician, allPoliticians });
+  } catch (err) { console.error('[login]', err.message, err.stack?.split('\n')[1]); res.status(500).json({ error: 'Server error: ' + err.message }); }
 });
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
