@@ -19,16 +19,56 @@ import {
   enqueueWarRoomScan,
   getQueuesStatus,
 } from './queues.js';
-import { generateMorningBrief } from './services/briefing.js';
-import { updateSentimentScores, getCurrentSentiment, getSentimentHistory } from './services/sentiment.js';
-import { generateDailyContentPack } from './services/contentFactory.js';
-import { generateVisitPlans } from './services/visitPlanner.js';
-import { processWhatsappMessage, parseAiSensyWebhook, parseWatiWebhook } from './services/whatsapp.js';
-import { transcribeAudio, createVoiceReport } from './services/voice.js';
-import { agentSystemMetrics } from './services/agentSystem.js';
-import { deepfakeMetrics } from './services/deepfakeShield.js';
-import { coalitionOverview } from './services/coalitionForecast.js';
-import { warRoomMetrics } from './services/warRoom.js';
+// Service imports — each wrapped so one failure doesn't break login/health
+let generateMorningBrief = async () => null;
+let updateSentimentScores = async () => null;
+let getCurrentSentiment = async () => ({});
+let getSentimentHistory = async () => [];
+let generateDailyContentPack = async () => null;
+let generateVisitPlans = async () => null;
+let processWhatsappMessage = async () => null;
+let parseAiSensyWebhook = () => ({});
+let parseWatiWebhook = () => ({});
+let transcribeAudio = async () => null;
+let createVoiceReport = async () => null;
+let agentSystemMetrics = async () => ({});
+let deepfakeMetrics = async () => ({});
+let coalitionOverview = async () => ({});
+let warRoomMetrics = async () => ({});
+
+// Load services safely — login never depends on these
+(async () => {
+  const load = async (name, path) => {
+    try {
+      const m = await import(path);
+      return m;
+    } catch(e) {
+      console.warn(`[services] ${name} failed to load:`, e.message);
+      return null;
+    }
+  };
+  const b = await load('briefing', './services/briefing.js');
+  if (b) { generateMorningBrief = b.generateMorningBrief || generateMorningBrief; }
+  const s = await load('sentiment', './services/sentiment.js');
+  if (s) { updateSentimentScores = s.updateSentimentScores || updateSentimentScores; getCurrentSentiment = s.getCurrentSentiment || getCurrentSentiment; getSentimentHistory = s.getSentimentHistory || getSentimentHistory; }
+  const cf = await load('contentFactory', './services/contentFactory.js');
+  if (cf) { generateDailyContentPack = cf.generateDailyContentPack || generateDailyContentPack; }
+  const vp = await load('visitPlanner', './services/visitPlanner.js');
+  if (vp) { generateVisitPlans = vp.generateVisitPlans || generateVisitPlans; }
+  const wa = await load('whatsapp', './services/whatsapp.js');
+  if (wa) { processWhatsappMessage = wa.processWhatsappMessage || processWhatsappMessage; parseAiSensyWebhook = wa.parseAiSensyWebhook || parseAiSensyWebhook; parseWatiWebhook = wa.parseWatiWebhook || parseWatiWebhook; }
+  const vo = await load('voice', './services/voice.js');
+  if (vo) { transcribeAudio = vo.transcribeAudio || transcribeAudio; createVoiceReport = vo.createVoiceReport || createVoiceReport; }
+  const ag = await load('agentSystem', './services/agentSystem.js');
+  if (ag) { agentSystemMetrics = ag.agentSystemMetrics || agentSystemMetrics; }
+  const df = await load('deepfakeShield', './services/deepfakeShield.js');
+  if (df) { deepfakeMetrics = df.deepfakeMetrics || deepfakeMetrics; }
+  const co = await load('coalitionForecast', './services/coalitionForecast.js');
+  if (co) { coalitionOverview = co.coalitionOverview || coalitionOverview; }
+  const wr = await load('warRoom', './services/warRoom.js');
+  if (wr) { warRoomMetrics = wr.warRoomMetrics || warRoomMetrics; }
+  console.log('[services] All loaded successfully');
+})();
 import darshanRoutes from './routes/darshan.js';
 import {
   listApiKeys,
@@ -2518,6 +2558,36 @@ app.post('/api/ai-debug', authMiddleware, async (req, res) => {
 app.use('/api/whatsapp_intelligence', crud('whatsapp_intelligence', ['sender_phone','classification','content']));
 app.use('/api/booths',                crud('booths',                ['booth_number','polling_station_name','mandal']));
 app.use('/api/promises',              crud('promises',              ['promise_text','category','status']));
+
+
+// ── AI SETTINGS — model + language per politician ────────────
+app.get('/api/founder/settings', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? null : req.user.politician_id;
+    const [rows] = await pool.query(
+      'SELECT setting_key, setting_value FROM platform_settings WHERE politician_id <=> ?',
+      [polId]
+    );
+    const settings = {};
+    rows.forEach(r => settings[r.setting_key] = r.setting_value);
+    res.json(settings);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/founder/settings', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? null : req.user.politician_id;
+    const allowed = ['ai_provider','ai_model','ai_language','openrouter_model','groq_model','gemini_model','mistral_model'];
+    for (const [key, value] of Object.entries(req.body)) {
+      if (!allowed.includes(key)) continue;
+      await pool.query(
+        'INSERT INTO platform_settings (politician_id, setting_key, setting_value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+        [polId, key, value]
+      );
+    }
+    res.json({ saved: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);

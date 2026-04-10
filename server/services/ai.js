@@ -16,6 +16,36 @@ async function getSavedModel(provider) {
   } catch { return null; }
 }
 
+// Get the globally configured AI provider preference
+async function getSavedProvider() {
+  try {
+    const [[row]] = await pool.query(
+      "SELECT setting_value FROM platform_settings WHERE politician_id IS NULL AND setting_key = 'ai_provider' LIMIT 1"
+    );
+    return row?.setting_value || null;
+  } catch { return null; }
+}
+
+async function getSavedAIModel() {
+  try {
+    const [[row]] = await pool.query(
+      "SELECT setting_value FROM platform_settings WHERE politician_id IS NULL AND setting_key = 'ai_model' LIMIT 1"
+    );
+    return row?.setting_value || null;
+  } catch { return null; }
+}
+
+async function getSavedLanguage(politicianId) {
+  try {
+    const polId = politicianId || null;
+    const [[row]] = await pool.query(
+      "SELECT setting_value FROM platform_settings WHERE politician_id <=> ? AND setting_key = 'ai_language' LIMIT 1",
+      [polId]
+    );
+    return row?.setting_value || 'english';
+  } catch { return 'english'; }
+}
+
 // Try multiple key name variants — handles MISTRAL, MISTRAL_API_KEY, GROQ, GROQ_API_KEY etc.
 async function resolveKey(names, politicianId, endpoint) {
   for (const name of names) {
@@ -58,7 +88,12 @@ export async function aiJSON({ prompt, system, politicianId, endpoint, maxTokens
   return JSON.parse(clean);
 }
 
-export async function aiChat({ messages, system, politicianId = null, endpoint = 'general', maxTokens = 2048, temperature = 0.7, jsonMode = false }) {
+export async function aiChat({ messages, system, politicianId = null, endpoint = 'general', maxTokens = 2048, temperature = 0.7, jsonMode = false, language = null }) {
+  // Inject language instruction if set
+  const savedLang = language || await getSavedLanguage(politicianId);
+  if (savedLang && savedLang !== 'english' && system) {
+    system = system + `\n\nIMPORTANT: Respond in ${savedLang} language.`;
+  }
   const sys = system || 'You are a helpful political intelligence assistant for an Indian politician.';
   const chain = await loadKeys(politicianId, endpoint);
 

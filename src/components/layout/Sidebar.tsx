@@ -1,3 +1,4 @@
+import AIModelSwitcher from '../AIModelSwitcher';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -293,6 +294,9 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
                 <span style={{ fontSize: 10, color: '#8899bb' }}>
                   {isSuperAdmin ? 'Super Admin' : 'Online'}
                 </span>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <AIModelSwitcher compact={false} />
               </div>
               <button
                 onClick={handleSignOut}
