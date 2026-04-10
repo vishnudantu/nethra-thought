@@ -1,1038 +1,530 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Plus, Search, X, Star, Users, Calendar, CheckCircle, Clock,
-  CreditCard as Edit2, Trash2, ListOrdered, Ban, ArrowUpCircle,
-  Info, ShieldCheck, ThumbsUp, ThumbsDown, MessageSquare, Send,
-  Bell, Lock
-} from 'lucide-react';
-import { api } from '../lib/api';
+import { Star, CheckCircle2, XCircle, Loader2, Trash2, Phone, CreditCard, User, MapPin, Calendar, Send, RefreshCw, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../lib/auth';
 
-interface DarshanBooking {
+// ── Types ──────────────────────────────────────────────────────
+interface Pilgrim {
   id: string;
-  booking_number: string;
-  pilgrim_name: string;
-  pilgrim_contact: string;
-  pilgrim_email: string;
-  pilgrim_aadhar_last4: string;
-  group_size: number;
+  full_name: string;
+  aadhaar: string;
+  phone: string;
+  age: string;
+  gender: string;
   darshan_type: string;
-  darshan_date: string;
-  darshan_time: string;
-  accommodation_required: boolean;
-  accommodation_type: string;
-  accommodation_nights: number;
-  transport_required: boolean;
-  transport_type: string;
-  departure_location: string;
-  mandal: string;
-  village: string;
-  special_requests: string;
-  status: string;
-  is_waitlisted: boolean;
-  waitlist_position: number | null;
-  cooldown_until: string | null;
-  promoted_from_waitlist: boolean;
-  coordinator_name: string;
-  notes: string;
-  approval_status: string;
-  approved_at: string | null;
-  approved_by: string;
-  rejection_reason: string;
-  sms_sent: boolean;
-  sms_sent_at: string | null;
-  contact_person: string;
-  contact_phone: string;
-  approval_notes: string;
-  ticket_pickup_point: string;
-  shrine_contact_numbers: string;
-  created_at: string;
+  address: string;
+  validation: 'idle' | 'checking' | 'valid' | 'invalid' | 'error';
+  validation_msg: string;
+  aadhaar_last4: string;
 }
 
-interface DateSlot {
-  id: string;
-  slot_date: string;
-  is_filled: boolean;
-  confirmed_booking_id: string | null;
-  waitlist_count: number;
+interface Quota { used: number; remaining: number; max: number; date: string; }
+interface BookingRecord {
+  id: number; booking_ref: string; full_name: string; phone: string;
+  aadhaar_last4: string; darshan_type: string; visit_date: string;
+  status: string; sms_sent: number; age: number; gender: string;
+  letter_date?: string;
 }
 
-const DARSHAN_TYPES = ['Standard Darshan', 'Seegra Darshan', 'VIP Break Darshan', 'Arjitha Seva', 'Special Entry Darshan (SED)', 'Divya Darshan'];
-
-const STATUS_COLORS: Record<string, string> = {
-  'Booked': '#1e88e5',
-  'Confirmed': '#00bcd4',
-  'Departed': '#ffa726',
-  'Completed': '#00c864',
-  'Cancelled': '#ff5555',
-  'No Show': '#8899bb',
-  'Waitlisted': '#f06292',
+// ── Constants ──────────────────────────────────────────────────
+const DARSHAN_TYPES = ['SSD Darshan', 'VIP Break Darshan', 'Special Entry Darshan', 'Arjitha Seva'];
+const BASE = '';
+const mkPilgrim = (): Pilgrim => ({
+  id: Math.random().toString(36).slice(2),
+  full_name: '', aadhaar: '', phone: '', age: '', gender: 'Male',
+  darshan_type: 'SSD Darshan', address: '',
+  validation: 'idle', validation_msg: '', aadhaar_last4: '',
+});
+const fmtAadhaar = (v: string) => {
+  const d = v.replace(/\D/g, '').slice(0, 12);
+  return d.replace(/(\d{4})(\d{0,4})(\d{0,4})/, (_, a, b, c) => [a, b, c].filter(Boolean).join(' '));
 };
 
-type EligibilityResult =
-  | { eligible: true }
-  | { eligible: false; reason: string; cooldown_until?: string };
+// ── Styles ─────────────────────────────────────────────────────
+const S = {
+  card: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 20 } as React.CSSProperties,
+  label: { fontSize: 10, fontWeight: 700, color: '#8899bb', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 } as React.CSSProperties,
+  input: { width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', color: '#f0f4ff', fontSize: 13, outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
+  pill: (active: boolean) => ({ padding: '5px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: active ? 'rgba(0,212,170,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${active ? 'rgba(0,212,170,0.4)' : 'rgba(255,255,255,0.08)'}`, color: active ? '#00d4aa' : '#8899bb' }) as React.CSSProperties,
+  btnPrimary: { background: 'linear-gradient(135deg,#00d4aa,#1e88e5)', border: 'none', borderRadius: 10, padding: '9px 20px', color: '#060b18', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 } as React.CSSProperties,
+  btnSecondary: { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 16px', color: '#8899bb', fontSize: 12, fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
+};
 
-async function checkEligibility(contact: string, currentBookingId?: string): Promise<EligibilityResult> {
-  if (!contact) return { eligible: true };
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+// ── Main Component ─────────────────────────────────────────────
+export default function Darshan() {
+  const { session } = useAuth();
+  const token = session?.access_token || localStorage.getItem('nethra_token') || '';
+  const [quota, setQuota] = useState<Quota>({ used: 0, remaining: 6, max: 6, date: '' });
+  const [todayBookings, setTodayBookings] = useState<Record<string, BookingRecord[]>>({});
+  const [pilgrims, setPilgrims] = useState<Pilgrim[]>([mkPilgrim()]);
+  const [visitDate, setVisitDate] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ ref: string; count: number } | null>(null);
+  const [selectedRef, setSelectedRef] = useState('');
+  const [approvalForm, setApprovalForm] = useState({ contact_person: '', contact_phone: '', pickup_point: 'TTD Ticket Counter, Tirumala', shrine_contacts: '155257' });
+  const [approving, setApproving] = useState(false);
+  const [approvalMsg, setApprovalMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [expandedRef, setExpandedRef] = useState<string | null>(null);
+  const [validationFeed, setValidationFeed] = useState<{ id: string; text: string; color: string }[]>([]);
 
-  const allBookings = await api.list('darshan_bookings', { order: 'darshan_date', dir: 'DESC', limit: '2000' }) as DarshanBooking[];
-  const data = allBookings.filter(b => b.pilgrim_contact === contact && b.status !== 'Cancelled' && !b.is_waitlisted);
+  const today = new Date().toISOString().slice(0, 10);
+  const authH = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  if (!data || data.length === 0) return { eligible: true };
-  const relevant = data.filter(b => !currentBookingId || b.id !== currentBookingId);
-  if (relevant.length === 0) return { eligible: true };
-
-  const latest = relevant[0];
-  if (latest.cooldown_until) {
-    const cooldownDate = new Date(latest.cooldown_until);
-    if (cooldownDate > new Date()) {
-      return {
-        eligible: false,
-        reason: `This person already received darshan on ${new Date(latest.darshan_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}. Eligible again after ${cooldownDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.`,
-        cooldown_until: latest.cooldown_until,
-      };
-    }
-  } else {
-    const darshanDate = new Date(latest.darshan_date);
-    if (darshanDate > sixMonthsAgo) {
-      const eligibleDate = new Date(darshanDate);
-      eligibleDate.setMonth(eligibleDate.getMonth() + 6);
-      return {
-        eligible: false,
-        reason: `This person already received darshan on ${darshanDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}. Eligible again after ${eligibleDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.`,
-        cooldown_until: eligibleDate.toISOString().split('T')[0],
-      };
-    }
-  }
-  return { eligible: true };
-}
-
-async function checkDateAvailability(date: string, currentBookingId?: string): Promise<{ available: boolean; waitlistCount: number; slot: DateSlot | null }> {
-  const slots = await api.list('darshan_date_slots') as DateSlot[];
-  const slot = slots.find(s => s.slot_date === date) || null;
-  if (!slot) return { available: true, waitlistCount: 0, slot: null };
-  const isCurrentlyFilled = slot.is_filled && slot.confirmed_booking_id !== currentBookingId;
-  return { available: !isCurrentlyFilled, waitlistCount: slot.waitlist_count, slot };
-}
-
-function BookingModal({ booking, onClose, onSave }: { booking: Partial<DarshanBooking> | null; onClose: () => void; onSave: () => void }) {
-  const isEdit = !!booking?.id;
-  const [form, setForm] = useState({
-    pilgrim_name: booking?.pilgrim_name || '',
-    pilgrim_contact: booking?.pilgrim_contact || '',
-    pilgrim_email: booking?.pilgrim_email || '',
-    pilgrim_aadhar_last4: booking?.pilgrim_aadhar_last4 || '',
-    group_size: booking?.group_size || 1,
-    darshan_type: booking?.darshan_type || 'Standard Darshan',
-    darshan_date: booking?.darshan_date || '',
-    darshan_time: booking?.darshan_time || '06:00',
-    accommodation_required: booking?.accommodation_required || false,
-    accommodation_type: booking?.accommodation_type || 'None',
-    accommodation_nights: booking?.accommodation_nights || 0,
-    transport_required: booking?.transport_required || false,
-    transport_type: booking?.transport_type || 'None',
-    departure_location: booking?.departure_location || '',
-    mandal: booking?.mandal || '',
-    village: booking?.village || '',
-    special_requests: booking?.special_requests || '',
-    coordinator_name: booking?.coordinator_name || '',
-    notes: booking?.notes || '',
-    status: booking?.status || 'Booked',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
-  const [checkingEligibility, setCheckingEligibility] = useState(false);
-  const [dateAvailability, setDateAvailability] = useState<{ available: boolean; waitlistCount: number; slot: DateSlot | null } | null>(null);
-  const [checkingDate, setCheckingDate] = useState(false);
-
-  const willBeWaitlisted = !!(dateAvailability && !dateAvailability.available && !isEdit);
-
-  useEffect(() => {
-    if (form.pilgrim_contact.length >= 10) {
-      setCheckingEligibility(true);
-      checkEligibility(form.pilgrim_contact, booking?.id).then(r => { setEligibility(r); setCheckingEligibility(false); });
-    } else { setEligibility(null); }
-  }, [form.pilgrim_contact, booking?.id]);
-
-  useEffect(() => {
-    if (form.darshan_date && !isEdit) {
-      setCheckingDate(true);
-      checkDateAvailability(form.darshan_date, booking?.id).then(r => { setDateAvailability(r); setCheckingDate(false); });
-    } else { setDateAvailability(null); }
-  }, [form.darshan_date, booking?.id, isEdit]);
-
-  async function handleSave() {
-    if (!form.pilgrim_name || !form.pilgrim_contact || !form.darshan_date) return;
-    if (eligibility && !eligibility.eligible && !willBeWaitlisted) return;
-    setSaving(true);
-    setError('');
+  const fetchQuota = useCallback(async () => {
     try {
-      const isWaitlisted = willBeWaitlisted;
-      if (isEdit && booking?.id) {
-        await api.update('darshan_bookings', booking.id, form);
-      } else {
-        const bookingNumber = `TTD-${Date.now().toString().slice(-8)}`;
-        const cooldownDate = new Date(form.darshan_date);
-        cooldownDate.setMonth(cooldownDate.getMonth() + 6);
-        let waitlistPos: number | null = null;
-        if (isWaitlisted && dateAvailability?.slot) waitlistPos = (dateAvailability.slot.waitlist_count || 0) + 1;
+      const r = await fetch(`${BASE}/api/darshan/quota?date=${today}`, { headers: authH });
+      if (r.ok) { const d = await r.json(); setQuota({ used: d.used||0, remaining: d.remaining??6, max: d.max||6, date: d.date||today }); }
+    } catch (_) {}
+  }, [today]);
 
-        const newBooking = await api.create('darshan_bookings', {
-          ...form,
-          booking_number: bookingNumber,
-          is_waitlisted: isWaitlisted,
-          waitlist_position: waitlistPos,
-          cooldown_until: isWaitlisted ? null : cooldownDate.toISOString().split('T')[0],
-          status: isWaitlisted ? 'Waitlisted' : 'Booked',
-          promoted_from_waitlist: false,
-          approval_status: 'pending',
+  const fetchBookings = useCallback(async () => {
+    try {
+      const r = await fetch(`${BASE}/api/darshan/bookings?date=${today}`, { headers: authH });
+      if (r.ok) {
+        const data = await r.json();
+        const groups: Record<string, BookingRecord[]> = {};
+        (Array.isArray(data) ? data : data.bookings || []).forEach((b: BookingRecord) => {
+          if (!b.booking_ref) return;
+          if (!groups[b.booking_ref]) groups[b.booking_ref] = [];
+          groups[b.booking_ref].push(b);
         });
-
-        if (newBooking) {
-          if (!isWaitlisted) {
-            await api.post('/api/darshan_date_slots/upsert', {
-              slot_date: form.darshan_date, is_filled: true, confirmed_booking_id: newBooking.id,
-              waitlist_count: dateAvailability?.slot?.waitlist_count || 0,
-            }).catch(() => api.create('darshan_date_slots', { slot_date: form.darshan_date, is_filled: true, confirmed_booking_id: newBooking.id, waitlist_count: 0 }));
-          } else if (dateAvailability?.slot) {
-            if (dateAvailability?.slot?.id) await api.update('darshan_date_slots', dateAvailability.slot.id, { waitlist_count: waitlistPos });
-          } else {
-            await api.create('darshan_date_slots', { slot_date: form.darshan_date, is_filled: false, waitlist_count: 1 });
-          }
-        }
+        setTodayBookings(groups);
       }
-      onSave();
-      onClose();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save darshan booking';
-      setError(message);
-    } finally {
-      setSaving(false);
+    } catch (_) {}
+    setLoading(false);
+  }, [today]);
+
+  useEffect(() => {
+    fetchQuota();
+    fetchBookings();
+    const tm = new Date(); tm.setDate(tm.getDate() + 1);
+    setVisitDate(tm.toISOString().slice(0, 10));
+  }, []);
+
+  function updatePilgrim(id: string, patch: Partial<Pilgrim>) {
+    setPilgrims(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+  }
+
+  async function validatePilgrim(id: string) {
+    const p = pilgrims.find(x => x.id === id);
+    if (!p) return;
+    const ca = p.aadhaar.replace(/\s/g, '');
+    const cp = p.phone.replace(/\D/g, '').slice(-10);
+    if (ca.length !== 12 || cp.length !== 10) return;
+    if (p.validation === 'checking') return;
+
+    updatePilgrim(id, { validation: 'checking', validation_msg: '' });
+    addFeed(id, `Checking Pilgrim ${pilgrims.findIndex(x=>x.id===id)+1}...`, '#64b5f6');
+
+    try {
+      const r = await fetch(`${BASE}/api/darshan/validate-pilgrim`, {
+        method: 'POST', headers: authH,
+        body: JSON.stringify({ aadhaar: ca, phone: cp }),
+      });
+      const d = await r.json();
+      if (d.valid) {
+        updatePilgrim(id, { validation: 'valid', validation_msg: 'Eligible for Darshan ✓', aadhaar_last4: d.aadhaar_display?.slice(-4) || ca.slice(-4) });
+        addFeed(id, `Pilgrim ${pilgrims.findIndex(x=>x.id===id)+1}${p.full_name?' — '+p.full_name:''} — Eligible ✓`, '#00d4aa');
+      } else {
+        const msg = d.reason === 'already_visited'
+          ? `Not eligible · Last visit: ${d.last_visit} · Next: ${d.next_eligible}`
+          : (d.message || 'Not eligible');
+        updatePilgrim(id, { validation: 'invalid', validation_msg: msg });
+        addFeed(id, `Pilgrim ${pilgrims.findIndex(x=>x.id===id)+1}${p.full_name?' — '+p.full_name:''} — ${msg}`, '#ff5555');
+      }
+    } catch (_) {
+      updatePilgrim(id, { validation: 'error', validation_msg: 'Could not verify — proceed with caution' });
+      addFeed(id, `Pilgrim ${pilgrims.findIndex(x=>x.id===id)+1} — Check failed (network error)`, '#ffa726');
     }
   }
 
-  const canSubmit = form.pilgrim_name && form.pilgrim_contact && form.darshan_date &&
-    (eligibility?.eligible || willBeWaitlisted) && !checkingEligibility;
+  function addFeed(id: string, text: string, color: string) {
+    setValidationFeed(f => [{ id: id + Date.now(), text, color }, ...f].slice(0, 10));
+  }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-        className="glass-card rounded-2xl w-full max-w-2xl overflow-y-auto max-h-[92vh]"
-        style={{ border: '1px solid rgba(255,255,255,0.12)' }} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <div>
-            <h2 className="font-bold text-xl" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
-              {isEdit ? 'Edit Booking' : 'New Darshan Request'}
-            </h2>
-            <p style={{ fontSize: 13, color: '#8899bb', marginTop: 2 }}>Sri Venkateswara Swamy Devasthanam — MP Quota</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}>
-            <X size={16} style={{ color: '#8899bb' }} />
-          </button>
-        </div>
-        <div className="p-6 space-y-5">
-          {error && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', color: '#ff7777' }}>
-              <X size={15} />
-              <span style={{ fontSize: 13 }}>{error}</span>
-            </div>
-          )}
-          <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(255,167,38,0.08)', border: '1px solid rgba(255,167,38,0.2)' }}>
-            <Info size={16} style={{ color: '#ffa726', flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontSize: 12, color: '#ffa726', lineHeight: 1.7 }}>
-              <strong>Rules:</strong> 1 darshan per day. 6-month cooldown after receiving darshan. All requests require the politician's approval before confirmation. No money collected.
-            </div>
-          </div>
+  function onAadhaarChange(id: string, v: string) {
+    updatePilgrim(id, { aadhaar: fmtAadhaar(v), validation: 'idle', validation_msg: '', aadhaar_last4: '' });
+  }
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Pilgrim Name *</label>
-              <input className="input-field" placeholder="Full name" value={form.pilgrim_name} onChange={e => setForm({ ...form, pilgrim_name: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Contact Number *</label>
-              <input className="input-field" placeholder="+91 XXXXX XXXXX" value={form.pilgrim_contact} onChange={e => setForm({ ...form, pilgrim_contact: e.target.value })} />
-            </div>
-          </div>
+  function onPhoneChange(id: string, v: string) {
+    const d = v.replace(/\D/g, '').slice(0, 10);
+    updatePilgrim(id, { phone: d, validation: 'idle', validation_msg: '' });
+    const p = pilgrims.find(x => x.id === id);
+    if (p && p.aadhaar.replace(/\s/g, '').length === 12 && d.length === 10) {
+      setTimeout(() => validatePilgrim(id), 400);
+    }
+  }
 
-          <AnimatePresence>
-            {checkingEligibility && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: '#8899bb', borderTopColor: 'transparent' }} />
-                <span style={{ fontSize: 12, color: '#8899bb' }}>Checking eligibility...</span>
-              </motion.div>
-            )}
-            {!checkingEligibility && eligibility && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex items-start gap-3 p-4 rounded-xl"
-                style={{ background: eligibility.eligible ? 'rgba(0,200,100,0.08)' : 'rgba(255,85,85,0.08)', border: `1px solid ${eligibility.eligible ? 'rgba(0,200,100,0.25)' : 'rgba(255,85,85,0.25)'}` }}>
-                {eligibility.eligible
-                  ? <ShieldCheck size={16} style={{ color: '#00c864', flexShrink: 0, marginTop: 1 }} />
-                  : <Ban size={16} style={{ color: '#ff5555', flexShrink: 0, marginTop: 1 }} />}
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: eligibility.eligible ? '#00c864' : '#ff5555' }}>
-                    {eligibility.eligible ? 'Eligible for Darshan' : '6-Month Restriction Active'}
-                  </div>
-                  {!eligibility.eligible && <div style={{ fontSize: 12, color: '#8899bb', marginTop: 3, lineHeight: 1.6 }}>{eligibility.reason}</div>}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+  function onAadhaarBlur(id: string) {
+    const p = pilgrims.find(x => x.id === id);
+    if (p && p.aadhaar.replace(/\s/g, '').length === 12 && p.phone.length === 10) validatePilgrim(id);
+  }
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Aadhaar Last 4 Digits</label>
-              <input className="input-field" placeholder="XXXX" maxLength={4} value={form.pilgrim_aadhar_last4}
-                onChange={e => setForm({ ...form, pilgrim_aadhar_last4: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Group Size</label>
-              <input type="number" min={1} max={10} className="input-field" value={form.group_size} onChange={e => setForm({ ...form, group_size: parseInt(e.target.value) || 1 })} />
-            </div>
-          </div>
+  function setCount(n: number) {
+    if (n > quota.remaining || n < 1) return;
+    setPilgrims(prev => n > prev.length
+      ? [...prev, ...Array(n - prev.length).fill(null).map(mkPilgrim)]
+      : prev.slice(0, n)
+    );
+  }
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Mandal</label>
-              <input className="input-field" placeholder="Mandal name" value={form.mandal} onChange={e => setForm({ ...form, mandal: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Village</label>
-              <input className="input-field" placeholder="Village name" value={form.village} onChange={e => setForm({ ...form, village: e.target.value })} />
-            </div>
-          </div>
+  const allValid = pilgrims.length > 0 && pilgrims.every(p => p.validation === 'valid' || p.validation === 'error');
+  const validCount = pilgrims.filter(p => p.validation === 'valid').length;
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Darshan Type *</label>
-              <select className="input-field" value={form.darshan_type} onChange={e => setForm({ ...form, darshan_type: e.target.value })}>
-                {DARSHAN_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Time Slot</label>
-              <select className="input-field" value={form.darshan_time} onChange={e => setForm({ ...form, darshan_time: e.target.value })}>
-                {['03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>
-              Darshan Date * {checkingDate && <span style={{ color: '#8899bb' }}>(checking...)</span>}
-            </label>
-            <input type="date" className="input-field" value={form.darshan_date}
-              min={new Date().toISOString().split('T')[0]}
-              onChange={e => setForm({ ...form, darshan_date: e.target.value })} />
-          </div>
-
-          <AnimatePresence>
-            {!checkingDate && dateAvailability && form.darshan_date && !isEdit && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="p-4 rounded-xl"
-                style={{ background: dateAvailability.available ? 'rgba(0,200,100,0.08)' : 'rgba(240,98,146,0.08)', border: `1px solid ${dateAvailability.available ? 'rgba(0,200,100,0.25)' : 'rgba(240,98,146,0.3)'}` }}>
-                {dateAvailability.available ? (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle size={15} style={{ color: '#00c864' }} />
-                    <span style={{ fontSize: 13, color: '#00c864', fontWeight: 600 }}>Date Available — Will go to pending approval queue</span>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <ListOrdered size={15} style={{ color: '#f06292' }} />
-                      <span style={{ fontSize: 13, color: '#f06292', fontWeight: 600 }}>Date Booked — Will be added to Waitlist (#{(dateAvailability.slot?.waitlist_count || 0) + 1})</span>
-                    </div>
-                    <p style={{ fontSize: 12, color: '#8899bb', lineHeight: 1.6 }}>The 6-month restriction applies only once promoted from waitlist.</p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl" style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>Accommodation</span>
-                <button onClick={() => setForm({ ...form, accommodation_required: !form.accommodation_required })}
-                  className="w-10 h-5 rounded-full transition-all" style={{ background: form.accommodation_required ? '#00d4aa' : 'rgba(255,255,255,0.15)', position: 'relative' }}>
-                  <div className="w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all" style={{ left: form.accommodation_required ? '22px' : '2px' }} />
-                </button>
-              </div>
-              {form.accommodation_required && (
-                <div className="space-y-3">
-                  <select className="input-field" style={{ fontSize: 12 }} value={form.accommodation_type} onChange={e => setForm({ ...form, accommodation_type: e.target.value })}>
-                    {['TTD Cottages', 'Choultries', 'Bhakta Niwas', 'Guest House', 'Private Hotel'].map(t => <option key={t}>{t}</option>)}
-                  </select>
-                  <input type="number" className="input-field" style={{ fontSize: 12 }} placeholder="Nights" min={1}
-                    value={form.accommodation_nights} onChange={e => setForm({ ...form, accommodation_nights: parseInt(e.target.value) || 1 })} />
-                </div>
-              )}
-            </div>
-            <div className="p-4 rounded-xl" style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>Transport Needed</span>
-                <button onClick={() => setForm({ ...form, transport_required: !form.transport_required })}
-                  className="w-10 h-5 rounded-full transition-all" style={{ background: form.transport_required ? '#1e88e5' : 'rgba(255,255,255,0.15)', position: 'relative' }}>
-                  <div className="w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all" style={{ left: form.transport_required ? '22px' : '2px' }} />
-                </button>
-              </div>
-              {form.transport_required && (
-                <div className="space-y-3">
-                  <select className="input-field" style={{ fontSize: 12 }} value={form.transport_type} onChange={e => setForm({ ...form, transport_type: e.target.value })}>
-                    {['Bus (AC)', 'Bus (Non-AC)', 'Train', 'Private Vehicle', 'Shared Taxi'].map(t => <option key={t}>{t}</option>)}
-                  </select>
-                  <input className="input-field" style={{ fontSize: 12 }} placeholder="Departure location" value={form.departure_location} onChange={e => setForm({ ...form, departure_location: e.target.value })} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Coordinator</label>
-            <input className="input-field" placeholder="Staff coordinator name" value={form.coordinator_name} onChange={e => setForm({ ...form, coordinator_name: e.target.value })} />
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Special Requests / Notes</label>
-            <textarea className="input-field" rows={2} placeholder="Accessibility needs, senior citizens, prasadam preferences..."
-              value={form.special_requests} onChange={e => setForm({ ...form, special_requests: e.target.value })} style={{ resize: 'none' }} />
-          </div>
-
-          {!isEdit && eligibility && !eligibility.eligible && !willBeWaitlisted && (
-            <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.3)' }}>
-              <Ban size={16} style={{ color: '#ff5555', flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 13, color: '#ff5555' }}>Booking cannot be created. This person is within the 6-month cooldown period.</p>
-            </div>
-          )}
-        </div>
-        <div className="flex gap-3 p-6 border-t border-white/10">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button onClick={handleSave} className="btn-primary flex-1" disabled={saving || !canSubmit}>
-            {saving ? 'Saving...' : isEdit ? 'Update Booking' : willBeWaitlisted ? 'Add to Waitlist' : 'Submit for Approval'}
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function ApprovalModal({ booking, onClose, onDone }: { booking: DarshanBooking; onClose: () => void; onDone: () => void }) {
-  const [approvedBy, setApprovedBy] = useState('');
-  const [contactPerson, setContactPerson] = useState(booking.contact_person || '');
-  const [contactPhone, setContactPhone] = useState(booking.contact_phone || '');
-  const [ticketPickupPoint, setTicketPickupPoint] = useState(booking.ticket_pickup_point || 'TTD Ticket Counter, Tirumala');
-  const [shrineContacts, setShrineContacts] = useState(booking.shrine_contact_numbers || 'TTD Helpline: 155257');
-  const [approvalNotes, setApprovalNotes] = useState('');
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [action, setAction] = useState<'approve' | 'reject' | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [smsPreview, setSmsPreview] = useState(false);
-
-  const darshanDate = booking.darshan_date
-    ? new Date(booking.darshan_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-    : '';
-
-  const smsMessage = `Dear ${booking.pilgrim_name}, your Tirupati Darshan is CONFIRMED by ${approvedBy || '[Politician Name]'}. Date: ${darshanDate} (${booking.darshan_type}). Ticket pickup: ${ticketPickupPoint}. Shrine contacts: ${shrineContacts}. ${contactPerson && contactPhone ? `Queries: ${contactPerson} - ${contactPhone}.` : ''} Carry this message and a valid ID. - MP Office`;
-
-  async function handleApprove() {
-    if (!approvedBy.trim()) return;
-    setProcessing(true);
+  async function submitBooking() {
+    if (!allValid || !visitDate) return;
+    setSubmitting(true);
     try {
-      await fetch('/api/darshan-sms', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('nethra_token') || ''}`,
-        },
+      const r = await fetch(`${BASE}/api/darshan/bookings`, {
+        method: 'POST', headers: authH,
         body: JSON.stringify({
-          booking_id: booking.id,
-          approved_by: approvedBy,
-          approval_notes: approvalNotes,
-          contact_person: contactPerson,
-          contact_phone: contactPhone,
-          ticket_pickup_point: ticketPickupPoint,
-          shrine_contact_numbers: shrineContacts,
+          visit_date: visitDate,
+          pilgrims: pilgrims.map(p => ({
+            full_name: p.full_name, aadhaar: p.aadhaar.replace(/\s/g, ''),
+            phone: p.phone, age: parseInt(p.age) || null,
+            gender: p.gender, darshan_type: p.darshan_type, address: p.address,
+          })),
         }),
       });
-    } catch (err) {
-      console.error('[darshan-sms]', err);
-    }
-    setProcessing(false);
-    onDone();
-    onClose();
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || d.message || 'Booking failed');
+      setSubmitResult({ ref: d.booking_ref, count: d.total_pilgrims || pilgrims.length });
+      setPilgrims([mkPilgrim()]);
+      setValidationFeed([]);
+      await fetchQuota();
+      await fetchBookings();
+    } catch (e: any) { alert('Booking failed: ' + e.message); }
+    setSubmitting(false);
   }
 
-  async function handleReject() {
-    if (!approvedBy.trim()) return;
-    setProcessing(true);
-    await api.update('darshan_bookings', booking.id, { approval_status: 'rejected', approved_by: approvedBy, rejection_reason: rejectionReason, status: 'Cancelled' });
-    setProcessing(false);
-    onDone();
-    onClose();
+  async function approveBooking() {
+    if (!selectedRef) return;
+    setApproving(true);
+    try {
+      // Find booking id from the selected ref
+      const group = todayBookings[selectedRef];
+      const bookingId = group?.[0]?.id;
+      const r = await fetch(`${BASE}/api/darshan/bookings/${bookingId}/approve`, {
+        method: 'PUT', headers: authH,
+        body: JSON.stringify({ approved_by: 'Politician', approval_notes: '', ...approvalForm }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Approval failed');
+      setApprovalMsg(`✓ Approved ${group?.length || 0} pilgrims. SMS sent.`);
+      setSelectedRef('');
+      await fetchBookings();
+      setTimeout(() => setApprovalMsg(''), 5000);
+    } catch (e: any) { setApprovalMsg('Error: ' + e.message); }
+    setApproving(false);
   }
+
+  // Quota ring
+  const pct = Math.min((quota.used / quota.max) * 100, 100);
+  const qColor = quota.remaining === 0 ? '#ff5555' : quota.remaining <= 2 ? '#ffa726' : '#00d4aa';
+  const r = 50, circ = 2 * Math.PI * r;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-        className="glass-card rounded-2xl w-full max-w-lg overflow-y-auto max-h-[92vh]"
-        style={{ border: '1px solid rgba(255,255,255,0.12)' }} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <div>
-            <h2 className="font-bold text-xl" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>Politician Approval</h2>
-            <p style={{ fontSize: 13, color: '#8899bb', marginTop: 2 }}>Review and approve or reject this darshan request</p>
+    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 300px', gap: 16, height: 'calc(100vh - 80px)', overflow: 'hidden', padding: '0 4px' }}>
+
+      {/* ── COL 1: QUOTA + BOOKINGS ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
+        {/* Quota Ring */}
+        <div style={{ ...S.card, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>Daily Quota</div>
+          <div style={{ position: 'relative', width: 110, height: 110, margin: '0 auto 12px' }}>
+            <svg width="110" height="110" style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx="55" cy="55" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
+              <circle cx="55" cy="55" r={r} fill="none" stroke={qColor} strokeWidth="10"
+                strokeDasharray={circ} strokeDashoffset={circ * (1 - pct / 100)} strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 0.5s ease, stroke 0.3s' }} />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 26, fontWeight: 900, color: qColor, fontFamily: 'Space Grotesk' }}>{quota.remaining}</div>
+              <div style={{ fontSize: 9, color: '#8899bb' }}>remaining</div>
+            </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}>
-            <X size={16} style={{ color: '#8899bb' }} />
-          </button>
+          <div style={{ fontSize: 11, color: '#8899bb' }}>{quota.used} of {quota.max} used today</div>
+          {quota.remaining === 0 && (
+            <div style={{ marginTop: 8, padding: '5px 10px', borderRadius: 8, background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)', fontSize: 10, color: '#ff7777' }}>Daily limit reached</div>
+          )}
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Request summary */}
-          <div className="p-4 rounded-xl space-y-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="flex items-center justify-between">
-              <span style={{ fontSize: 11, color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Request Summary</span>
-              <span style={{ fontSize: 11, color: '#00d4aa', fontFamily: 'monospace' }}>{booking.booking_number}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Pilgrim', value: booking.pilgrim_name },
-                { label: 'Contact', value: booking.pilgrim_contact },
-                { label: 'Date', value: darshanDate },
-                { label: 'Darshan Type', value: booking.darshan_type },
-                { label: 'Group Size', value: String(booking.group_size) },
-                { label: 'Location', value: [booking.mandal, booking.village].filter(Boolean).join(', ') || '—' },
-              ].map(item => (
-                <div key={item.label}>
-                  <div style={{ fontSize: 11, color: '#8899bb', marginBottom: 2 }}>{item.label}</div>
-                  <div style={{ fontSize: 13, color: '#f0f4ff', fontWeight: 500 }}>{item.value || '—'}</div>
-                </div>
-              ))}
-            </div>
-            {booking.special_requests && (
-              <div>
-                <div style={{ fontSize: 11, color: '#8899bb', marginBottom: 2 }}>Special Requests</div>
-                <div style={{ fontSize: 12, color: '#8899bb' }}>{booking.special_requests}</div>
+        {/* Bookings list */}
+        <div style={{ ...S.card, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#f0f4ff' }}>Today's Bookings</span>
+            <button onClick={() => { fetchQuota(); fetchBookings(); }} style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', padding: 2 }}><RefreshCw size={12} /></button>
+          </div>
+          <div style={{ overflow: 'auto', flex: 1 }}>
+            {loading ? (
+              <div style={{ padding: 20, textAlign: 'center', color: '#8899bb', fontSize: 11 }}>Loading...</div>
+            ) : Object.keys(todayBookings).length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center' }}>
+                <Star size={24} style={{ margin: '0 auto 8px', color: '#8899bb', opacity: 0.3 }} />
+                <div style={{ fontSize: 11, color: '#8899bb' }}>No bookings today</div>
               </div>
-            )}
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>
-              Approved / Reviewed By * <span style={{ color: '#ffa726' }}>(Politician's name)</span>
-            </label>
-            <input className="input-field" placeholder="Enter your name to authenticate this action"
-              value={approvedBy} onChange={e => setApprovedBy(e.target.value)} />
-          </div>
-
-          {/* Action selector */}
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => setAction('approve')}
-              className="flex items-center justify-center gap-2 p-3 rounded-xl font-semibold transition-all"
-              style={{
-                background: action === 'approve' ? 'rgba(0,200,100,0.2)' : 'rgba(255,255,255,0.04)',
-                border: `2px solid ${action === 'approve' ? '#00c864' : 'rgba(255,255,255,0.1)'}`,
-                color: action === 'approve' ? '#00c864' : '#8899bb',
-              }}>
-              <ThumbsUp size={16} /> Approve
-            </button>
-            <button onClick={() => setAction('reject')}
-              className="flex items-center justify-center gap-2 p-3 rounded-xl font-semibold transition-all"
-              style={{
-                background: action === 'reject' ? 'rgba(255,85,85,0.15)' : 'rgba(255,255,255,0.04)',
-                border: `2px solid ${action === 'reject' ? '#ff5555' : 'rgba(255,255,255,0.1)'}`,
-                color: action === 'reject' ? '#ff5555' : '#8899bb',
-              }}>
-              <ThumbsDown size={16} /> Reject
-            </button>
-          </div>
-
-          <AnimatePresence>
-            {action === 'approve' && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Office Contact Person</label>
-                    <input className="input-field" placeholder="Name to relay in SMS" value={contactPerson} onChange={e => setContactPerson(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Contact Phone</label>
-                    <input className="input-field" placeholder="Phone number" value={contactPhone} onChange={e => setContactPhone(e.target.value)} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Ticket Pickup Point</label>
-                    <input className="input-field" placeholder="TTD Ticket Counter, Tirumala" value={ticketPickupPoint} onChange={e => setTicketPickupPoint(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Shrine Contact Numbers</label>
-                    <input className="input-field" placeholder="TTD Helpline: 155257" value={shrineContacts} onChange={e => setShrineContacts(e.target.value)} />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Approval Notes (optional)</label>
-                  <input className="input-field" placeholder="Any instructions for the pilgrim" value={approvalNotes} onChange={e => setApprovalNotes(e.target.value)} />
-                </div>
-
-                {/* SMS preview */}
-                <div>
-                  <button onClick={() => setSmsPreview(!smsPreview)}
-                    className="flex items-center gap-2 text-sm mb-2"
-                    style={{ color: '#8899bb' }}>
-                    <MessageSquare size={13} />
-                    {smsPreview ? 'Hide' : 'Preview'} SMS that will be sent
-                  </button>
-                  <AnimatePresence>
-                    {smsPreview && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                        className="p-4 rounded-xl" style={{ background: 'rgba(0,200,100,0.06)', border: '1px solid rgba(0,200,100,0.2)' }}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Send size={12} style={{ color: '#00c864' }} />
-                          <span style={{ fontSize: 11, color: '#00c864', fontWeight: 600 }}>SMS to {booking.pilgrim_contact}</span>
-                        </div>
-                        <p style={{ fontSize: 12, color: '#8899bb', lineHeight: 1.7 }}>{smsMessage}</p>
-                        <p style={{ fontSize: 11, color: '#4a5568', marginTop: 8 }}>
-                          {smsMessage.length} characters — {Math.ceil(smsMessage.length / 160)} SMS unit(s)
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-            )}
-            {action === 'reject' && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6, fontWeight: 500 }}>Reason for Rejection</label>
-                <textarea className="input-field" rows={3} placeholder="Explain why this request is being rejected..."
-                  value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} style={{ resize: 'none' }} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="flex gap-3 p-6 border-t border-white/10">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          {action === 'approve' && (
-            <button onClick={handleApprove} disabled={processing || !approvedBy.trim()}
-              className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl px-4 py-2.5 transition-all"
-              style={{ background: 'linear-gradient(135deg, #00c864, #00d4aa)', color: '#060b18', opacity: (!approvedBy.trim() || processing) ? 0.5 : 1 }}>
-              <ThumbsUp size={15} />
-              {processing ? 'Approving & Sending SMS...' : 'Approve & Send SMS'}
-            </button>
-          )}
-          {action === 'reject' && (
-            <button onClick={handleReject} disabled={processing || !approvedBy.trim()}
-              className="flex-1 flex items-center justify-center gap-2 font-semibold rounded-xl px-4 py-2.5 transition-all"
-              style={{ background: 'linear-gradient(135deg, #ff5555, #ff3333)', color: '#fff', opacity: (!approvedBy.trim() || processing) ? 0.5 : 1 }}>
-              <ThumbsDown size={15} />
-              {processing ? 'Rejecting...' : 'Reject Request'}
-            </button>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-export default function Darshan() {
-  const [bookings, setBookings] = useState<DarshanBooking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selected, setSelected] = useState<Partial<DarshanBooking> | null>(null);
-  const [approvalTarget, setApprovalTarget] = useState<DarshanBooking | null>(null);
-  const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'pending' | 'confirmed' | 'waitlist'>('pending');
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-
-  async function fetchData() {
-    setLoading(true);
-    const data = await api.list('darshan_bookings') as DarshanBooking[];
-    setBookings(data || []);
-    setLoading(false);
-  }
-
-  async function deleteBooking(id: string) {
-    const booking = bookings.find(b => b.id === id);
-    if (booking && !booking.is_waitlisted) {
-      const slots = await api.list('darshan_date_slots') as DateSlot[];
-      const slot = slots.find(s => s.slot_date === booking.darshan_date);
-      if (slot) await api.update('darshan_date_slots', slot.id, { is_filled: false, confirmed_booking_id: null });
-    }
-    await api.remove('darshan_bookings', id);
-    setConfirmDelete(null);
-    fetchData();
-  }
-
-  async function promoteFromWaitlist(bookingId: string) {
-    const booking = bookings.find(b => b.id === bookingId);
-    if (!booking) return;
-    const cooldownDate = new Date(booking.darshan_date);
-    cooldownDate.setMonth(cooldownDate.getMonth() + 6);
-    await api.update('darshan_bookings', bookingId, { is_waitlisted: false, waitlist_position: null, status: 'Booked', promoted_from_waitlist: true, cooldown_until: cooldownDate.toISOString().split('T')[0], approval_status: 'pending' });
-    const slots = await api.list('darshan_date_slots') as DateSlot[];
-    const slot = slots.find(s => s.slot_date === booking.darshan_date);
-    if (slot) await api.update('darshan_date_slots', slot.id, { is_filled: true, confirmed_booking_id: bookingId });
-    else await api.create('darshan_date_slots', { slot_date: booking.darshan_date, is_filled: true, confirmed_booking_id: bookingId, waitlist_count: 0 });
-    setTab('pending');
-    fetchData();
-  }
-
-  useEffect(() => { fetchData(); }, []);
-
-  const filterSearch = (b: DarshanBooking) =>
-    !search || b.pilgrim_name.toLowerCase().includes(search.toLowerCase()) ||
-    b.booking_number?.includes(search) || b.pilgrim_contact?.includes(search);
-
-  const pending = bookings.filter(b => !b.is_waitlisted && b.approval_status === 'pending' && b.status !== 'Cancelled' && filterSearch(b));
-  const confirmed = bookings.filter(b => !b.is_waitlisted && b.approval_status === 'approved' && filterSearch(b));
-  const waitlist = bookings.filter(b => b.is_waitlisted && filterSearch(b));
-
-  const today = new Date().toISOString().split('T')[0];
-  const todayBooked = bookings.some(b => b.darshan_date === today && !b.is_waitlisted && b.approval_status === 'approved' && b.status !== 'Cancelled');
-
-  const tabs = [
-    { id: 'pending', label: 'Pending Approval', count: pending.length, color: '#ffa726' },
-    { id: 'confirmed', label: 'Approved', count: confirmed.length, color: '#00c864' },
-    { id: 'waitlist', label: 'Waitlist', count: waitlist.length, color: '#f06292' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="p-5 rounded-2xl" style={{ background: 'linear-gradient(135deg, rgba(255,167,38,0.15), rgba(255,100,0,0.1))', border: '1px solid rgba(255,167,38,0.25)' }}>
-        <div className="flex items-center gap-3 mb-2">
-          <Star size={22} style={{ color: '#ffa726' }} fill="#ffa726" />
-          <h2 className="font-bold text-xl" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>Tirupati Darshan Coordination</h2>
-        </div>
-        <p style={{ fontSize: 13, color: '#8899bb', lineHeight: 1.7 }}>
-          Sri Venkateswara Swamy Devasthanam — MP Quota. Staff registers requests; only the politician can approve. SMS confirmation sent to pilgrim on approval.
-        </p>
-        <div className="flex items-center gap-3 mt-3 flex-wrap">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-            style={{ background: todayBooked ? 'rgba(255,85,85,0.1)' : 'rgba(0,200,100,0.1)', border: `1px solid ${todayBooked ? 'rgba(255,85,85,0.25)' : 'rgba(0,200,100,0.25)'}` }}>
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: todayBooked ? '#ff5555' : '#00c864' }} />
-            <span style={{ fontSize: 12, color: todayBooked ? '#ff5555' : '#00c864', fontWeight: 600 }}>
-              Today: {todayBooked ? 'Slot Filled' : 'Slot Available'}
-            </span>
-          </div>
-          {pending.length > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-              style={{ background: 'rgba(255,167,38,0.1)', border: '1px solid rgba(255,167,38,0.25)' }}>
-              <Bell size={12} style={{ color: '#ffa726' }} />
-              <span style={{ fontSize: 12, color: '#ffa726', fontWeight: 600 }}>{pending.length} request{pending.length > 1 ? 's' : ''} awaiting your approval</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-            style={{ background: 'rgba(240,98,146,0.08)', border: '1px solid rgba(240,98,146,0.2)' }}>
-            <Lock size={12} style={{ color: '#f06292' }} />
-            <span style={{ fontSize: 12, color: '#f06292', fontWeight: 600 }}>Approval-gated • No money collected</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        {[
-          { icon: Clock, label: 'Pending Approval', value: pending.length, color: '#ffa726' },
-          { icon: CheckCircle, label: 'Approved', value: confirmed.length, color: '#00c864' },
-          { icon: Users, label: 'Total Pilgrims', value: confirmed.reduce((s, b) => s + b.group_size, 0), color: '#00d4aa' },
-          { icon: ListOrdered, label: 'Waitlisted', value: waitlist.length, color: '#f06292' },
-        ].map((s, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            className="glass-card rounded-2xl p-5" style={{ border: `1px solid ${s.color}22` }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: `${s.color}22` }}>
-              <s.icon size={20} style={{ color: s.color }} />
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>{s.value}</div>
-            <div style={{ fontSize: 13, color: '#8899bb', marginTop: 2 }}>{s.label}</div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id as 'pending' | 'confirmed' | 'waitlist')}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
-              style={{
-                background: tab === t.id ? `${t.color}18` : 'rgba(255,255,255,0.05)',
-                color: tab === t.id ? t.color : '#8899bb',
-                border: `1px solid ${tab === t.id ? `${t.color}40` : 'rgba(255,255,255,0.08)'}`,
-              }}>
-              {t.label}
-              <span className="px-1.5 py-0.5 rounded-full text-xs"
-                style={{ background: tab === t.id ? `${t.color}25` : 'rgba(255,255,255,0.08)', color: tab === t.id ? t.color : '#6677aa' }}>
-                {t.count}
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <Search size={14} style={{ color: '#8899bb' }} />
-            <input className="bg-transparent text-sm border-none outline-none text-white placeholder-gray-500 w-44"
-              placeholder="Search name, contact..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <button className="btn-primary flex items-center gap-2" onClick={() => { setSelected(null); setModalOpen(true); }}>
-            <Plus size={16} /> New Request
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        {tab === 'pending' && (
-          <motion.div key="pending" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-3">
-            {pending.length === 0 ? (
-              <div className="glass-card rounded-2xl p-12 text-center">
-                <CheckCircle size={40} style={{ color: '#00c864', margin: '0 auto 12px' }} />
-                <p style={{ color: '#f0f4ff', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No Pending Requests</p>
-                <p style={{ color: '#8899bb', fontSize: 13 }}>All requests have been reviewed. New requests from staff will appear here for your approval.</p>
-              </div>
-            ) : (
-              <>
-                <div className="p-4 rounded-xl flex items-start gap-3"
-                  style={{ background: 'rgba(255,167,38,0.08)', border: '1px solid rgba(255,167,38,0.2)' }}>
-                  <Lock size={15} style={{ color: '#ffa726', flexShrink: 0, marginTop: 1 }} />
-                  <p style={{ fontSize: 13, color: '#8899bb', lineHeight: 1.7 }}>
-                    These requests were submitted by office staff and are awaiting your personal approval. On approval, an SMS is automatically sent to the pilgrim with the darshan confirmation and contact details.
-                  </p>
-                </div>
-                {pending.map((b, i) => (
-                  <motion.div key={b.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                    className="glass-card rounded-2xl p-5" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div className="flex items-start justify-between flex-wrap gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ background: 'rgba(255,167,38,0.12)', border: '1px solid rgba(255,167,38,0.2)' }}>
-                          <Star size={20} style={{ color: '#ffa726' }} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span style={{ fontSize: 16, fontWeight: 700, color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>{b.pilgrim_name}</span>
-                            <span style={{ fontSize: 11, color: '#00d4aa', fontFamily: 'monospace' }}>{b.booking_number}</span>
-                            {b.promoted_from_waitlist && <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(240,98,146,0.15)', color: '#f06292' }}>Promoted from Waitlist</span>}
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 flex-wrap">
-                            <span style={{ fontSize: 13, color: '#8899bb' }}>{b.pilgrim_contact}</span>
-                            {b.mandal && <span style={{ fontSize: 13, color: '#8899bb' }}>{b.mandal}{b.village ? ` • ${b.village}` : ''}</span>}
-                          </div>
-                          <div className="flex items-center gap-4 mt-2 flex-wrap">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar size={12} style={{ color: '#ffa726' }} />
-                              <span style={{ fontSize: 13, color: '#f0f4ff', fontWeight: 600 }}>
-                                {new Date(b.darshan_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                              </span>
-                            </div>
-                            <span style={{ fontSize: 12, color: '#8899bb' }}>{b.darshan_type}</span>
-                            <span style={{ fontSize: 12, color: '#8899bb' }}>Group: {b.group_size}</span>
-                          </div>
-                          {b.special_requests && (
-                            <div className="mt-2 text-xs px-2 py-1 rounded-lg inline-block" style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb' }}>
-                              {b.special_requests}
-                            </div>
-                          )}
-                        </div>
+            ) : Object.entries(todayBookings).map(([ref, group]) => {
+              const status = group[0]?.status || 'pending';
+              const isExp = expandedRef === ref;
+              return (
+                <div key={ref} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <button onClick={() => setExpandedRef(isExp ? null : ref)}
+                    style={{ width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#f0f4ff', fontFamily: 'monospace' }}>{ref}</div>
+                        <div style={{ fontSize: 9, color: '#8899bb', marginTop: 2 }}>{group.length} pilgrim{group.length > 1 ? 's' : ''}</div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setApprovalTarget(b)}
-                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm"
-                          style={{ background: 'linear-gradient(135deg, rgba(0,200,100,0.2), rgba(0,212,170,0.15))', color: '#00c864', border: '1px solid rgba(0,200,100,0.3)' }}>
-                          <ThumbsUp size={14} /> Review & Approve
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 100, fontWeight: 700, background: status === 'approved' ? 'rgba(0,200,100,0.12)' : 'rgba(255,167,38,0.12)', color: status === 'approved' ? '#00c864' : '#ffa726' }}>
+                          {status === 'approved' ? 'Approved' : 'Pending'}
+                        </span>
+                        {isExp ? <ChevronUp size={11} style={{ color: '#8899bb' }} /> : <ChevronDown size={11} style={{ color: '#8899bb' }} />}
+                      </div>
+                    </div>
+                  </button>
+                  {isExp && (
+                    <div style={{ padding: '0 14px 10px' }}>
+                      {group.map((p, i) => (
+                        <div key={i} style={{ padding: '5px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                          <div style={{ fontSize: 11, color: '#f0f4ff', fontWeight: 600 }}>{p.full_name}</div>
+                          <div style={{ fontSize: 9, color: '#8899bb' }}>****{p.aadhaar_last4} · {p.darshan_type}</div>
+                          {p.sms_sent ? <div style={{ fontSize: 9, color: '#00c864' }}>✓ SMS sent</div> : null}
+                        </div>
+                      ))}
+                      {status !== 'approved' && (
+                        <button onClick={() => { setSelectedRef(ref); setExpandedRef(null); }}
+                          style={{ marginTop: 8, width: '100%', padding: '6px', borderRadius: 8, background: 'rgba(0,212,170,0.08)', border: '1px solid rgba(0,212,170,0.2)', color: '#00d4aa', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                          Approve & Send SMS →
                         </button>
-                        {confirmDelete === b.id ? (
-                          <div className="flex gap-1">
-                            <button onClick={() => deleteBooking(b.id)} className="p-2 rounded-lg" style={{ background: 'rgba(255,85,85,0.2)', color: '#ff5555' }}><CheckCircle size={13} /></button>
-                            <button onClick={() => setConfirmDelete(null)} className="p-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb' }}><X size={13} /></button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setConfirmDelete(b.id)} className="p-2 rounded-lg" style={{ background: 'rgba(255,85,85,0.1)', color: '#ff5555' }}><Trash2 size={14} /></button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── COL 2: BOOKING CANVAS ── */}
+      <div style={{ overflow: 'auto', paddingRight: 4 }}>
+        {/* Success */}
+        {submitResult && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            style={{ ...S.card, textAlign: 'center', marginBottom: 14, border: '1px solid rgba(0,212,170,0.3)', background: 'rgba(0,212,170,0.04)' }}>
+            <CheckCircle2 size={36} style={{ color: '#00d4aa', margin: '0 auto 10px' }} />
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Space Grotesk', marginBottom: 4 }}>Booking Submitted!</div>
+            <div style={{ fontSize: 13, color: '#00d4aa', fontFamily: 'monospace', marginBottom: 6 }}>{submitResult.ref}</div>
+            <div style={{ fontSize: 11, color: '#8899bb', marginBottom: 14 }}>{submitResult.count} pilgrim{submitResult.count > 1 ? 's' : ''} added · Awaiting approval</div>
+            <button onClick={() => setSubmitResult(null)} style={S.btnPrimary}>Book More</button>
+          </motion.div>
+        )}
+
+        {!submitResult && (
+          <>
+            <div style={{ ...S.card, marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff', marginBottom: 3 }}>New Darshan Booking</div>
+              <div style={{ fontSize: 11, color: '#8899bb' }}>Max {quota.remaining} slot{quota.remaining !== 1 ? 's' : ''} available today</div>
+            </div>
+
+            {/* Count selector */}
+            <div style={{ ...S.card, marginBottom: 12 }}>
+              <label style={S.label}>Number of Pilgrims</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[1,2,3,4,5,6].map(n => {
+                  const disabled = n > quota.remaining;
+                  const sel = pilgrims.length === n;
+                  return (
+                    <button key={n} onClick={() => !disabled && setCount(n)} disabled={disabled}
+                      style={{ width: 42, height: 42, borderRadius: 10, fontWeight: 800, fontSize: 15, fontFamily: 'Space Grotesk', cursor: disabled ? 'not-allowed' : 'pointer', background: sel ? 'linear-gradient(135deg,#00d4aa,#1e88e5)' : disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)', color: sel ? '#060b18' : disabled ? 'rgba(136,153,187,0.25)' : '#f0f4ff', border: sel ? 'none' : '1px solid rgba(255,255,255,0.08)', transition: 'all 0.15s' }}>
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+              {quota.remaining === 0 && <div style={{ fontSize: 10, color: '#ff5555', marginTop: 8 }}>Daily limit reached</div>}
+            </div>
+
+            {/* Visit date */}
+            <div style={{ ...S.card, marginBottom: 12 }}>
+              <label style={{ ...S.label, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Calendar size={9} />VISIT DATE
+              </label>
+              <input type="date" value={visitDate} min={today}
+                onChange={e => setVisitDate(e.target.value)} style={S.input} />
+            </div>
+
+            {/* Pilgrim cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {pilgrims.map((p, i) => {
+                const vBorder = p.validation === 'valid' ? 'rgba(0,212,170,0.4)' : p.validation === 'invalid' ? 'rgba(255,85,85,0.4)' : p.validation === 'checking' ? 'rgba(30,136,229,0.4)' : p.validation === 'error' ? 'rgba(255,167,38,0.4)' : 'rgba(255,255,255,0.08)';
+                const vBg = p.validation === 'valid' ? 'rgba(0,212,170,0.02)' : p.validation === 'invalid' ? 'rgba(255,85,85,0.02)' : 'rgba(255,255,255,0.04)';
+                return (
+                  <motion.div key={p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                    style={{ background: vBg, border: `1px solid ${vBorder}`, borderRadius: 16, padding: 18, transition: 'border-color 0.3s,background 0.3s' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 0.5 }}>PILGRIM {i + 1}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {p.validation === 'checking' && <Loader2 size={13} style={{ color: '#1e88e5', animation: 'spin 1s linear infinite' }} />}
+                        {p.validation === 'valid' && <CheckCircle2 size={13} style={{ color: '#00d4aa' }} />}
+                        {p.validation === 'invalid' && <XCircle size={13} style={{ color: '#ff5555' }} />}
+                        {p.validation === 'error' && <AlertTriangle size={13} style={{ color: '#ffa726' }} />}
+                        {pilgrims.length > 1 && (
+                          <button onClick={() => setPilgrims(prev => { const n = prev.filter(x => x.id !== p.id); return n.length ? n : [mkPilgrim()]; })}
+                            style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', padding: 2 }}><Trash2 size={12} /></button>
                         )}
                       </div>
                     </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div style={{ gridColumn: '1/-1' }}>
+                        <label style={S.label}><User size={9} style={{ display: 'inline', marginRight: 4 }} />FULL NAME *</label>
+                        <input value={p.full_name} onChange={e => updatePilgrim(p.id, { full_name: e.target.value })} placeholder="As on Aadhaar card" style={S.input} />
+                      </div>
+                      <div>
+                        <label style={S.label}><CreditCard size={9} style={{ display: 'inline', marginRight: 4 }} />AADHAAR NUMBER *</label>
+                        <input value={p.aadhaar} onChange={e => onAadhaarChange(p.id, e.target.value)} onBlur={() => onAadhaarBlur(p.id)} placeholder="0000 0000 0000" maxLength={14}
+                          style={{ ...S.input, fontFamily: 'monospace', letterSpacing: 2 }} />
+                      </div>
+                      <div>
+                        <label style={S.label}><Phone size={9} style={{ display: 'inline', marginRight: 4 }} />MOBILE NUMBER *</label>
+                        <input value={p.phone} onChange={e => onPhoneChange(p.id, e.target.value)} placeholder="10-digit number" maxLength={10} type="tel" style={S.input} />
+                      </div>
+                      <div>
+                        <label style={S.label}>AGE</label>
+                        <input value={p.age} onChange={e => updatePilgrim(p.id, { age: e.target.value })} placeholder="Age" type="number" min="1" max="120" style={S.input} />
+                      </div>
+                      <div>
+                        <label style={S.label}>GENDER</label>
+                        <select value={p.gender} onChange={e => updatePilgrim(p.id, { gender: e.target.value })}
+                          style={{ ...S.input, appearance: 'none' }}>
+                          <option>Male</option><option>Female</option><option>Other</option>
+                        </select>
+                      </div>
+                      <div style={{ gridColumn: '1/-1' }}>
+                        <label style={S.label}>DARSHAN TYPE *</label>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {DARSHAN_TYPES.map(t => (
+                            <button key={t} onClick={() => updatePilgrim(p.id, { darshan_type: t })} style={S.pill(p.darshan_type === t)}>{t}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ gridColumn: '1/-1' }}>
+                        <label style={S.label}><MapPin size={9} style={{ display: 'inline', marginRight: 4 }} />ADDRESS (OPTIONAL)</label>
+                        <input value={p.address} onChange={e => updatePilgrim(p.id, { address: e.target.value })} placeholder="Village, Mandal, District" style={S.input} />
+                      </div>
+                    </div>
+
+                    {p.validation !== 'idle' && (
+                      <div style={{ marginTop: 10, padding: '7px 12px', borderRadius: 8, fontSize: 11,
+                        background: p.validation === 'valid' ? 'rgba(0,212,170,0.08)' : p.validation === 'invalid' ? 'rgba(255,85,85,0.08)' : p.validation === 'checking' ? 'rgba(30,136,229,0.08)' : 'rgba(255,167,38,0.08)',
+                        color: p.validation === 'valid' ? '#00d4aa' : p.validation === 'invalid' ? '#ff7777' : p.validation === 'checking' ? '#64b5f6' : '#ffa726' }}>
+                        {p.validation === 'checking' ? '⚡ Verifying eligibility...' : p.validation === 'valid' ? '✓ ' + p.validation_msg : p.validation === 'invalid' ? '✗ ' + p.validation_msg : '⚠ ' + p.validation_msg}
+                      </div>
+                    )}
                   </motion.div>
-                ))}
-              </>
-            )}
-          </motion.div>
-        )}
+                );
+              })}
+            </div>
 
-        {tab === 'confirmed' && (
-          <motion.div key="confirmed" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
-            className="glass-card rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    {['Booking', 'Pilgrim', 'Date', 'Type', 'Mandal/Village', 'Group', 'SMS', 'Approved By', 'Cooldown Until', 'Status', ''].map(h => (
-                      <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#8899bb', whiteSpace: 'nowrap', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? Array(5).fill(0).map((_, i) => (
-                    <tr key={i}>{Array(11).fill(0).map((_, j) => (<td key={j} style={{ padding: '12px 14px' }}><div className="shimmer h-4 rounded w-16" /></td>))}</tr>
-                  )) : confirmed.map((b, i) => (
-                    <motion.tr key={b.id} className="table-row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, color: '#00d4aa', fontWeight: 600, fontFamily: 'monospace' }}>{b.booking_number}</div>
-                        {b.promoted_from_waitlist && <span style={{ fontSize: 10, color: '#f06292' }}>Promoted</span>}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{b.pilgrim_name}</div>
-                        <div style={{ fontSize: 11, color: '#8899bb' }}>{b.pilgrim_contact}</div>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f0f4ff' }}>
-                          {new Date(b.darshan_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#8899bb' }}>{b.darshan_time}</div>
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 12, color: '#f0f4ff' }}>{b.darshan_type?.replace(' Darshan', '')}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        {b.mandal && <div style={{ fontSize: 12, color: '#f0f4ff' }}>{b.mandal}</div>}
-                        {b.village && <div style={{ fontSize: 11, color: '#8899bb' }}>{b.village}</div>}
-                        {!b.mandal && !b.village && <span style={{ color: '#4a5568' }}>—</span>}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#f0f4ff', textAlign: 'center' }}>{b.group_size}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span className="text-xs px-2 py-1 rounded-lg" style={{ background: b.sms_sent ? 'rgba(0,200,100,0.12)' : 'rgba(255,85,85,0.1)', color: b.sms_sent ? '#00c864' : '#ff5555' }}>
-                          {b.sms_sent ? 'Sent' : 'Not Sent'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 12, color: '#8899bb' }}>{b.approved_by || '—'}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        {b.cooldown_until
-                          ? <div style={{ fontSize: 11, color: '#ffa726' }}>{new Date(b.cooldown_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-                          : <span style={{ color: '#4a5568' }}>—</span>}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span className="text-xs px-2 py-1 rounded-lg font-medium"
-                          style={{ background: `${STATUS_COLORS[b.status] || '#8899bb'}22`, color: STATUS_COLORS[b.status] || '#8899bb' }}>
-                          {b.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => { setSelected(b); setModalOpen(true); }} className="p-1.5 rounded-lg" style={{ background: 'rgba(30,136,229,0.15)', color: '#1e88e5' }}><Edit2 size={13} /></button>
-                          {confirmDelete === b.id ? (
-                            <div className="flex gap-1">
-                              <button onClick={() => deleteBooking(b.id)} className="p-1.5 rounded-lg" style={{ background: 'rgba(255,85,85,0.2)', color: '#ff5555' }}><CheckCircle size={12} /></button>
-                              <button onClick={() => setConfirmDelete(null)} className="p-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb' }}><X size={12} /></button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setConfirmDelete(b.id)} className="p-1.5 rounded-lg" style={{ background: 'rgba(255,85,85,0.1)', color: '#ff5555' }}><Trash2 size={13} /></button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-              {!loading && confirmed.length === 0 && (
-                <div className="text-center py-14">
-                  <Star size={40} style={{ color: '#8899bb', margin: '0 auto 12px' }} />
-                  <p style={{ color: '#8899bb', fontSize: 14 }}>No approved bookings yet</p>
-                </div>
+            {/* Submit bar */}
+            <AnimatePresence>
+              {pilgrims.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
+                  style={{ ...S.card, marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, border: allValid && visitDate ? '1px solid rgba(0,212,170,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#f0f4ff' }}>
+                      {allValid ? `✓ ${validCount} of ${pilgrims.length} validated` : `${validCount} of ${pilgrims.length} validated`}
+                    </div>
+                    {!visitDate && <div style={{ fontSize: 10, color: '#ffa726', marginTop: 2 }}>Select visit date</div>}
+                    {pilgrims.some(p => p.validation === 'invalid') && <div style={{ fontSize: 10, color: '#ff7777', marginTop: 2 }}>Some pilgrims are not eligible</div>}
+                  </div>
+                  <button onClick={submitBooking} disabled={!allValid || !visitDate || submitting || quota.remaining === 0}
+                    style={{ ...S.btnPrimary, opacity: (!allValid || !visitDate || quota.remaining === 0) ? 0.4 : 1 }}>
+                    {submitting ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Submitting...</> : <><Send size={13} />Submit for Approval</>}
+                  </button>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
+          </>
+        )}
+      </div>
+
+      {/* ── COL 3: VALIDATION FEED + APPROVAL ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto' }}>
+        <div style={S.card}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#f0f4ff', marginBottom: 4 }}>
+            {selectedRef ? 'Approve Booking' : 'Validation Feed'}
+          </div>
+          <div style={{ fontSize: 10, color: '#8899bb' }}>
+            {selectedRef ? `Ref: ${selectedRef}` : 'Live eligibility check results'}
+          </div>
+        </div>
+
+        {approvalMsg && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ padding: '10px 14px', borderRadius: 10, background: approvalMsg.includes('Error') ? 'rgba(255,85,85,0.1)' : 'rgba(0,212,170,0.1)', border: `1px solid ${approvalMsg.includes('Error') ? 'rgba(255,85,85,0.2)' : 'rgba(0,212,170,0.2)'}`, fontSize: 12, color: approvalMsg.includes('Error') ? '#ff7777' : '#00d4aa' }}>
+            {approvalMsg}
           </motion.div>
         )}
 
-        {tab === 'waitlist' && (
-          <motion.div key="waitlist" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-3">
-            <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(240,98,146,0.08)', border: '1px solid rgba(240,98,146,0.2)' }}>
-              <Info size={15} style={{ color: '#f06292', flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 13, color: '#8899bb', lineHeight: 1.7 }}>
-                When promoted, the booking moves to the <strong style={{ color: '#ffa726' }}>Pending Approval</strong> tab for the politician to review before the SMS is sent.
-              </p>
+        {/* Approval Panel */}
+        {selectedRef ? (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+            style={{ ...S.card, border: '1px solid rgba(0,212,170,0.2)' }}>
+            <div style={{ marginBottom: 14 }}>
+              {(todayBookings[selectedRef] || []).map((p, i) => (
+                <div key={i} style={{ padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 11 }}>
+                  <div style={{ color: '#f0f4ff', fontWeight: 600 }}>{p.full_name}</div>
+                  <div style={{ color: '#8899bb', fontSize: 10 }}>{p.darshan_type} · ****{p.aadhaar_last4}</div>
+                </div>
+              ))}
             </div>
-            {waitlist.length === 0 ? (
-              <div className="glass-card rounded-2xl p-12 text-center">
-                <ListOrdered size={40} style={{ color: '#8899bb', margin: '0 auto 12px' }} />
-                <p style={{ color: '#f0f4ff', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Waitlist is Empty</p>
-                <p style={{ color: '#8899bb', fontSize: 13 }}>People are added when they apply for a date that is already filled.</p>
+
+            {[
+              { k: 'contact_person', l: 'CONTACT PERSON *', ph: 'Name' },
+              { k: 'contact_phone', l: 'CONTACT PHONE *', ph: '10-digit number' },
+              { k: 'pickup_point', l: 'PICKUP POINT *', ph: 'TTD office location' },
+              { k: 'shrine_contacts', l: 'SHRINE HELPLINE', ph: '155257' },
+            ].map(({ k, l, ph }) => (
+              <div key={k} style={{ marginBottom: 10 }}>
+                <label style={S.label}>{l}</label>
+                <input value={(approvalForm as any)[k]} onChange={e => setApprovalForm(f => ({ ...f, [k]: e.target.value }))}
+                  placeholder={ph} style={S.input} />
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setSelectedRef('')} style={S.btnSecondary}>Cancel</button>
+              <button onClick={approveBooking}
+                disabled={approving || !approvalForm.contact_person || !approvalForm.pickup_point}
+                style={{ ...S.btnPrimary, flex: 1, justifyContent: 'center', opacity: approving ? 0.7 : 1 }}>
+                {approving ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Sending...</> : <><Send size={13} />Approve & SMS</>}
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          /* Validation feed */
+          <div style={{ ...S.card, flex: 1 }}>
+            {validationFeed.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <Star size={22} style={{ color: '#8899bb', opacity: 0.3, margin: '0 auto 8px' }} />
+                <div style={{ fontSize: 10, color: '#8899bb' }}>Fill pilgrim details to see validation results</div>
               </div>
             ) : (
-              <div className="glass-card rounded-2xl overflow-hidden">
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                      {['Position', 'Pilgrim', 'Requested Date', 'Darshan Type', 'Mandal/Village', 'Group', 'Applied On', ''].map(h => (
-                        <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#8899bb', whiteSpace: 'nowrap', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {waitlist.sort((a, b) => (a.waitlist_position || 99) - (b.waitlist_position || 99)).map((b, i) => (
-                      <motion.tr key={b.id} className="table-row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}>
-                        <td style={{ padding: '12px 16px' }}>
-                          <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold"
-                            style={{ background: 'rgba(240,98,146,0.15)', color: '#f06292', fontSize: 14, fontFamily: 'Space Grotesk' }}>
-                            #{b.waitlist_position || i + 1}
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 14px' }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{b.pilgrim_name}</div>
-                          <div style={{ fontSize: 11, color: '#8899bb' }}>{b.pilgrim_contact}</div>
-                        </td>
-                        <td style={{ padding: '12px 14px' }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>
-                            {new Date(b.darshan_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#8899bb' }}>{b.darshan_time}</div>
-                        </td>
-                        <td style={{ padding: '12px 14px', fontSize: 12, color: '#f0f4ff' }}>{b.darshan_type?.replace(' Darshan', '')}</td>
-                        <td style={{ padding: '12px 14px' }}>
-                          {b.mandal && <div style={{ fontSize: 12, color: '#f0f4ff' }}>{b.mandal}</div>}
-                          {b.village && <div style={{ fontSize: 11, color: '#8899bb' }}>{b.village}</div>}
-                          {!b.mandal && !b.village && <span style={{ color: '#4a5568', fontSize: 12 }}>—</span>}
-                        </td>
-                        <td style={{ padding: '12px 14px', fontSize: 13, color: '#f0f4ff', textAlign: 'center' }}>{b.group_size}</td>
-                        <td style={{ padding: '12px 14px', fontSize: 12, color: '#8899bb' }}>
-                          {new Date(b.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </td>
-                        <td style={{ padding: '12px 14px' }}>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => promoteFromWaitlist(b.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                              style={{ background: 'rgba(0,200,100,0.15)', color: '#00c864', border: '1px solid rgba(0,200,100,0.25)' }}>
-                              <ArrowUpCircle size={12} /> Promote
-                            </button>
-                            {confirmDelete === b.id ? (
-                              <div className="flex gap-1">
-                                <button onClick={() => deleteBooking(b.id)} className="p-1.5 rounded-lg" style={{ background: 'rgba(255,85,85,0.2)', color: '#ff5555' }}><CheckCircle size={12} /></button>
-                                <button onClick={() => setConfirmDelete(null)} className="p-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb' }}><X size={12} /></button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setConfirmDelete(b.id)} className="p-1.5 rounded-lg" style={{ background: 'rgba(255,85,85,0.1)', color: '#ff5555' }}><Trash2 size={13} /></button>
-                            )}
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              validationFeed.map(f => (
+                <motion.div key={f.id} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
+                  style={{ padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 11 }}>
+                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: f.color, marginRight: 8, flexShrink: 0 }} />
+                  <span style={{ color: '#d0d8ee' }}>{f.text}</span>
+                </motion.div>
+              ))
             )}
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {modalOpen && (
-          <BookingModal booking={selected} onClose={() => { setModalOpen(false); setSelected(null); }} onSave={fetchData} />
-        )}
-        {approvalTarget && (
-          <ApprovalModal booking={approvalTarget} onClose={() => setApprovalTarget(null)} onDone={fetchData} />
-        )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }

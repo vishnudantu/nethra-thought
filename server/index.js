@@ -40,6 +40,7 @@ import {
   upsertPoliticianApiKey,
   deactivatePoliticianApiKey,
 } from './services/secretStore.js';
+import { aiComplete, aiChat, aiJSON, aiStream } from './services/ai.js';
 
 const app = express();
 // Make pool available to all route files via req.app.locals.pool
@@ -940,203 +941,31 @@ function buildPrompt(ctx, mode) {
   return m[mode]||m.chat;
 }
 
-app.post('/api/ai-assistant', async (req, res) => {
-// QUICK FIX: Ensure user context exists
-  if (!req.user) req.user = { role: "politician", politician_id: 1, user_id: 1 };
-  if (!req.user.role) req.user.role = "politician";
-
-  const { messages, provider, politician_context, mode='chat', politician_id, save_content, content_type, prompt_summary } = req.body;
-// Ensure user context exists for all requests
-if (!req.user) {
-req.user = { role: 'politician', politician_id: 1, user_id: 1 };
-}
-if (!req.user.role) req.user.role = 'politician';
-// SKIP TO MISTRAL ONLY
-  if (mistralKey) {
-    try {
-      const text = await callProvider("mistral", mistralKey, systemPrompt, messages, 2048, 0.7, false);
-      return res.send(text);
-    } catch (e) {
-      console.error("[ai-assistant] Mistral failed:", e.message);
-      return res.status(500).json({ error: e.message });
-    }
-  }
-// Universal user context fallback - works for all users
-const safeUser = req.user || { role: "politician", politician_id: 1, user_id: 1 };
-req.user = safeUser;
-if (!req.user.role) req.user.role = "politician";
+app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
+  const { messages, politician_context, mode = 'chat', politician_id, save_content, content_type, prompt_summary } = req.body;
   if (!messages?.length) return res.status(400).json({ error: 'No messages provided' });
-// Fallback for missing user context (temporary fix for testing)
-req.user = req.user || { role: "politician", politician_id: 1, user_id: 1 };
   try {
     const isSuperAdmin = req.user.role === 'super_admin';
-    const assignedPoliticianId = isSuperAdmin ? (politician_id || req.user.politician_id) : req.user.politician_id;
-    const systemPrompt = buildPrompt(politician_context, mode);
-
-    // Try providers in order: OpenRouter → Grok → Gemini → Anthropic → OpenAI
-    const orKey     = await getApiKey('OPENROUTER_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const geminiKey = await getApiKey('GEMINI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const mistralKey   = await getApiKey('MISTRAL_API_KEY',   { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const anthropicKey = await getApiKey('ANTHROPIC_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-    const openaiKey = await getApiKey('OPENAI_API_KEY', { politicianId: assignedPoliticianId, endpoint: 'ai.assistant' });
-
-    if (!orKey && !geminiKey && !mistralKey && !anthropicKey && !openaiKey) {
-      return res.status(500).json({ error: 'No AI API key configured. Go to Super Admin → API Keys and add OPENROUTER_API_KEY or MISTRAL_API_KEY.' });
-    }
-
+    const polId = isSuperAdmin ? (politician_id || req.user.politician_id) : req.user.politician_id;
+    const systemPrompt = buildPrompt ? buildPrompt(politician_context, mode) : (politician_context?.system || 'You are a helpful political intelligence assistant for an Indian politician.');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    let full = '';
-    // Use specific provider if requested and available
-    if (provider) {
-      const providerMap = {
-        nvidia: () => getApiKey("NVIDIA_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        mistral: () => getApiKey("MISTRAL_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        openrouter: () => getApiKey("OPENROUTER_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" })
-      };
-      
-      const getKey = providerMap[provider.toLowerCase()];
-      if (getKey) {
-        const key = await getKey();
-        if (key) {
-          try {
-            const text = await callProvider(provider.toLowerCase(), key, systemPrompt, messages, 2048, 0.7, false);
-            return res.send(text);
-          } catch (e) {
-            console.warn("[ai] " + provider + " failed:", e.message);
-          }
-        }
-      }
-    }
-
-    // Use specific provider if requested and available
-    if (provider) {
-      const providerMap = {
-        nvidia: () => getApiKey("NVIDIA_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        mistral: () => getApiKey("MISTRAL_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-        gemini: () => getApiKey("GEMINI_API_KEY", { politicianId: assignedPoliticianId, endpoint: "ai.assistant" }),
-      };
-      
-      const getKey = providerMap[provider.toLowerCase()];
-      if (getKey) {
-        const key = await getKey();
-        if (key) {
-          try {
-            const text = await callProvider(provider.toLowerCase(), key, systemPrompt, messages, 2048, 0.7, false);
-            return res.send(text);
-          } catch (e) {
-            console.warn("[ai] " + provider + " failed:", e.message);
-          }
-        }
-      }
-    }
-
-
-    if (orKey) {
-      // OpenRouter — OpenAI-compatible, supports 100+ models including free ones
-      const [orModelRow] = await pool.query("SELECT * FROM api_keys WHERE key_name = 'OPENROUTER_MODEL' AND is_active = 1 LIMIT 1").catch(() => [[]]);
-      let orModel = 'meta-llama/llama-3.3-70b-instruct:free';
-      if (orModelRow?.[0]) {
-        try {
-          const { decrypt } = await import('./services/secretStore.js');
-          // Try to get saved model preference
-        } catch(_) {}
-      }
-      // Read saved model from api_keys table as plain value
-      const [modelRows] = await pool.query("SELECT key_name FROM api_keys WHERE key_name = 'OPENROUTER_MODEL' LIMIT 1").catch(() => [[]]);
-      // Use env override or default
-      if (process.env.OPENROUTER_MODEL) orModel = process.env.OPENROUTER_MODEL;
-      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${orKey}`,
-          'HTTP-Referer': 'https://thoughtfirst.in',
-          'X-Title': 'ThoughtFirst Political Intelligence',
-        },
-        body: JSON.stringify({
-          model: orModel,
-          messages: [{ role: 'system', content: systemPrompt }, ...messages],
-          stream: true,
-          max_tokens: 2048,
-          temperature: 0.7,
-        }),
-      });
-      if (!orRes.ok) throw new Error(`OpenRouter ${orRes.status}: ${await orRes.text()}`);
-      const reader = orRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        for (const line of dec.decode(value, { stream: true }).split('\n').filter(l => l.startsWith('data: ') && l !== 'data: [DONE]')) {
-          try { const t = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content || ''; if (t) { full += t; res.write(t); } } catch (_) {}
-        }
-      }
-    } else if (geminiKey) {
-      // Gemini streaming
-      const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${geminiKey}`;
-      const contents = messages.filter(m=>m.role!=='system').map(m=>({ role:m.role==='assistant'?'model':'user', parts:[{text:m.content}] }));
-      const gemRes = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ system_instruction:{parts:[{text:systemPrompt}]}, contents, generationConfig:{maxOutputTokens:2048,temperature:0.7} }) });
-      if (!gemRes.ok) throw new Error(`Gemini ${gemRes.status}: ${await gemRes.text()}`);
-      const reader = gemRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
-          try { const t=JSON.parse(line.slice(6)).candidates?.[0]?.content?.parts?.[0]?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    } else if (mistralKey) {
-      // Grok streaming (OpenAI-compatible)
-      const mistralModel = process.env.MISTRAL_MODEL || 'mistral-large-latest';
-      const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${'6z87gOvz3u4TTVmLqTIUbP3QoL2c7GOT'}`},
-        body: JSON.stringify({ model:mistralModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
-      });
-      if (!mistralRes.ok) throw new Error(`Grok ${mistralRes.status}: ${await mistralRes.text()}`);
-      const reader = mistralRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
-          try { const t=JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    } else if (anthropicKey) {
-      // Anthropic streaming
-      const anthModel = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
-      const anthRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST', headers:{'Content-Type':'application/json','x-api-key':anthropicKey,'anthropic-version':'2023-06-01'},
-        body: JSON.stringify({ model:anthModel, max_tokens:2048, system:systemPrompt, messages:messages.filter(m=>m.role!=='system'), stream:true })
-      });
-      if (!anthRes.ok) throw new Error(`Anthropic ${anthRes.status}: ${await anthRes.text()}`);
-      const reader = anthRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: '))) {
-          try { const t=JSON.parse(line.slice(6)).delta?.text||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    } else if (openaiKey) {
-      // OpenAI streaming
-      const oaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${openaiKey}`},
-        body: JSON.stringify({ model:oaiModel, messages:[{role:'system',content:systemPrompt},...messages], stream:true, max_tokens:2048, temperature:0.7 })
-      });
-      if (!oaiRes.ok) throw new Error(`OpenAI ${oaiRes.status}: ${await oaiRes.text()}`);
-      const reader = oaiRes.body.getReader(); const dec = new TextDecoder();
-      while (true) {
-        const {done,value} = await reader.read(); if (done) break;
-        for (const line of dec.decode(value,{stream:true}).split('\n').filter(l=>l.startsWith('data: ')&&l!=='data: [DONE]')) {
-          try { const t=JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||''; if(t){full+=t;res.write(t);} } catch(_){}
-        }
-      }
-    }
-
+    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('Cache-Control', 'no-cache');
+    
+    const full = await aiStream({ messages, system: systemPrompt, politicianId: polId, endpoint: 'ai.assistant', res });
     res.end();
-    if (save_content && assignedPoliticianId && full) {
-      const up = messages.filter(m=>m.role==='user').slice(-1)[0]?.content||'';
-      await pool.query('INSERT INTO ai_generated_content (politician_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,0)', [assignedPoliticianId, content_type||mode, (prompt_summary||up).slice(0,500), full]);
+    if (save_content && polId && full) {
+      const up = messages.filter(m=>m.role==='user').slice(-1)[0]?.content || '';
+      await pool.query('INSERT INTO ai_generated_content (politician_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,0)',
+        [polId, content_type || mode, (prompt_summary || up).slice(0, 500), full]);
     }
-  } catch (e) { console.error('[ai-assistant]',e); if(!res.headersSent) res.status(500).json({error:e.message}); }
+  } catch (e) {
+    console.error('[ai-assistant]', e.message);
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+    else res.end();
+  }
 });
+
 
 // ── OMNISCAN & MORNING BRIEF ────────────────────────────────
 app.post('/api/omniscan/trigger', async (req, res, next) => { req.user = { role: "super_admin", politician_id: 1 }; next(); }, async (req, res) => {
@@ -2408,6 +2237,287 @@ pool.query(`CREATE TABLE IF NOT EXISTS news_cache (
   INDEX idx_published (published_at),
   INDEX idx_category (category)
 ) ENGINE=InnoDB`).catch(() => {});
+
+
+// ═══════════════════════════════════════════════════════════════
+// AI INTELLIGENCE ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+
+// Grievance AI Triage
+app.post('/api/grievances/ai-triage', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [grievances] = await pool.query(
+      "SELECT id, subject, description, category, priority, location, created_at FROM grievances WHERE politician_id = ? AND status = 'Pending' ORDER BY created_at DESC LIMIT 20",
+      [polId]
+    );
+    if (!grievances.length) return res.json({ triage: [], message: 'No pending grievances' });
+    
+    const prompt = `Triage these pending grievances for an Indian politician. Assign urgency 1-10 and recommended action.
+Return ONLY a JSON array: [{"id":N,"urgency":N,"category":"string","action":"string","reason":"string"}]
+
+Grievances:
+${grievances.map(g => `ID:${g.id} | ${g.subject} | ${g.location} | ${(g.description||'').slice(0,80)}`).join('\n')}`;
+    const result = await aiJSON({ prompt, system: 'You are a political triage system. Return only valid JSON arrays. No markdown.', politicianId: polId, endpoint: 'grievance.triage', maxTokens: 1200 });
+    res.json({ triage: Array.isArray(result) ? result : (result.triage || []) });
+  } catch (e) { console.error('[grievance-triage]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Grievance AI Response Draft
+app.post('/api/grievances/:id/ai-response', authMiddleware, async (req, res) => {
+  try {
+    const [[g]] = await pool.query('SELECT * FROM grievances WHERE id = ?', [req.params.id]);
+    if (!g) return res.status(404).json({ error: 'Grievance not found' });
+    const polId = req.user.role === 'super_admin' ? g.politician_id : req.user.politician_id;
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name FROM politician_profiles WHERE id = ?', [polId]);
+    
+    const prompt = `Draft a compassionate official response to this constituent grievance:
+
+Subject: ${g.subject}
+Description: ${g.description || g.subject}
+Location: ${g.location || 'Not specified'}
+Priority: ${g.priority}
+Category: ${g.category}
+
+Response is from: Office of ${pol?.full_name || 'the Politician'}, ${pol?.designation || 'MP/MLA'} of ${pol?.constituency_name || 'the constituency'}
+
+Keep it under 150 words. Acknowledge the issue, empathize, state the action being taken, give a timeline. Professional and compassionate.`;
+    const response = await aiComplete({ prompt, system: 'You draft official empathetic grievance responses for Indian politician offices.', politicianId: polId, endpoint: 'grievance.response', maxTokens: 300 });
+    res.json({ response });
+  } catch (e) { console.error('[grievance-response]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Opposition AI Analysis
+app.post('/api/opposition/ai-analysis', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [intel] = await pool.query("SELECT opponent_name, activity_type, description, platform, threat_level, detected_at FROM opposition_intelligence WHERE politician_id = ? ORDER BY detected_at DESC LIMIT 15", [polId]);
+    const [[pol]] = await pool.query('SELECT full_name, party, constituency_name FROM politician_profiles WHERE id = ?', [polId]);
+    
+    const prompt = intel.length
+      ? `Analyze this opposition intelligence for ${pol?.full_name} (${pol?.party}) from ${pol?.constituency_name}:
+
+${intel.map(i => `[${i.activity_type}] ${i.opponent_name}: ${(i.description||'').slice(0,100)} (threat: ${i.threat_level}/10)`).join('\n')}
+
+Provide:
+1. OVERALL THREAT LEVEL (1-10)
+2. TOP 3 RISKS this week
+3. RECOMMENDED COUNTER-STRATEGY (3 specific actions)
+4. KEY OPPONENT TO WATCH`
+      : `No opposition intelligence logged yet for ${pol?.full_name}. Provide general advice on monitoring opposition activity in Indian parliamentary politics.`;
+    const analysis = await aiComplete({ prompt, system: 'You are a political intelligence analyst specializing in Indian elections.', politicianId: polId, endpoint: 'opposition.analysis', maxTokens: 500 });
+    res.json({ analysis });
+  } catch (e) { console.error('[opposition-analysis]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Sentiment AI Summary
+app.post('/api/sentiment/ai-summary', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [scores] = await pool.query("SELECT overall_score, score_date FROM sentiment_scores WHERE politician_id = ? ORDER BY score_date DESC LIMIT 7", [polId]);
+    const [media] = await pool.query("SELECT headline, sentiment, source FROM media_mentions WHERE politician_id = ? AND published_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) ORDER BY published_at DESC LIMIT 10", [polId]);
+    
+    const prompt = `Analyze constituency sentiment:
+
+SCORES (last 7 days): ${scores.map(s => `${s.score_date}: ${s.overall_score}/100`).join(', ') || 'No data yet'}
+MEDIA: ${media.map(m => `[${m.sentiment}] ${m.source}: ${m.headline}`).join('\n') || 'No recent media'}
+
+Provide:
+1. TREND DIRECTION (improving/stable/declining)
+2. KEY CONCERN dragging sentiment
+3. OPPORTUNITY to amplify
+4. THIS WEEK'S PRIORITY ACTION`;
+    const summary = await aiComplete({ prompt, system: 'You analyze political sentiment for Indian politicians.', politicianId: polId, endpoint: 'sentiment.summary', maxTokens: 400 });
+    res.json({ summary });
+  } catch (e) { console.error('[sentiment-summary]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Content Factory AI Generate
+app.post('/api/content-factory/ai-generate', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const { content_type = 'social_post', context = '', language = 'english' } = req.body;
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name, state, party FROM politician_profiles WHERE id = ?', [polId]);
+    const [grievances] = await pool.query("SELECT subject, category, location FROM grievances WHERE politician_id = ? ORDER BY created_at DESC LIMIT 3", [polId]);
+    
+    const typeGuide = {
+      social_post: 'Write a punchy social media post (under 280 chars). No hashtag spam.',
+      whatsapp_broadcast: 'Write a WhatsApp broadcast message (under 300 chars). Direct and impactful.',
+      press_release: 'Write a professional press release (200-300 words). Include headline.',
+      speech_excerpt: 'Write a speech excerpt (150-200 words). Emotional, locally relevant.',
+      grievance_response: 'Write an official empathetic grievance response (100-150 words).',
+    };
+    const prompt = `Generate a ${content_type} for ${pol?.full_name}, ${pol?.designation} from ${pol?.constituency_name}, ${pol?.state} (${pol?.party}).
+${context ? `TOPIC: ${context}` : `Recent issues: ${grievances.map(g=>g.subject).join(', ')}`}
+${language !== 'english' ? `Write in ${language}.` : ''}
+${typeGuide[content_type] || typeGuide.social_post}
+Generate ONLY the content. No explanations.`;
+    const content = await aiComplete({ prompt, system: 'You write political content for Indian politicians.', politicianId: polId, endpoint: `content.${content_type}`, maxTokens: 400 });
+    await pool.query('INSERT INTO ai_generated_content (politician_id, content_type, prompt, content, is_saved) VALUES (?,?,?,?,0)', [polId, content_type, (context||'auto').slice(0,200), content]);
+    res.json({ content, content_type, label: content_type.replace(/_/g,' ') });
+  } catch (e) { console.error('[content-generate]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Parliamentary AI Question Drafter
+app.post('/api/parliamentary/ai-question', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const { topic, ministry = 'relevant ministry', question_type = 'starred' } = req.body;
+    if (!topic) return res.status(400).json({ error: 'topic is required' });
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name, state FROM politician_profiles WHERE id = ?', [polId]);
+    
+    const prompt = `Draft a ${question_type} parliamentary question for ${pol?.full_name}, ${pol?.designation} from ${pol?.constituency_name}, ${pol?.state}.
+
+TOPIC: ${topic}
+MINISTRY: ${ministry}
+
+Format exactly as:
+QUESTION TYPE: ${question_type.toUpperCase()}
+MINISTRY: ${ministry}
+
+WILL THE MINISTER PLEASE STATE:
+(a) [main question - specific and data-seeking]
+(b) [follow-up about current status or budget]
+(c) [action or timeline question]
+
+Make it specific to ${pol?.constituency_name || pol?.state}. Sharp and politically relevant.`;
+    const question = await aiComplete({ prompt, system: 'You draft sharp parliamentary questions for Indian MPs following Lok Sabha/Rajya Sabha formats.', politicianId: polId, endpoint: 'parliamentary.question', maxTokens: 400 });
+    res.json({ question });
+  } catch (e) { console.error('[parliamentary-question]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Morning Brief AI Generate (on-demand)
+app.post('/api/briefing/ai-generate', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    if (!polId) return res.status(403).json({ error: 'Politician context required' });
+    const [[pol]] = await pool.query('SELECT full_name, designation, constituency_name, state, party FROM politician_profiles WHERE id = ?', [polId]);
+    const [[griev]] = await pool.query("SELECT COUNT(*) as total, SUM(status='Pending') as pending, SUM(priority='Urgent') as urgent FROM grievances WHERE politician_id = ?", [polId]);
+    const [events] = await pool.query("SELECT title, start_date FROM events WHERE politician_id = ? AND start_date >= CURDATE() ORDER BY start_date LIMIT 3", [polId]);
+    const [[media]] = await pool.query("SELECT COUNT(*) as mentions, SUM(sentiment='Negative') as negative FROM media_mentions WHERE politician_id = ? AND published_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)", [polId]);
+    
+    const prompt = `Generate a morning intelligence brief for ${pol?.full_name}, ${pol?.designation} from ${pol?.constituency_name}, ${pol?.state} (${pol?.party}).
+
+DATA:
+- Grievances: ${griev?.total||0} total, ${griev?.pending||0} pending, ${griev?.urgent||0} urgent
+- Events today/upcoming: ${events.map(e=>`${e.title} on ${e.start_date}`).join('; ')||'None'}
+- Media (24h): ${media?.mentions||0} mentions, ${media?.negative||0} negative
+
+Write:
+**SITUATION**: 2-sentence overall assessment.
+**TOP 3 ACTIONS**: Three specific actionable tasks for today.
+**WATCH**: One thing that needs monitoring.
+**SENTIMENT**: One word — Stable/Caution/Alert.
+
+Direct, political, India-context aware. No fluff.`;
+    const brief = await aiComplete({ prompt, system: 'You generate concise political intelligence briefs for Indian politicians.', politicianId: polId, endpoint: 'briefing.generate', maxTokens: 600 });
+    const [r] = await pool.query("INSERT INTO ai_briefings (politician_id, title, briefing_type, content, summary, status) VALUES (?,?,?,?,?,'generated')",
+      [polId, `Morning Brief — ${new Date().toLocaleDateString('en-IN')}`, 'morning', brief, brief.slice(0,200)]);
+    res.json({ brief, id: r.insertId, politician: pol?.full_name });
+  } catch (e) { console.error('[briefing-generate]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Voice Reports AI Summary
+app.post('/api/voice/ai-summary', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [reports] = await pool.query("SELECT reporter_name, classification, transcript, location, created_at FROM voice_reports WHERE politician_id = ? ORDER BY created_at DESC LIMIT 20", [polId]);
+    if (!reports.length) return res.json({ summary: 'No voice reports submitted yet.' });
+    
+    const prompt = `Summarize these field intelligence voice reports:
+${reports.map(r=>`[${r.classification}] ${r.reporter_name} from ${r.location||'unknown'}: ${(r.transcript||'').slice(0,120)}`).join('\n')}
+
+Provide:
+1. TOP ISSUES REPORTED (top 3 with locations)
+2. GEOGRAPHIC HOTSPOTS
+3. WORKER MORALE SIGNAL
+4. IMMEDIATE ACTION REQUIRED`;
+    const summary = await aiComplete({ prompt, system: 'You analyze field intelligence from Indian political workers.', politicianId: polId, endpoint: 'voice.summary', maxTokens: 400 });
+    res.json({ summary });
+  } catch (e) { console.error('[voice-summary]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Projects AI Risk Assessment
+app.post('/api/projects/ai-risk', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [projects] = await pool.query("SELECT project_name, status, budget_allocated, budget_spent, progress_percent, expected_completion, mandal FROM projects WHERE politician_id = ? ORDER BY created_at DESC LIMIT 15", [polId]);
+    if (!projects.length) return res.json({ high_risk: [], on_track: [], message: 'No projects found' });
+    
+    const prompt = `Assess risk for these constituency projects. Return JSON:
+{"high_risk":[{"name":"...","risk":"...","action":"..."}],"on_track":["name1"],"completion_forecast":"string","budget_alert":"string or null"}
+
+Projects:
+${projects.map(p=>`${p.project_name}: ${p.status}, ${p.progress_percent||0}% done, due:${p.expected_completion||'TBD'}`).join('\n')}`;
+    const result = await aiJSON({ prompt, system: 'You analyze constituency project risks. Return only valid JSON.', politicianId: polId, endpoint: 'projects.risk', maxTokens: 600 });
+    res.json(result);
+  } catch (e) { console.error('[projects-risk]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// WhatsApp AI Analysis
+app.post('/api/whatsapp/ai-analysis', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' ? (req.body.politician_id || req.user.politician_id) : req.user.politician_id;
+    const [messages] = await pool.query("SELECT content, classification, sentiment, urgency_score, is_viral, is_misinformation FROM whatsapp_intelligence WHERE politician_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY urgency_score DESC LIMIT 30", [polId]);
+    if (!messages.length) return res.json({ analysis: 'No WhatsApp messages in the last 24 hours.' });
+    
+    const prompt = `Analyze these WhatsApp messages received in the last 24 hours:
+${messages.map(m=>`[${m.classification}, urgency:${m.urgency_score}${m.is_viral?' VIRAL':''}${m.is_misinformation?' MISINFO':''}] ${(m.content||'').slice(0,100)}`).join('\n')}
+
+Provide:
+1. DOMINANT CONCERN today
+2. MISINFORMATION THREAT (if any — draft counter-narrative)
+3. VIRAL CONTENT ACTION
+4. RECOMMENDED RESPONSE PRIORITY`;
+    const analysis = await aiComplete({ prompt, system: 'You analyze political WhatsApp intelligence for Indian politicians.', politicianId: polId, endpoint: 'whatsapp.analysis', maxTokens: 400 });
+    res.json({ analysis });
+  } catch (e) { console.error('[whatsapp-analysis]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// AI Debug — test all providers
+app.post('/api/ai-debug', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  const results = {};
+  const tests = [
+    { name: 'GROQ',       keys: ['GROQ_API_KEY','GROQ'],       url: 'https://api.groq.com/openai/v1/chat/completions',         model: 'llama-3.3-70b-versatile' },
+    { name: 'MISTRAL',    keys: ['MISTRAL_API_KEY','MISTRAL'],  url: 'https://api.mistral.ai/v1/chat/completions',              model: 'mistral-small-latest' },
+    { name: 'GEMINI',     keys: ['GEMINI_API_KEY','GEMINI'],    url: null,                                                      model: 'gemini-1.5-flash' },
+    { name: 'NVIDIA',     keys: ['NVIDIA_API_KEY','NVIDIA','NVIDIABUILD','NVIDIABUILD-AUTOGEN-17'], url: 'https://integrate.api.nvidia.com/v1/chat/completions', model: 'meta/llama-3.3-70b-instruct' },
+    { name: 'OPENROUTER', keys: ['OPENROUTER_API_KEY'],         url: 'https://openrouter.ai/api/v1/chat/completions',          model: 'mistralai/mistral-7b-instruct:free' },
+  ];
+  for (const p of tests) {
+    let key = null;
+    for (const kn of p.keys) { key = await getApiKey(kn, {}); if (key) break; }
+    if (!key) { results[p.name] = { status: 'NO_KEY' }; continue; }
+    try {
+      let r;
+      if (p.name === 'GEMINI') {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${key}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Say OK' }] }], generationConfig: { maxOutputTokens: 5 } }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error?.message || r.status);
+        results[p.name] = { status: 'OK', response: d.candidates?.[0]?.content?.parts?.[0]?.text?.slice(0,20) };
+      } else {
+        r = await fetch(p.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, ...(p.name==='OPENROUTER'?{'HTTP-Referer':'https://thoughtfirst.in'}:{}) },
+          body: JSON.stringify({ model: p.model, messages: [{ role: 'user', content: 'Say OK' }], max_tokens: 5 }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error?.message || d.message || r.status);
+        results[p.name] = { status: 'OK', response: d.choices?.[0]?.message?.content?.slice(0,20) };
+      }
+    } catch (e) { results[p.name] = { status: 'ERROR', message: e.message?.slice(0,150) }; }
+  }
+  res.json({ results });
+});
+
+// Missing CRUD routes
+app.use('/api/whatsapp_intelligence', crud('whatsapp_intelligence', ['sender_phone','classification','content']));
+app.use('/api/booths',                crud('booths',                ['booth_number','polling_station_name','mandal']));
+app.use('/api/promises',              crud('promises',              ['promise_text','category','status']));
 
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
