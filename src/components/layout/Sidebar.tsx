@@ -295,9 +295,11 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
                   {isSuperAdmin ? 'Super Admin' : 'Online'}
                 </span>
               </div>
-              <div style={{ marginBottom: 8 }}>
-                <AIModelSwitcher compact={false} />
-              </div>
+              {isSuperAdmin && (
+                <div style={{ marginBottom: 8 }}>
+                  <AIModelSwitcher compact={false} />
+                </div>
+              )}
               <button
                 onClick={handleSignOut}
                 disabled={signingOut}
