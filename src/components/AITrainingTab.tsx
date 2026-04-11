@@ -100,7 +100,7 @@ export default function AITrainingTab({ politicians }: { politicians: Politician
     if (summaries[polId]) return;
     try {
       const r = await fetch(`/api/ai-training/summary/${polId}`, { headers: h });
-      if (r.ok) setSummaries(prev => ({ ...prev, [polId]: await r.json() }));
+      if (r.ok) { const d = await r.json(); setSummaries(prev => ({ ...prev, [polId]: d })); }
     } catch (_) {}
   }
 
