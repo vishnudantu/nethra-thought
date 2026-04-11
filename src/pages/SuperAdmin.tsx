@@ -967,48 +967,79 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                           onMouseEnter={e => (e.currentTarget.style.background='rgba(255,255,255,0.05)')}
                           onMouseLeave={e => (e.currentTarget.style.background='rgba(255,255,255,0.025)')}
                         >
-                          {/* left accent */}
                           <div style={{ position:'absolute',left:0,top:0,bottom:0,width:3,background:accentColor,borderRadius:'14px 0 0 14px',opacity:0.7 }} />
 
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingLeft: 6 }}>
-                            {/* Avatar */}
-                            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${accentColor}22`, border: `1px solid ${accentColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: accentColor, flexShrink: 0, fontFamily: 'Space Grotesk' }}>
-                              {initials}
+                          <div style={{ paddingLeft: 8 }}>
+                            {/* Name row */}
+                            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                              <div style={{ width:34, height:34, borderRadius:9, background:`${accentColor}18`, border:`1px solid ${accentColor}33`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:accentColor, flexShrink:0, fontFamily:'Space Grotesk' }}>
+                                {initials}
+                              </div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
+                                  <div style={{ fontSize:12, fontWeight:700, color:'#f0f4ff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.full_name}</div>
+                                  <div style={{ width:6, height:6, borderRadius:'50%', background: p.is_active ? '#00c864' : '#666', flexShrink:0 }} />
+                                </div>
+                                <div style={{ fontSize:10, color:'#8899bb', marginTop:1 }}>{p.designation} · {p.constituency_name}</div>
+                              </div>
                             </div>
 
-                            {/* Info */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.full_name}</div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: perfColor }}>{perf}</span>
-                                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.is_active ? '#00c864' : '#666' }} />
+                            {/* Election metrics grid */}
+                            {(() => {
+                              const margin = (p as any).winning_margin;
+                              const votes = (p as any).vote_count;
+                              const polled = (p as any).total_votes_polled;
+                              const voteShare = (votes && polled) ? Math.round(votes * 100 / polled) : null;
+                              const marginPct = (margin && polled) ? (margin * 100 / polled).toFixed(1) : null;
+                              const fmtNum = (n: number) => n >= 100000 ? `${(n/100000).toFixed(1)}L` : n >= 1000 ? `${(n/1000).toFixed(0)}K` : `${n}`;
+                              return (
+                                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:10 }}>
+                                  <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:8, padding:'6px 8px' }}>
+                                    <div style={{ fontSize:9, color:'#8899bb', textTransform:'uppercase', letterSpacing:0.5, marginBottom:2 }}>Margin</div>
+                                    <div style={{ fontSize:13, fontWeight:800, color: margin > 50000 ? '#00d4aa' : margin > 20000 ? '#ffa726' : '#ff7777', fontFamily:'Space Grotesk' }}>
+                                      {margin ? fmtNum(margin) : '—'}
+                                    </div>
+                                  </div>
+                                  <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:8, padding:'6px 8px' }}>
+                                    <div style={{ fontSize:9, color:'#8899bb', textTransform:'uppercase', letterSpacing:0.5, marginBottom:2 }}>Vote Share</div>
+                                    <div style={{ fontSize:13, fontWeight:800, color: voteShare && voteShare >= 60 ? '#00d4aa' : voteShare && voteShare >= 50 ? '#42a5f5' : '#ffa726', fontFamily:'Space Grotesk' }}>
+                                      {voteShare ? `${voteShare}%` : '—'}
+                                    </div>
+                                  </div>
+                                  <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:8, padding:'6px 8px' }}>
+                                    <div style={{ fontSize:9, color:'#8899bb', textTransform:'uppercase', letterSpacing:0.5, marginBottom:2 }}>Votes</div>
+                                    <div style={{ fontSize:13, fontWeight:800, color:'#d0d8ee', fontFamily:'Space Grotesk' }}>
+                                      {votes ? fmtNum(votes) : '—'}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                              <div style={{ fontSize: 11, color: '#8899bb', marginTop: 2 }}>{p.designation} · {p.constituency_name}</div>
+                              );
+                            })()}
 
-                              {/* Performance bar */}
-                              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: `${perf}%`, background: `linear-gradient(90deg,${perfColor}88,${perfColor})`, borderRadius: 2, transition: 'width 0.6s ease' }} />
-                                </div>
-                                <span style={{ fontSize: 9, color: '#8899bb', whiteSpace: 'nowrap' }}>{p.open_grievances ?? 0} open</span>
+                            {/* Platform activity bar */}
+                            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                              <div style={{ flex:1, height:2, borderRadius:2, background:'rgba(255,255,255,0.06)', overflow:'hidden' }}>
+                                <div style={{ height:'100%', width:`${perf}%`, background:`linear-gradient(90deg,${perfColor}66,${perfColor})`, borderRadius:2, transition:'width 0.6s ease' }} />
                               </div>
+                              <span style={{ fontSize:9, color:'#8899bb', flexShrink:0 }}>Platform {perf}</span>
+                              {(p.open_grievances ?? 0) > 0 && (
+                                <span style={{ fontSize:9, color:'#ff7777', flexShrink:0 }}>· {p.open_grievances} pending</span>
+                              )}
+                            </div>
 
-                              {/* Action buttons */}
-                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                                <button onClick={() => { setTab('access'); setSelectedAccessPolitician(p.id); }}
-                                  style={{ fontSize: 10, padding: '4px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#8899bb', cursor: 'pointer', fontWeight: 600 }}>
-                                  Access
-                                </button>
-                                <button onClick={() => { setTab('reports'); setReportPoliticianId(p.id); }}
-                                  style={{ fontSize: 10, padding: '4px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#8899bb', cursor: 'pointer', fontWeight: 600 }}>
-                                  Report
-                                </button>
-                                <span style={{ marginLeft: 'auto', fontSize: 9, padding: '3px 8px', borderRadius: 6, background: p.is_active ? 'rgba(0,200,100,0.08)' : 'rgba(255,255,255,0.04)', color: p.is_active ? '#00c864' : '#666', fontWeight: 700, border: `1px solid ${p.is_active ? 'rgba(0,200,100,0.15)' : 'rgba(255,255,255,0.06)'}` }}>
-                                  {p.subscription_status || 'active'}
-                                </span>
-                              </div>
+                            {/* Actions */}
+                            <div style={{ display:'flex', gap:6 }}>
+                              <button onClick={() => { setTab('access'); setSelectedAccessPolitician(p.id); }}
+                                style={{ fontSize:10, padding:'4px 10px', borderRadius:7, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', color:'#8899bb', cursor:'pointer', fontWeight:600 }}>
+                                Access
+                              </button>
+                              <button onClick={() => { setTab('reports'); setReportPoliticianId(p.id); }}
+                                style={{ fontSize:10, padding:'4px 10px', borderRadius:7, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', color:'#8899bb', cursor:'pointer', fontWeight:600 }}>
+                                Report
+                              </button>
+                              <span style={{ marginLeft:'auto', fontSize:9, padding:'3px 8px', borderRadius:6, background: p.is_active ? 'rgba(0,200,100,0.08)' : 'rgba(255,255,255,0.04)', color: p.is_active ? '#00c864' : '#666', fontWeight:700, border:`1px solid ${p.is_active ? 'rgba(0,200,100,0.15)' : 'rgba(255,255,255,0.06)'}` }}>
+                                {p.subscription_status || 'active'}
+                              </span>
                             </div>
                           </div>
                         </div>

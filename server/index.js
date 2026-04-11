@@ -2077,7 +2077,7 @@ app.get('/api/admin/politician-overview', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT p.id, p.full_name, p.party, p.designation, p.constituency_name, p.state, p.is_active, p.subscription_status,
-        p.color_primary, p.color_secondary,
+        p.color_primary, p.color_secondary, p.winning_margin, p.vote_count, p.total_votes_polled,
         (SELECT COUNT(*) FROM grievances g WHERE g.politician_id = p.id AND g.status NOT IN ('Resolved','Closed')) AS open_grievances,
         (SELECT COUNT(*) FROM projects pr WHERE pr.politician_id = p.id AND pr.status IN ('In Progress','Planning','Tendering')) AS active_projects,
         (SELECT COUNT(*) FROM events e WHERE e.politician_id = p.id AND e.start_date >= CURDATE()) AS upcoming_events,
