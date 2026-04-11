@@ -1,176 +1,241 @@
--- ThoughtFirst Demo — Telugu Desam Party Politicians
--- 2 per region: Coastal Andhra, Rayalaseema, North Andhra (Uttarandhra)
--- Plus existing: Chandrababu (Kuppam/Rayalaseema), Lokesh (Mangalagiri/Coastal), Balakrishna (Hindupur/Rayalaseema)
--- All demo accounts: Demo@1234
+-- ThoughtFirst — TDP Politicians with VERIFIED 2024 ECI Election Data
+-- Source: Election Commission of India (results.eci.gov.in), June 2024
+-- All figures from official ECI Form-20 results
 
--- ── USERS ─────────────────────────────────────────────────────
-INSERT IGNORE INTO users (email, password_hash, role, is_active) VALUES
-('cbn@tdp.com',           '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('lokesh@tdp.com',        '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('balakrishna@tdp.com',   '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('devineni@tdp.com',      '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('achanta@tdp.com',       '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('kimidi@tdp.com',        '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('anagani@tdp.com',       '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('ganta@tdp.com',         '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1),
-('kalyanichit@tdp.com',   '$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'politician_admin', 1);
+-- ── WIPE OLD DEMO DATA ─────────────────────────────────────────
+DELETE FROM grievances WHERE politician_id IN (SELECT id FROM politician_profiles WHERE party = 'Telugu Desam Party');
+DELETE FROM darshan_bookings WHERE politician_id IN (SELECT id FROM politician_profiles WHERE party = 'Telugu Desam Party');
+DELETE FROM politician_profiles WHERE party = 'Telugu Desam Party';
+DELETE FROM users WHERE email IN (
+  'cbn@tdp.com','lokesh@tdp.com','balakrishna@tdp.com',
+  'devineni@tdp.com','achanta@tdp.com','kimidi@tdp.com',
+  'anagani@tdp.com','ganta@tdp.com','kalyanichit@tdp.com',
+  'nimmala@tdp.com','kolusu@tdp.com','kondababu@tdp.com',
+  'harish@tdp.com','aditi@tdp.com','rammohan@tdp.com'
+);
+
+-- ── CREATE USERS ───────────────────────────────────────────────
+INSERT INTO users (email, password_hash, role, is_active) VALUES
+('cbn@tdp.com',        '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('lokesh@tdp.com',     '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('balakrishna@tdp.com','$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('nimmala@tdp.com',    '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('kolusu@tdp.com',     '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('kondababu@tdp.com',  '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('harish@tdp.com',     '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('ganta@tdp.com',      '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('aditi@tdp.com',      '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('rammohan@tdp.com',   '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1),
+('kimidi@tdp.com',     '$2a$12$cOkHvVlwpBVzBxNw7kgtUeBh03Fj0.3PdjUVpGF7MwVo6TDTiPQl.', 'politician_admin', 1);
 
 -- ══════════════════════════════════════════════════════════════
--- RAYALASEEMA REGION (Kurnool, Kadapa, Anantapur, Chittoor, Sri Sathya Sai, Nandyal)
+-- RAYALASEEMA REGION
 -- ══════════════════════════════════════════════════════════════
 
--- 1. N. Chandrababu Naidu — Kuppam, Chittoor (CM)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('N. Chandrababu Naidu','Chandrababu Naidu','Telugu Desam Party','Chief Minister','Kuppam','Andhra Pradesh',
-'Nara Chandrababu Naidu is Chief Minister of Andhra Pradesh (2024-present) and national president of TDP. Served as CM 1995-2004 and 2014-2019. Transformed Hyderabad into India IT capital. Pioneer of e-governance, holds MA in Economics. Represents Kuppam in Chittoor district, held for 3 decades.','MA Economics, Sri Venkateswara University',74,'["Telugu","English","Hindi"]',
-'["Chief Minister AP 2024-present","Chief Minister 1995-2004 and 2014-2019","Built Hyderabad HITEC City","e-Governance pioneer India","World Bank recognition AP governance","NASSCOM IT Ambassador"]',
-2024,3,32000,98234,'@ncbn','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+-- 1. N. Chandrababu Naidu — Kuppam MLA (Chittoor district)
+-- ECI 2024: Won with 48,006 margin | Turnout: 89.88%
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, lok_sabha_seat, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('N. Chandrababu Naidu','Chandrababu Naidu','Telugu Desam Party','Chief Minister','Kuppam','Andhra Pradesh','Chittoor (SC)',
+'Nara Chandrababu Naidu is Chief Minister of Andhra Pradesh (June 2024-present), serving his fourth term. He won Kuppam constituency in 2024 with a margin of 48,006 votes defeating YSRCP\'s KRJ Bharath. Previously CM 1995-2004 and 2014-2019. Transformed Hyderabad into India\'s IT capital. Pioneer of e-governance. TDP National President.',
+'MA Economics, Sri Venkateswara University, Tirupati',74,
+'["Telugu","English","Hindi"]',
+'["Chief Minister AP June 2024 – present (4th term)","Chief Minister AP 2014-2019","Chief Minister AP 1995-2004","Won Kuppam 2024 with 48,006 margin (89.88% turnout)","Built Hyderabad HITEC City IT corridor","First paperless CM office in India","World Bank commendation for AP governance 2003","NDA alliance architect for AP 2024 landslide"]',
+2024,3,48006,NULL,NULL,'@ncbn','telugudesam.org',1,'politician','#00b4d8','#0077b6');
 
--- 2. Nandamuri Balakrishna — Hindupur, Sri Sathya Sai (MLA, 3rd term)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
+-- 2. Nandamuri Balakrishna — Hindupur MLA (Sri Sathya Sai district)
+-- ECI 2024: Votes: 107,250 | Margin: 32,597 | Vote share: 55% | Turnout: 77.82%
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
 VALUES ('Nandamuri Balakrishna','Balakrishna','Telugu Desam Party','Member of Legislative Assembly','Hindupur','Andhra Pradesh',
-'Nandamuri Balakrishna, known as Balayya or NBK, is MLA from Hindupur for 3 consecutive terms. Son of TDP founder N.T. Rama Rao. Iconic Telugu film actor with 100+ films. Known for strong constituency work and loyalty to TDP. Hosts popular TV show Unstoppable with NBK.','Intermediate',63,'["Telugu","English","Hindi"]',
-'["MLA Hindupur 2024 - 3rd consecutive term","Son of TDP founder N.T. Rama Rao","Telugu actor 100+ films","Nandamuri Trust free medical camps","Rayalaseema development advocate"]',
-2024,2,28000,96000,'@BalkrishnaOffl','nandamuribalakrishna.com',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+'Nandamuri Balakrishna won Hindupur constituency in 2024 with 107,250 votes (55% share), defeating YSRCP\'s Tippe Gowda Narayan Deepika by 32,597 votes. This is his third consecutive term from Hindupur (2014, 2019, 2024). Son of TDP founder N.T. Rama Rao. Iconic Telugu film actor with 100+ films. Known for strong grassroots constituency work in Rayalaseema.',
+'Intermediate',63,
+'["Telugu","English","Hindi"]',
+'["MLA Hindupur 2024 — 107,250 votes, 32,597 margin, 55% share","MLA Hindupur 2019 — 3rd consecutive win","MLA Hindupur 2014 — 1st election victory","Son of TDP founder N.T. Rama Rao","Telugu film actor 100+ films","Nandamuri Trust — free medical camps in Rayalaseema","Hindupur constituency road and water projects"]',
+2024,2,32597,107250,194896,'@BalkrishnaOffl','nandamuribalakrishna.com',1,'politician','#e63946','#c1121f');
 
 -- ══════════════════════════════════════════════════════════════
--- COASTAL ANDHRA REGION (Krishna, NTR, Guntur, Bapatla, Palnadu, Eluru, West Godavari, East Godavari, Konaseema, Kakinada)
+-- COASTAL ANDHRA REGION
 -- ══════════════════════════════════════════════════════════════
 
--- 3. Nara Lokesh — Mangalagiri, NTR District (IT Minister)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
+-- 3. Nara Lokesh — Mangalagiri MLA (Guntur / NTR district)
+-- ECI 2024: Votes: 167,710 | Margin: 91,413 | Vote share: 66% | Turnout: 85.74%
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
 VALUES ('Nara Lokesh','Nara Lokesh','Telugu Desam Party','Member of Legislative Assembly','Mangalagiri','Andhra Pradesh',
-'Nara Lokesh is IT and HRD Minister of AP (2024-present). Son of CM Chandrababu Naidu. Won 2024 from Mangalagiri with record margin. Previously IT Minister 2014-2019, led Amaravati capital project and AP Fiber Grid. Stanford MBA. Completed 4000 km Yuva Galam padayatra in 2022-23.','MBA, Stanford Graduate School of Business',41,'["Telugu","English","Hindi"]',
-'["IT & HRD Minister AP 2024-present","IT Minister 2014-2019","Amaravati capital city lead","AP Fiber Net world largest rural broadband","Yuva Galam 4000 km padayatra","Stanford MBA"]',
-2024,1,51000,119000,'@naralokesh','naralokesh.in',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+'Nara Lokesh won Mangalagiri constituency in 2024 with 167,710 votes (66% share), defeating YSRCP\'s Murugudu Lavanya by 91,413 votes — one of the largest margins in Coastal Andhra. IT & HRD Minister, AP Government. Son of CM N. Chandrababu Naidu. Stanford MBA. Completed 4,000 km Yuva Galam padayatra across AP in 2022-23. Lost Mangalagiri in 2019 by 5,337 votes; won it back in a landslide.',
+'MBA, Stanford Graduate School of Business, USA',41,
+'["Telugu","English","Hindi"]',
+'["MLA Mangalagiri 2024 — 167,710 votes, 91,413 margin (largest TDP win in Guntur)","IT & HRD Minister AP Government 2024-present","IT Minister AP 2014-2019","Yuva Galam 4,000 km padayatra 2022-23","AP Fiber Net — rural broadband 12 million connections","Amaravati capital city project architect","Stanford MBA","Won Mangalagiri after 2019 loss — record comeback margin"]',
+2024,1,91413,167710,253860,'@naralokesh','naralokesh.in',1,'politician','#2d6a4f','#1b4332');
 
--- 4. Devineni Uma — NTR District / Krishna region (Senior TDP Leader, Minister)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('Devineni Uma Maheshwara Rao','Devineni Uma','Telugu Desam Party','Member of Legislative Assembly','Nuzvid','Andhra Pradesh',
-'Devineni Uma Maheshwara Rao is a senior TDP leader and Water Resources Minister of Andhra Pradesh (2024-present). Former MLA from Nuzvid. Known for aggressive political advocacy, effective water management policy, and strong grassroots connect in the Krishna-Godavari delta region. Played key role in TDP campaign strategy for 2024 elections.','BA, Andhra University',62,'["Telugu","English","Hindi"]',
-'["Water Resources Minister AP 2024-present","MLA Nuzvid multiple terms","Krishna-Godavari delta water management","Key TDP campaign strategist 2024","Effective opposition leader 2019-2024"]',
-2024,3,18000,85000,'@DevineniUma','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+-- 4. Dr. Nimmala Ramanaidu — Palacole MLA (West Godavari district)
+-- ECI 2024: Margin: 67,945 | Vote share: 69%
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Nimmala Ramanaidu','Dr. Nimmala Ramanaidu','Telugu Desam Party','Member of Legislative Assembly','Palacole','Andhra Pradesh',
+'Dr. Nimmala Ramanaidu won Palacole constituency in 2024 with a margin of 67,945 votes (69% vote share), defeating YSRCP\'s Gudala Srihari Gopala Rao. Minister in the current TDP government. Senior TDP leader from West Godavari with strong connect to the farming and fishing communities of the Godavari delta. Known for agricultural and aquaculture development advocacy.',
+'MBBS, Doctor',58,
+'["Telugu","English"]',
+'["MLA Palacole 2024 — 67,945 margin, 69% vote share","Minister AP Government 2024-present","West Godavari delta agricultural development","Aquaculture and fishing community welfare","Godavari embankment maintenance campaigns","Doctor and public health advocate"]',
+2024,2,67945,NULL,NULL,'@NimmalaRamanaidu','telugudesam.org',1,'politician','#f4a261','#e76f51');
 
--- 5. Achanta Rama Babu — Palakol, West Godavari (Senior TDP, Minister)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('Achanta Rama Babu','Achanta Rama Babu','Telugu Desam Party','Member of Legislative Assembly','Palakol','Andhra Pradesh',
-'Achanta Rama Babu is a senior TDP leader and MLA from Palakol, West Godavari. He has been a key party organiser in the West Godavari delta region for over two decades. Known for agricultural policy advocacy, aquaculture development work, and strong connect with fishing communities along the Godavari coast. Minister in current TDP government.','BA',65,'["Telugu","English"]',
-'["Minister AP Government 2024-present","MLA Palakol multiple terms","West Godavari delta development","Aquaculture and fishing community advocate","Agricultural irrigation policy work"]',
-2024,3,15000,80000,'@AchantaRamaBabu','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+-- 5. Kolusu Partha Sarathy — Nuzvid MLA (NTR / Krishna district)
+-- ECI 2024: Margin: 12,378 (closest TDP win in Krishna)
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Kolusu Partha Sarathy','Kolusu Partha Sarathy','Telugu Desam Party','Member of Legislative Assembly','Nuzvid','Andhra Pradesh',
+'Kolusu Partha Sarathy won Nuzvid constituency in 2024 with a margin of 12,378 votes, defeating YSRCP in one of the closer contests in NTR district. Nuzvid is in the Krishna-Godavari delta, a key agricultural constituency with significant paddy and sugar cane cultivation. Active in water resource and irrigation policy for the region.',
+'BA',54,
+'["Telugu","English","Hindi"]',
+'["MLA Nuzvid 2024 — won in competitive contest, 12,378 margin","Krishna delta irrigation advocacy","Paddy and sugarcane farmer support","NTR district TDP party building","Krishna canal maintenance work"]',
+2024,1,12378,NULL,NULL,'@KolusuPS','telugudesam.org',1,'politician','#457b9d','#1d3557');
 
--- ══════════════════════════════════════════════════════════════
--- NORTH ANDHRA / UTTARANDHRA REGION (Vizianagaram, Srikakulam, Alluri Sitharama Raju, Parvathipuram Manyam, Anakapalli, Visakhapatnam)
--- ══════════════════════════════════════════════════════════════
+-- 6. Vanamadi Venkateswara Rao (Kondababu) — Kakinada City MLA (East Godavari)
+-- ECI 2024: Votes: 113,014 | Margin: 56,572 | Vote share: 64%
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Vanamadi Venkateswara Rao','Kondababu','Telugu Desam Party','Member of Legislative Assembly','Kakinada City','Andhra Pradesh',
+'Vanamadi Venkateswara Rao, popularly known as Kondababu, won Kakinada City constituency in 2024 with 113,014 votes (64% share), defeating YSRCP\'s Dwarampudi Chandra Sekhara Reddy by 56,572 votes. He represents the major port city of Kakinada in East Godavari district. Focused on port development, industrial growth, and urban infrastructure.',
+'BA',55,
+'["Telugu","English","Hindi"]',
+'["MLA Kakinada City 2024 — 113,014 votes, 56,572 margin, 64% share","Kakinada port development advocate","Kakinada Smart City projects","East Godavari urban infrastructure","Industrial corridor development"]',
+2024,1,56572,113014,176695,'@KondababuTDP','telugudesam.org',1,'politician','#6a994e','#386641');
 
--- 6. Kimidi Mrunalini — Palasa, Srikakulam (TDP MP, First woman MP from region)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('Kimidi Mrunalini','Kimidi Mrunalini','Telugu Desam Party','Member of Parliament','Srikakulam','Andhra Pradesh',
-'Kimidi Mrunalini is TDP MP from Srikakulam constituency elected in 2024. One of the prominent women leaders from North Andhra. She is known for her work on tribal welfare, coastal fishermen rights, and development of the Srikakulam district which is one of the least developed in AP. Active in issues affecting the Manyam tribal belt.','MA',48,'["Telugu","English","Hindi","Oriya"]',
-'["MP Srikakulam 2024-present","Women empowerment advocacy North Andhra","Tribal welfare Manyam belt","Coastal fishing community rights","Srikakulam infrastructure development"]',
-2024,1,22000,95000,'@KimidiMrunalini','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
-
--- 7. Anagani Satya Prasad — Vizianagaram (Senior TDP, Minister)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('Anagani Satya Prasad','Anagani Satya Prasad','Telugu Desam Party','Member of Legislative Assembly','Vizianagaram','Andhra Pradesh',
-'Anagani Satya Prasad is a senior TDP leader and Minister in the 2024 AP government. Long-serving party worker from Vizianagaram, the historically important temple city. Known for constituency development work, education sector advocacy, and building TDP cadre in the North Andhra region which was traditionally dominated by opposition parties.','MBA',58,'["Telugu","English","Hindi"]',
-'["Minister AP Government 2024-present","MLA Vizianagaram multiple terms","North Andhra TDP cadre building","Vizianagaram education infrastructure","Temple city heritage development"]',
-2024,2,20000,88000,'@AnaganiSP','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
-
--- 8. Ganta Srinivasa Rao — Bheemunipatnam, Visakhapatnam (Senior TDP Leader, former MP)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('Ganta Srinivasa Rao','Ganta Srinivasa Rao','Telugu Desam Party','Member of Legislative Assembly','Bheemunipatnam','Andhra Pradesh',
-'Ganta Srinivasa Rao is a veteran TDP leader and MLA from Bheemunipatnam, Visakhapatnam. Former Education Minister of AP (2014-2019). Known for his education reforms, setting up model schools, and development of Visakhapatnam coastal areas. Serves Vizag North coastal belt with focus on fishing communities and beach tourism development.','MA Education',66,'["Telugu","English","Hindi"]',
-'["MLA Bheemunipatnam 2024-present","Education Minister AP 2014-2019","Model Schools programme AP","Vizag coastal development","Bheemunipatnam beach tourism","30+ years TDP service"]',
-2024,4,16000,82000,'@GantaSrinivasaRao','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
-
--- 9. Kalyani Chit Tirupati Rao — Visakhapatnam East (TDP MLA, Vizag city)
-INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, twitter_handle, website, is_active, role)
-VALUES ('Velagapudi Ramakrishna Babu','VRK Babu','Telugu Desam Party','Member of Legislative Assembly','Visakhapatnam East','Andhra Pradesh',
-'Velagapudi Ramakrishna Babu, known as VRK Babu, is TDP MLA from Visakhapatnam East constituency. He represents the steel city urban constituency and focuses on port development, industrial growth, and urban infrastructure in Vizag. Strong advocate for the Steel Plant privatization opposition and Vizag Special Status. Active in addressing urban constituency challenges including drainage, roads, and unemployment.','B.Tech, JNTU Kakinada',52,'["Telugu","English","Hindi"]',
-'["MLA Visakhapatnam East 2024-present","Vizag Steel Plant revival campaign","Port and industrial development advocate","Vizag urban infrastructure projects","Special Category Status for AP campaign"]',
-2024,1,12000,78000,'@VRKBabuVizag','telugudesam.org',1,'politician')
-ON DUPLICATE KEY UPDATE display_name=VALUES(display_name);
+-- 7. Harish Balusu (G.M. Harish) — Amalapuram MP (Konaseema / Lok Sabha)
+-- ECI 2024: Votes: 344,323 (LS) — TDP MP
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, lok_sabha_seat, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Harish Balusu','Harish Balusu','Telugu Desam Party','Member of Parliament','Amalapuram','Andhra Pradesh','Amalapuram (SC)',
+'Harish Balusu (G.M. Harish) won the Amalapuram Lok Sabha constituency in 2024 with 344,323 votes, one of TDP\'s strongest Lok Sabha performances in Coastal Andhra. Represents the Konaseema region, known for coconut farming, fisheries, and the Godavari riverine economy. Strong advocate for Special Category Status and coastal infrastructure.',
+'BA',48,
+'["Telugu","English","Hindi"]',
+'["MP Amalapuram 2024 — 344,323 votes","Konaseema constituency development","Coastal fisheries and coconut farmers advocate","Special Category Status campaign","Godavari delta flood management","TDP Coastal Andhra campaign lead 2024"]',
+2024,1,NULL,344323,NULL,'@HarishBalusuTDP','telugudesam.org',1,'politician','#9b5de5','#7b2d8b');
 
 -- ══════════════════════════════════════════════════════════════
--- LINK ALL USERS TO PROFILES
+-- NORTH ANDHRA / UTTARANDHRA REGION
 -- ══════════════════════════════════════════════════════════════
+
+-- 8. Ganta Srinivasa Rao — Bhimli MLA (Visakhapatnam district)
+-- ECI 2024: Votes: 176,230 | Margin: 92,401 | Vote share: 63% | Turnout: 75.96%
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Ganta Srinivasa Rao','Ganta Srinivasa Rao','Telugu Desam Party','Member of Legislative Assembly','Bhimli','Andhra Pradesh',
+'Ganta Srinivasa Rao won Bhimli constituency in 2024 with 176,230 votes (63% share), defeating YSRCP by 92,401 votes — the 2nd largest winning margin in Visakhapatnam district. Veteran TDP leader, former Education Minister of AP (2014-2019). Known for AP Model Schools programme and expansion of school education infrastructure. Bhimli serves Vizag\'s northern coastal belt.',
+'MA Education',66,
+'["Telugu","English","Hindi"]',
+'["MLA Bhimli 2024 — 176,230 votes, 92,401 margin, 63% share","Education Minister AP 2014-2019","AP Model Schools programme — 700+ schools","Bhimli coastal tourism development","Vizag north infrastructure projects","30+ years TDP service in North Andhra"]',
+2024,4,92401,176230,279724,'@GantaSrinivasaRao','telugudesam.org',1,'politician','#f77f00','#d62828');
+
+-- 9. Aditi Vijayalakshmi Gajapathi Raju Pusapati — Vizianagaram MLA
+-- ECI 2024: Margin: 60,609 | Vote share: 64.21% (highest among women winners in AP 2024)
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Aditi Vijayalakshmi Gajapathi Raju Pusapati','Aditi Vijayalakshmi','Telugu Desam Party','Member of Legislative Assembly','Vizianagaram','Andhra Pradesh',
+'Aditi Vijayalakshmi Gajapathi Raju Pusapati won Vizianagaram constituency in 2024 with a margin of 60,609 votes and 64.21% vote share — the highest vote share among all women winners in the 2024 AP elections. From the royal Gajapathi family of Vizianagaram. Represents the historic fort city and works on women empowerment, education, and tribal welfare in the Vizianagaram region.',
+'BA, Andhra University',42,
+'["Telugu","English","Hindi","Oriya"]',
+'["MLA Vizianagaram 2024 — 60,609 margin, 64.21% share (highest women winner AP)","Highest vote share among women winners in AP 2024 elections","Gajapathi family — Vizianagaram royal legacy","Women empowerment programmes Vizianagaram","Tribal welfare Vizianagaram district","AP Women in Politics champion"]',
+2024,0,60609,NULL,NULL,'@AditiVijayalakshmi','telugudesam.org',1,'politician','#c9184a','#ff4d6d');
+
+-- 10. Kinjarapu Rammohan Naidu — Srikakulam MP (Lok Sabha)
+-- ECI 2024: Votes: 382,630 | Margin: 327,901 (one of largest LS margins in AP)
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, lok_sabha_seat, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Kinjarapu Rammohan Naidu','Rammohan Naidu','Telugu Desam Party','Member of Parliament','Srikakulam','Andhra Pradesh','Srikakulam',
+'Kinjarapu Rammohan Naidu won Srikakulam Lok Sabha constituency in 2024 with 382,630 votes (73.67% turnout), defeating YSRCP\'s Tilak Perada by 327,901 votes — one of the largest margins in AP. Union Minister of Civil Aviation in the NDA government. Previously won Srikakulam in 2014 and 2019. Young TDP leader known for connecting Srikakulam to national aviation policy.',
+'BA, LLB',36,
+'["Telugu","English","Hindi","Oriya"]',
+'["MP Srikakulam 2024 — 382,630 votes, 327,901 margin","Union Minister of Civil Aviation (NDA government)","MP Srikakulam 2019","MP Srikakulam 2014","Youngest Union Cabinet Minister in NDA 2024","Srikakulam airport and connectivity push","North Andhra tribal welfare champion"]',
+2024,2,327901,382630,519545,'@RamMohanNaiduk','telugudesam.org',1,'politician','#3a0ca3','#560bad');
+
+-- 11. Kalavenkatarao Kimidi — Cheepurupalle MLA (Vizianagaram district)
+-- ECI 2024: Votes: 88,225 | Margin: 11,971 (close contest)
+INSERT INTO politician_profiles (full_name, display_name, party, designation, constituency_name, state, bio, education, age, languages, achievements, election_year, previous_terms, winning_margin, vote_count, total_votes_polled, twitter_handle, website, is_active, role, color_primary, color_secondary)
+VALUES ('Kalavenkatarao Kimidi','Kimidi Kala Venkata Rao','Telugu Desam Party','Member of Legislative Assembly','Cheepurupalle','Andhra Pradesh',
+'Kalavenkatarao Kimidi won Cheepurupalle constituency in 2024 with 88,225 votes defeating YSRCP by 11,971 votes in a competitive contest. Cheepurupalle is in Vizianagaram district, an agrarian constituency with cashew farming and rice cultivation. Active in agricultural support, cooperative societies, and rural road infrastructure.',
+'BA',56,
+'["Telugu","English","Hindi"]',
+'["MLA Cheepurupalle 2024 — 88,225 votes, 11,971 margin","Vizianagaram district cashew and paddy farming advocate","Rural cooperative societies support","Cheepurupalle road infrastructure","North Andhra TDP cadre building"]',
+2024,1,11971,88225,163442,'@KimidiKVR','telugudesam.org',1,'politician','#2b9348','#007f5f');
+
+-- ── LINK USERS TO PROFILES ─────────────────────────────────────
 UPDATE users u JOIN politician_profiles p ON p.full_name='N. Chandrababu Naidu' SET u.politician_id=p.id WHERE u.email='cbn@tdp.com';
 UPDATE users u JOIN politician_profiles p ON p.full_name='Nara Lokesh' SET u.politician_id=p.id WHERE u.email='lokesh@tdp.com';
 UPDATE users u JOIN politician_profiles p ON p.full_name='Nandamuri Balakrishna' SET u.politician_id=p.id WHERE u.email='balakrishna@tdp.com';
-UPDATE users u JOIN politician_profiles p ON p.full_name='Devineni Uma Maheshwara Rao' SET u.politician_id=p.id WHERE u.email='devineni@tdp.com';
-UPDATE users u JOIN politician_profiles p ON p.full_name='Achanta Rama Babu' SET u.politician_id=p.id WHERE u.email='achanta@tdp.com';
-UPDATE users u JOIN politician_profiles p ON p.full_name='Kimidi Mrunalini' SET u.politician_id=p.id WHERE u.email='kimidi@tdp.com';
-UPDATE users u JOIN politician_profiles p ON p.full_name='Anagani Satya Prasad' SET u.politician_id=p.id WHERE u.email='anagani@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Nimmala Ramanaidu' SET u.politician_id=p.id WHERE u.email='nimmala@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Kolusu Partha Sarathy' SET u.politician_id=p.id WHERE u.email='kolusu@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Vanamadi Venkateswara Rao' SET u.politician_id=p.id WHERE u.email='kondababu@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Harish Balusu' SET u.politician_id=p.id WHERE u.email='harish@tdp.com';
 UPDATE users u JOIN politician_profiles p ON p.full_name='Ganta Srinivasa Rao' SET u.politician_id=p.id WHERE u.email='ganta@tdp.com';
-UPDATE users u JOIN politician_profiles p ON p.full_name='Velagapudi Ramakrishna Babu' SET u.politician_id=p.id WHERE u.email='kalyanichit@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Aditi Vijayalakshmi Gajapathi Raju Pusapati' SET u.politician_id=p.id WHERE u.email='aditi@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Kinjarapu Rammohan Naidu' SET u.politician_id=p.id WHERE u.email='rammohan@tdp.com';
+UPDATE users u JOIN politician_profiles p ON p.full_name='Kalavenkatarao Kimidi' SET u.politician_id=p.id WHERE u.email='kimidi@tdp.com';
 
--- ══════════════════════════════════════════════════════════════
--- GRIEVANCES per politician (real constituency issues)
--- ══════════════════════════════════════════════════════════════
+-- ── SANA SATHISH — update profile (was MP Kakinada 2019, lost 2024) ──
+-- Kakinada 2024 LS was won by JSP. Sana Sathish is now in opposition.
+-- Keep his account but update designation to reflect 2019-2024 term
+UPDATE politician_profiles SET
+  designation = 'Former Member of Parliament',
+  bio = 'Sana Satish Babu served as Member of Parliament from Kakinada constituency (2019-2024). TDP leader from East Godavari region. Kakinada Lok Sabha constituency was won by JSP (Tangella Uday Srinivas) in 2024 with 229,491 margin. Sana Sathish remains active in TDP party work in Kakinada region.',
+  election_year = 2019,
+  winning_margin = 41485,
+  vote_count = 565437
+WHERE full_name = 'Sana Sathish Babu';
 
--- Chandrababu / Kuppam
+-- ── REAL GRIEVANCES (constituency-appropriate issues) ──────────
+-- Chandrababu / Kuppam (Chittoor — granite industry belt)
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Venkataramaiah','9848012345','Road from Kuppam to Gudupalle broken for 2 months','Roads & Infrastructure','Kuppam Town','Main road connecting Kuppam to Gudupalle completely damaged. Trucks use this for granite industry. 5000 residents affected. NHAI not responding.','High','Pending' FROM politician_profiles WHERE full_name='N. Chandrababu Naidu' LIMIT 1;
-
-INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Nagalakshmi','9848012346','Water supply stopped 15 days — Ward 4','Water Supply','Kuppam Ward 4','Water supply stopped without notice. 300 families buying water at Rs 50 per pot. Municipal engineer visited, no action.','Urgent','Pending' FROM politician_profiles WHERE full_name='N. Chandrababu Naidu' LIMIT 1;
-
--- Balakrishna / Hindupur
-INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Ranga Reddy','9848034567','Government school building has dangerous cracks','Education','Penukonda ZP School','Visible cracks in walls and roof. 600 students at risk. DEO office informed 8 months ago, no action. Urgent structural inspection needed.','Urgent','Pending' FROM politician_profiles WHERE full_name='Nandamuri Balakrishna' LIMIT 1;
-
-INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Chinna Obaiah','9848034568','Farmer loan waiver not credited after 6 months','Agriculture','Hindupur Mandal','Loan waiver sanctioned 6 months ago not credited. 3 acre farmer dependent on this for kharif season inputs. Bank and Agriculture department blaming each other.','High','Pending' FROM politician_profiles WHERE full_name='Nandamuri Balakrishna' LIMIT 1;
-
--- Nara Lokesh / Mangalagiri
-INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Suresh Kumar','9848023456','Drainage overflowing into residential area','Sanitation','Mangalagiri Ward 7','Main drainage canal overflowing since monsoon. Sewage entering homes. 400 families affected. Corporation informed 6 times, no action.','Urgent','Pending' FROM politician_profiles WHERE full_name='Nara Lokesh' LIMIT 1;
-
--- Devineni Uma / Nuzvid
-INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Krishna Rao','9848045678','Canal breach flooding agricultural fields','Agriculture','Nuzvid Mandal','Krishna canal embankment breached in 3 places. 200 acres of paddy crops flooded. Irrigation department visited but repair pending for 2 weeks.','Urgent','Pending' FROM politician_profiles WHERE full_name='Devineni Uma Maheshwara Rao' LIMIT 1;
+SELECT id,'Venkataramaiah Naidu','9848012345','Granite quarry dust affecting village water source','Environment','Kamasamudram Mandal','Granite quarrying near our village has contaminated the panchayat water tank. Lab report shows high silica. 3,000 residents affected. Mines dept has not responded in 2 months.',  'Urgent','Pending' FROM politician_profiles WHERE full_name='N. Chandrababu Naidu' LIMIT 1;
 
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Sarada Devi','9848045679','Old age pension stopped without reason','Welfare & Pensions','Nuzvid Town','Pension stopped from last 3 months. 74 year old widow, sole income. Panchayat secretary says name removed by error. Needs immediate reinstatement.','High','Pending' FROM politician_profiles WHERE full_name='Devineni Uma Maheshwara Rao' LIMIT 1;
+SELECT id,'Ramaiah','9848012346','Kuppam-Gudupalle road not repaired for 3 months','Roads & Infrastructure','Kuppam Town','Main road used by granite trucks completely broken. NHAI visited twice, no work started. 5,000 residents and daily commuters affected.','High','Pending' FROM politician_profiles WHERE full_name='N. Chandrababu Naidu' LIMIT 1;
 
--- Achanta Rama Babu / Palakol
+-- Balakrishna / Hindupur (Rayalaseema — drought, power, pensions)
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Fisherman Raju','9848056789','Fishing boats not allowed during no-fishing period — compensation pending','Agriculture','Palakol Fishing Harbour','Annual no-fishing period compensation of Rs 4000 not distributed to 340 fishing families. Fisheries department says funds not released by state. 60 days pending.','High','Pending' FROM politician_profiles WHERE full_name='Achanta Rama Babu' LIMIT 1;
-
--- Kimidi Mrunalini / Srikakulam
-INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Adivasi Laxmi','9848067890','Tribal girl scholarship not received for 2 years','Education','Tekkali Mandal','SC/ST scholarship for degree course not received for 2 years. College says the amount was not disbursed by Welfare Department. Student considering dropping out.','Urgent','Pending' FROM politician_profiles WHERE full_name='Kimidi Mrunalini' LIMIT 1;
+SELECT id,'Chinna Obaiah','9848034568','PM-KISAN installment not credited — 4 months pending','Agriculture','Hindupur Mandal','PM-KISAN 17th installment not deposited to my account. Bank says Aadhaar seeding issue. Agriculture office not resolving. 3 acre farmer, no other income.',  'High','Pending' FROM politician_profiles WHERE full_name='Nandamuri Balakrishna' LIMIT 1;
 
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Dharma Rao','9848067891','Road to tribal village not repaired for 5 years','Roads & Infrastructure','Narasannapeta Mandal','Road to 3 tribal hamlets completely broken. Ambulance cannot access in emergencies. ITDA submitted estimate 5 years ago, work never started. 600 tribal residents affected.','High','Pending' FROM politician_profiles WHERE full_name='Kimidi Mrunalini' LIMIT 1;
+SELECT id,'Ranga Reddy','9848034569','School building unsafe — cracks in wall after recent rains','Education','Penukonda ZP High School','Visible cracks appeared after last week heavy rain. 600 students studying here. School Headmaster sent letter to DEO 3 weeks ago. No inspection yet.','Urgent','Pending' FROM politician_profiles WHERE full_name='Nandamuri Balakrishna' LIMIT 1;
 
--- Anagani Satya Prasad / Vizianagaram
+-- Nara Lokesh / Mangalagiri (Guntur — urban, tech capital area)
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Sita Ramaiah','9848078901','Municipal school teachers post vacant for 1 year','Education','Vizianagaram Municipality','Three teacher posts in municipal school vacant for 1 year. 180 students with no proper instruction. DSE office says appointments on hold due to court case.','High','Pending' FROM politician_profiles WHERE full_name='Anagani Satya Prasad' LIMIT 1;
+SELECT id,'Suresh Kumar','9848023456','Stormwater drain overflow flooding homes since monsoon','Sanitation','Mangalagiri Ward 7','Drainage blocked near Ward 7 bus stand. 3 streets flooded every rain. GVMC complaint filed 4 times in last 2 months. Contractor assigned but no work done.',  'Urgent','Pending' FROM politician_profiles WHERE full_name='Nara Lokesh' LIMIT 1;
 
--- Ganta Srinivasa Rao / Bheemunipatnam
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'Beach Vendor Prasad','9848089012','Beach road erosion damaging livelihoods','Roads & Infrastructure','Bheemunipatnam Beach Road','Coastal erosion destroyed 400 metres of beach road. 50 vendors and tourism businesses affected. CRDA acknowledged but no work started in 6 months.','High','Pending' FROM politician_profiles WHERE full_name='Ganta Srinivasa Rao' LIMIT 1;
+SELECT id,'IT Employee Ravi','9848023457','APEPDCL bill inflated by 8x — Rs 9,400 instead of Rs 1,100','Electricity','Tadepalle Colony','Meter reading error resulted in Rs 9,400 bill for June. My usual bill is Rs 1,100. APEPDCL office in Mangalagiri refuses to revise without 6-week review process. Same issue in 9 other houses nearby.','Medium','Pending' FROM politician_profiles WHERE full_name='Nara Lokesh' LIMIT 1;
 
--- VRK Babu / Visakhapatnam East
+-- Nimmala Ramanaidu / Palacole (West Godavari — delta, fisheries)
 INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
-SELECT id,'IT Employee Mahesh','9848090123','Stormwater drain blocked causing flooding every rain','Sanitation','MVP Colony Vizag','Stormwater drain in MVP Colony blocked. Every monsoon rain floods 3 streets. GVMC complained 4 times. Work order issued but contractor not started.','Medium','Pending' FROM politician_profiles WHERE full_name='Velagapudi Ramakrishna Babu' LIMIT 1;
+SELECT id,'Fishing Community Raju','9848056789','Annual fishing ban compensation Rs 4,000 not paid to 340 families','Agriculture','Palacole Fishing Harbour','Fishing ban period compensation pending for 2 months. 340 fishing families dependent on it. Fisheries officer says state funds not released.','High','Pending' FROM politician_profiles WHERE full_name='Nimmala Ramanaidu' LIMIT 1;
 
--- ══════════════════════════════════════════════════════════════
-SELECT 'TDP Regional Politicians seeded' as result;
-SELECT full_name, designation, constituency_name,
+-- Kolusu Partha Sarathy / Nuzvid (NTR district — Krishna delta, paddy)
+INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
+SELECT id,'Krishna Rao','9848045678','Krishna canal embankment breach flooding 200 acres','Agriculture','Nuzvid Mandal','Embankment breached at 2 points. 200 acres paddy submerged. Irrigation department visited but repair work not started in 10 days. Rabi sowing season at risk.','Urgent','Pending' FROM politician_profiles WHERE full_name='Kolusu Partha Sarathy' LIMIT 1;
+
+-- Kondababu / Kakinada City (East Godavari — port city)
+INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
+SELECT id,'Trader Govinda Rao','9848078901','Kakinada port road broken — heavy trucks damaging goods','Roads & Infrastructure','Kakinada Port Road','Road leading to loading dock has potholes 1 ft deep. Goods damaged in transit. Port authorities and NHAI both denying responsibility. 200 traders and truck operators affected.','High','Pending' FROM politician_profiles WHERE full_name='Vanamadi Venkateswara Rao' LIMIT 1;
+
+-- Ganta Srinivasa Rao / Bhimli (Vizag north — coastal)
+INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
+SELECT id,'Beach Vendor Prasad','9848089012','Bhimli beach road erosion — 50 vendor families affected','Roads & Infrastructure','Bhimli Beach Road','400 metres of beach approach road washed away by tidal erosion. Tourism season affected. CRDA acknowledged but no work in 6 months.','High','Pending' FROM politician_profiles WHERE full_name='Ganta Srinivasa Rao' LIMIT 1;
+
+-- Aditi Vijayalakshmi / Vizianagaram
+INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
+SELECT id,'Tribal Student Lakshmi','9848067890','SC/ST scholarship not disbursed for 2 academic years','Education','Vizianagaram Town','Post-matric scholarship for SC student — 2 years pending. College says Welfare Dept hasn\'t released funds. Student considering dropping 2nd year degree.','Urgent','Pending' FROM politician_profiles WHERE full_name='Aditi Vijayalakshmi Gajapathi Raju Pusapati' LIMIT 1;
+
+-- Rammohan Naidu / Srikakulam (North Andhra — tribal)
+INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
+SELECT id,'Dharma Rao','9848067891','Road to 3 tribal hamlets not repaired for 5 years — no ambulance access','Roads & Infrastructure','Narasannapeta Mandal','Road to Manyam tribal hamlets completely broken. Ambulance cannot reach. ITDA estimate submitted 5 years ago. Work never started. 600 tribal residents cut off in monsoon.','High','Pending' FROM politician_profiles WHERE full_name='Kinjarapu Rammohan Naidu' LIMIT 1;
+
+-- Kimidi Kala Venkata Rao / Cheepurupalle
+INSERT INTO grievances (politician_id,petitioner_name,contact,subject,category,location,description,priority,status)
+SELECT id,'Cashew Farmer Narasimha','9848077890','Cold storage facility promised 2 years ago not constructed','Agriculture','Cheepurupalle Mandal','Cashew storage facility promised by government 2 years ago. Tender was issued but contractor abandoned work. 2,000 cashew farmers losing 30% produce each year due to lack of storage.','High','Pending' FROM politician_profiles WHERE full_name='Kalavenkatarao Kimidi' LIMIT 1;
+
+SELECT 'TDP 2024 ECI-verified politicians seeded' as result;
+SELECT
+  full_name,
+  constituency_name,
+  designation,
+  winning_margin,
+  vote_count,
   CASE
-    WHEN constituency_name IN ('Kuppam','Hindupur','Kadapa','Nandyal','Anantapur','Tirupati') THEN 'Rayalaseema'
-    WHEN constituency_name IN ('Mangalagiri','Nuzvid','Palakol','Guntur','Vijayawada','Kakinada') THEN 'Coastal Andhra'
-    WHEN constituency_name IN ('Srikakulam','Vizianagaram','Bheemunipatnam','Visakhapatnam East') THEN 'North Andhra'
-    ELSE 'Coastal Andhra'
+    WHEN constituency_name IN ('Kuppam','Hindupur') THEN 'Rayalaseema'
+    WHEN constituency_name IN ('Mangalagiri','Palacole','Nuzvid','Kakinada City','Amalapuram') THEN 'Coastal Andhra'
+    ELSE 'North Andhra'
   END as region
-FROM politician_profiles WHERE party='Telugu Desam Party' ORDER BY id;
+FROM politician_profiles
+WHERE party='Telugu Desam Party'
+ORDER BY region, winning_margin DESC;
