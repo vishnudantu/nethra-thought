@@ -42,7 +42,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
   const sidebarWidth = sidebarCollapsed ? 72 : 256;
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+    <div className="min-h-screen flex relative" style={{ background: 'var(--bg-primary)', overflowX: 'hidden' }}>
       {isMobile && mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
@@ -79,7 +79,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
           onNavigate={handleNavigate}
         />
 
-        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5">
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}

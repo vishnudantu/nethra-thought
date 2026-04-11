@@ -10,6 +10,7 @@ import ApiKeysTab from '../components/ApiKeysTab';
 import { useAuth } from '../lib/auth';
 import Badge from '../components/ui/Badge';
 import PhotoUpload from '../components/PhotoUpload';
+import { useW, isMob } from '../components/ui/ModuleLayout';
 import type { AdminReport, FeatureAccess, FeatureFlag, FeatureModule, ModuleAccess } from '../lib/types';
 
 interface Politician {
@@ -205,6 +206,7 @@ const OPENROUTER_FREE_MODELS = [
 
 export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { refreshPoliticians, user, refreshUser } = useAuth();
+  const w = useW();
   const [tab, setTab] = useState<'overview' | 'access' | 'reports' | 'users' | 'api-keys'>('overview');
   const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [overview, setOverview] = useState<PoliticianOverview[]>([]);
@@ -811,19 +813,19 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                 Platform Command
               </h1>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingLeft: 14 }}>
-              <span style={{ fontSize: 12, color: '#8899bb' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMob(w) ? 8 : 16, paddingLeft: 14, flexWrap: 'wrap' }}>
+              {!isMob(w) && <span style={{ fontSize: 12, color: '#8899bb' }}>
                 {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-              <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
+              </span>}
+              {!isMob(w) && <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />}
               <span style={{ fontSize: 12, color: stats.critical > 0 ? '#ff7777' : '#00c864', fontWeight: 700 }}>
                 {stats.critical > 0 ? `${stats.critical} Critical` : '● All Systems Stable'}
               </span>
               <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
-              <span style={{ fontSize: 12, color: '#8899bb' }}>{stats.total} Politicians Active</span>
+              <span style={{ fontSize: 12, color: '#8899bb' }}>{stats.total} Politicians</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: isMob(w) ? 'flex-start' : 'flex-end' }}>
             <button onClick={() => handleNavigate('website-admin')}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#d0d8ee', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
               <LayoutDashboard size={13} /> Website CMS
@@ -840,7 +842,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
         </div>
 
         {/* ── PULSE METRICS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginTop: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMob(w) ? 2 : w < 900 ? 3 : 6}, 1fr)`, gap: isMob(w) ? 8 : 12, marginTop: 20 }}>
           {[
             { label: 'Politicians', value: stats.total, sub: `${stats.live} live`, accent: '#00d4aa', bar: (stats.live/Math.max(stats.total,1))*100 },
             { label: 'Performance', value: `${stats.avgPerf}`, sub: 'avg score', accent: '#42a5f5', bar: stats.avgPerf },
@@ -852,7 +854,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, height: 2, width: `${m.bar}%`, background: m.accent, borderRadius: '0 1px 0 0', transition: 'width 0.6s ease' }} />
               <div style={{ fontSize: 10, color: '#8899bb', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 6 }}>{m.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: m.accent, fontFamily: 'Space Grotesk', lineHeight: 1 }}>{m.value}</div>
+              <div style={{ fontSize: isMob(w) ? 18 : 24, fontWeight: 900, color: m.accent, fontFamily: 'Space Grotesk', lineHeight: 1 }}>{m.value}</div>
               <div style={{ fontSize: 10, color: '#8899bb', marginTop: 4 }}>{m.sub}</div>
             </div>
           ))}
@@ -874,7 +876,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
       )}
 
       <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center gap-0 p-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: 4, borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {([
             { key: 'overview', label: 'Overview', icon: LayoutDashboard },
             { key: 'access', label: 'Access Control', icon: SlidersHorizontal },
@@ -883,32 +885,36 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             { key: 'api-keys', label: 'API Keys', icon: Key },
           ] as const).map(t => {
             const Icon = t.icon;
+            const isActive = tab === t.key;
             return (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className="px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2"
                 style={{
-                  fontSize: 12,
-                  background: tab === t.key ? 'rgba(0,212,170,0.12)' : 'transparent',
-                  color: tab === t.key ? '#00d4aa' : '#8899bb',
+                  display: 'flex', alignItems: 'center', gap: isMob(w) ? 0 : 6,
+                  padding: isMob(w) ? '10px 14px' : '8px 14px',
+                  borderRadius: 9, fontWeight: 600, cursor: 'pointer',
+                  fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0,
+                  background: isActive ? 'rgba(0,212,170,0.12)' : 'transparent',
+                  color: isActive ? '#00d4aa' : '#8899bb', border: 'none',
+                  borderBottom: isActive ? '2px solid #00d4aa' : '2px solid transparent',
+                  transition: 'all 0.15s',
                 }}
               >
-                <Icon size={14} />
-                {t.label}
+                <Icon size={15} />
+                {!isMob(w) && <span>{t.label}</span>}
               </button>
             );
           })}
           <div className="flex-1" />
-          {tab === 'overview' && (
-            <div className="flex items-center gap-2 mr-3">
-              <Search size={14} style={{ color: '#8899bb' }} />
+          {tab === 'overview' && !isMob(w) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
+              <Search size={13} style={{ color: '#8899bb' }} />
               <input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search politicians..."
-                className="py-1 px-2 rounded-lg"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: '#f0f4ff', fontSize: 12, outline: 'none', width: 180 }}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: '#f0f4ff', fontSize: 12, outline: 'none', width: 160, padding: '5px 8px' }}
               />
             </div>
           )}
@@ -917,6 +923,14 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
           </button>
         </div>
 
+        {tab === 'overview' && isMob(w) && (
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.05)', borderRadius: 9, padding: '7px 10px' }}>
+              <Search size={13} style={{ color: '#8899bb', flexShrink: 0 }} />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search politicians..." style={{ background: 'none', border: 'none', color: '#f0f4ff', fontSize: 13, outline: 'none', width: '100%' }} />
+            </div>
+          </div>
+        )}
         {loading ? (
           <div className="py-20 text-center" style={{ color: '#8899bb' }}>
             <div className="w-8 h-8 rounded-full border-2 animate-spin mx-auto mb-3" style={{ borderColor: 'rgba(0,212,170,0.2)', borderTopColor: '#00d4aa' }} />
@@ -956,7 +970,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#8899bb', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     {region} · {pols.length} politician{pols.length !== 1 ? 's' : ''}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr' : w < 900 ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 10 }}>
                     {pols.map(p => {
                       const perf = p.performance ?? 0;
                       const perfColor = perf >= 70 ? '#00d4aa' : perf >= 40 ? '#ffa726' : '#ff5555';
@@ -984,7 +998,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                               />
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
-                                  <div style={{ fontSize:12, fontWeight:700, color:'#f0f4ff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.full_name}</div>
+                                  <div style={{ fontSize:isMob(w) ? 13 : 12, fontWeight:700, color:'#f0f4ff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace: isMob(w) ? 'normal' : 'nowrap', lineHeight: 1.3 }}>{p.full_name}</div>
                                   <div style={{ width:6, height:6, borderRadius:'50%', background: p.is_active ? '#00c864' : '#666', flexShrink:0 }} />
                                 </div>
                                 <div style={{ fontSize:10, color:'#8899bb', marginTop:1 }}>{p.designation} · {p.constituency_name}</div>
@@ -1000,7 +1014,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                               const marginPct = (margin && polled) ? (margin * 100 / polled).toFixed(1) : null;
                               const fmtNum = (n: number) => n >= 100000 ? `${(n/100000).toFixed(1)}L` : n >= 1000 ? `${(n/1000).toFixed(0)}K` : `${n}`;
                               return (
-                                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:10 }}>
+                                <div style={{ display:'grid', gridTemplateColumns:`repeat(${isMob(w) ? 2 : 3},1fr)`, gap:6, marginBottom:10 }}>
                                   <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:8, padding:'6px 8px' }}>
                                     <div style={{ fontSize:9, color:'#8899bb', textTransform:'uppercase', letterSpacing:0.5, marginBottom:2 }}>Margin</div>
                                     <div style={{ fontSize:13, fontWeight:800, color: margin > 50000 ? '#00d4aa' : margin > 20000 ? '#ffa726' : '#ff7777', fontFamily:'Space Grotesk' }}>
@@ -1035,7 +1049,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                             </div>
 
                             {/* Actions */}
-                            <div style={{ display:'flex', gap:6 }}>
+                            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                               <button onClick={() => { setTab('access'); setSelectedAccessPolitician(p.id); }}
                                 style={{ fontSize:10, padding:'4px 10px', borderRadius:7, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', color:'#8899bb', cursor:'pointer', fontWeight:600 }}>
                                 Access
