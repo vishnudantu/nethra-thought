@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, Trash2, Check, X, AlertCircle, UserCheck, Shield, Building2, Search, ToggleLeft,
   ToggleRight, Key, RefreshCw, Eye, EyeOff, LayoutDashboard, SlidersHorizontal,
-  FileBarChart2, Sparkles, ClipboardCheck, Settings2, BadgeCheck, Ban, Send
-} from 'lucide-react';
+  FileBarChart2, Sparkles, ClipboardCheck, Settings2, BadgeCheck, Ban, Send, Brain} from 'lucide-react';
 import { api } from '../lib/api';
 import ApiKeysTab from '../components/ApiKeysTab';
+import AITrainingTab from '../components/AITrainingTab';
 import { useAuth } from '../lib/auth';
 import Badge from '../components/ui/Badge';
 import PhotoUpload from '../components/PhotoUpload';
@@ -207,7 +207,7 @@ const OPENROUTER_FREE_MODELS = [
 export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { refreshPoliticians, user, refreshUser } = useAuth();
   const w = useW();
-  const [tab, setTab] = useState<'overview' | 'access' | 'reports' | 'users' | 'api-keys'>('overview');
+  const [tab, setTab] = useState<'overview' | 'access' | 'reports' | 'users' | 'api-keys' | 'training'>('overview');
   const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [overview, setOverview] = useState<PoliticianOverview[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -883,6 +883,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             { key: 'reports', label: 'Reports', icon: FileBarChart2 },
             { key: 'users', label: 'Users', icon: Users },
             { key: 'api-keys', label: 'API Keys', icon: Key },
+            { key: 'training', label: 'AI Training', icon: Brain },
           ] as const).map(t => {
             const Icon = t.icon;
             const isActive = tab === t.key;
@@ -1392,6 +1393,8 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
               )}
             </div>
           </div>
+        ) : tab === 'training' ? (
+          <AITrainingTab politicians={politicians.map(p => ({ id: String(p.id), full_name: p.full_name, party: p.party || '' }))} />
         ) : tab === 'api-keys' ? (
           <ApiKeysTab
             apiKeys={apiKeys}

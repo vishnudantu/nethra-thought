@@ -1,7 +1,7 @@
 // Shared layout primitives used by EVERY module
 import { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Sparkles, X } from 'lucide-react';
+import { Loader2, Sparkles, X, ThumbsUp, ThumbsDown, Check } from 'lucide-react';
 
 // ── Responsive hook ───────────────────────────────────────────
 import { useState, useEffect } from 'react';
@@ -44,7 +44,27 @@ export function Stat({ label, value, color, icon: Icon }: { label: string; value
 }
 
 // ── AI Panel ───────────────────────────────────────────────────
-export function AIPanel({ title, content, onClose, loading }: { title?: string; content?: string; onClose?: () => void; loading?: boolean }) {
+export function AIPanel({ title, content, onClose, loading, endpoint, politicianId }: { 
+  title?: string; content?: string; onClose?: () => void; loading?: boolean;
+  endpoint?: string; politicianId?: number;
+}) {
+  const [fed, setFed] = useState<'positive' | 'negative' | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function sendFeedback(type: 'positive' | 'negative') {
+    if (!content || !endpoint) return;
+    setSaving(true);
+    try {
+      await fetch('/api/ai-training/feedback', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, ai_output: content, feedback: type, politician_id: politicianId }),
+      });
+      setFed(type);
+    } catch (_) {}
+    setSaving(false);
+  }
+
   return (
     <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} style={T.ai}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: loading ? 0 : 10 }}>
@@ -54,7 +74,28 @@ export function AIPanel({ title, content, onClose, loading }: { title?: string; 
             {loading ? 'AI Thinking...' : (title || 'AI Analysis')}
           </span>
         </div>
-        {onClose && !loading && <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', padding: 0 }}><X size={13} /></button>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {!loading && content && endpoint && !fed && (
+            <>
+              <button onClick={() => sendFeedback('positive')} disabled={saving}
+                style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}
+                title="This output is good — train AI">
+                <ThumbsUp size={11} />
+              </button>
+              <button onClick={() => sendFeedback('negative')} disabled={saving}
+                style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}
+                title="This output needs improvement">
+                <ThumbsDown size={11} />
+              </button>
+            </>
+          )}
+          {fed && (
+            <span style={{ fontSize: 10, color: fed === 'positive' ? '#00c864' : '#ff7777', display: 'flex', alignItems: 'center', gap: 3 }}>
+              {fed === 'positive' ? <><ThumbsUp size={10} /> Saved</> : <><ThumbsDown size={10} /> Noted</>}
+            </span>
+          )}
+          {onClose && !loading && <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer', padding: 0, marginLeft: 2 }}><X size={13} /></button>}
+        </div>
       </div>
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>

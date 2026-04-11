@@ -2670,6 +2670,125 @@ app.delete('/api/founder/politicians/:id/photo', authMiddleware, async (req, res
   }
 });
 
+
+// ── AI TRAINING CONTEXT ──────────────────────────────────────────────────────
+
+// GET all context profiles (super admin)
+app.get('/api/ai-training/contexts', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const { scope, scope_id } = req.query;
+    let sql = 'SELECT * FROM ai_context_profiles WHERE is_active = 1';
+    const params = [];
+    if (scope) { sql += ' AND scope = ?'; params.push(scope); }
+    if (scope_id) { sql += ' AND scope_id = ?'; params.push(scope_id); }
+    sql += ' ORDER BY scope, scope_id, context_type, created_at';
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET context summary for a politician
+app.get('/api/ai-training/summary/:politicianId', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const summary = await getContextSummary(parseInt(req.params.politicianId));
+    res.json(summary);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST create context profile
+app.post('/api/ai-training/contexts', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const { scope, scope_id, context_type, title, content } = req.body;
+    if (!scope || !context_type || !title || !content) {
+      return res.status(400).json({ error: 'scope, context_type, title, content required' });
+    }
+    const [result] = await pool.query(
+      'INSERT INTO ai_context_profiles (scope, scope_id, context_type, title, content, created_by) VALUES (?,?,?,?,?,?)',
+      [scope, scope_id || null, context_type, title, content, req.user.id]
+    );
+    clearContextCache(scope, scope_id);
+    res.json({ id: result.insertId, success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT update context profile
+app.put('/api/ai-training/contexts/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const { title, content, is_active } = req.body;
+    const [[existing]] = await pool.query('SELECT scope, scope_id FROM ai_context_profiles WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    await pool.query(
+      'UPDATE ai_context_profiles SET title=?, content=?, is_active=?, updated_at=NOW() WHERE id=?',
+      [title, content, is_active ?? 1, req.params.id]
+    );
+    clearContextCache(existing.scope, existing.scope_id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE context profile
+app.delete('/api/ai-training/contexts/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const [[existing]] = await pool.query('SELECT scope, scope_id FROM ai_context_profiles WHERE id = ?', [req.params.id]);
+    await pool.query('UPDATE ai_context_profiles SET is_active = 0 WHERE id = ?', [req.params.id]);
+    if (existing) clearContextCache(existing.scope, existing.scope_id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET parties list (for party context creation)
+app.get('/api/ai-training/parties', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const [rows] = await pool.query('SELECT DISTINCT party FROM politician_profiles WHERE party IS NOT NULL ORDER BY party');
+    res.json(rows.map(r => r.party));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET feedback for a politician
+app.get('/api/ai-training/feedback', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const { politician_id, feedback, limit = 20 } = req.query;
+    let sql = 'SELECT * FROM ai_feedback WHERE 1=1';
+    const params = [];
+    if (politician_id) { sql += ' AND politician_id = ?'; params.push(parseInt(politician_id)); }
+    if (feedback) { sql += ' AND feedback = ?'; params.push(feedback); }
+    sql += ' ORDER BY created_at DESC LIMIT ?';
+    params.push(parseInt(limit));
+    const [rows] = await pool.query(sql, params);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST save AI feedback (from any module)
+app.post('/api/ai-training/feedback', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin'
+      ? (req.body.politician_id || req.user.politician_id)
+      : req.user.politician_id;
+    const { endpoint, prompt_summary, ai_output, feedback, feedback_note } = req.body;
+    if (!ai_output || !feedback) return res.status(400).json({ error: 'ai_output and feedback required' });
+    await saveAiFeedback({ politicianId: polId, endpoint, promptSummary: prompt_summary, aiOutput: ai_output, feedback, feedbackNote: feedback_note, reviewedBy: req.user.id });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET preview what context a politician's AI actually sees
+app.post('/api/ai-training/preview', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+    const { politician_id, endpoint = 'general' } = req.body;
+    const system = await buildContextualSystem('You are a helpful political intelligence assistant.', parseInt(politician_id), endpoint);
+    res.json({ system_prompt: system, char_count: system.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Mistral\n`);

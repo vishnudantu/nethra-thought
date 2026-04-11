@@ -5,6 +5,7 @@
  */
 import pool from '../db.js';
 import { getApiKey } from './secretStore.js';
+import { buildContextualSystem } from './aiContext.js';
 
 async function getSavedModel(provider) {
   try {
@@ -94,7 +95,14 @@ export async function aiChat({ messages, system, politicianId = null, endpoint =
   if (savedLang && savedLang !== 'english' && system) {
     system = system + `\n\nIMPORTANT: Respond in ${savedLang} language.`;
   }
-  const sys = system || 'You are a helpful political intelligence assistant for an Indian politician.';
+
+  // Inject party + politician training context
+  const sys = await buildContextualSystem(
+    system || 'You are a helpful political intelligence assistant for an Indian politician.',
+    politicianId,
+    endpoint
+  );
+
   const chain = await loadKeys(politicianId, endpoint);
 
   if (!chain.length) {
@@ -212,7 +220,11 @@ async function callProvider(name, key, system, messages, maxTokens, temperature,
 
 // Streaming for chat endpoint
 export async function aiStream({ messages, system, politicianId, endpoint, res }) {
-  const sys = system || 'You are a helpful political intelligence assistant for an Indian politician.';
+  const sys = await buildContextualSystem(
+    system || 'You are a helpful political intelligence assistant for an Indian politician.',
+    politicianId,
+    endpoint
+  );
   const chain = await loadKeys(politicianId, endpoint);
   if (!chain.length) throw new Error('No AI key configured.');
 
