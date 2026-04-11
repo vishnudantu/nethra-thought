@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Star, CheckCircle2, XCircle, Loader2, Trash2, Phone, CreditCard,
@@ -6,6 +6,7 @@ import {
   AlertTriangle, Users, Building2, Vote, Tag
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { useW, isMob } from '../components/ui/ModuleLayout';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Pilgrim {
@@ -42,8 +43,12 @@ const mkPilgrim = (): Pilgrim => ({
   occupation:'', notes:'', validation:'idle', validation_msg:'', aadhaar_last4:'',
 });
 const fmtAadhaar = (v:string) => {
+  // Strip everything non-digit first
   const d = v.replace(/\D/g,'').slice(0,12);
-  return d.replace(/(\d{4})(\d{0,4})(\d{0,4})/,(_,a,b,c)=>[a,b,c].filter(Boolean).join(' '));
+  // Format as XXXX XXXX XXXX
+  if (d.length <= 4) return d;
+  if (d.length <= 8) return d.slice(0,4) + ' ' + d.slice(4);
+  return d.slice(0,4) + ' ' + d.slice(4,8) + ' ' + d.slice(8);
 };
 
 // ── Styles ─────────────────────────────────────────────────────
@@ -55,6 +60,7 @@ const BTN: React.CSSProperties = {background:'linear-gradient(135deg,#00d4aa,#1e
 
 export default function Darshan() {
   const { session } = useAuth();
+  const w = useW();
   const token = session?.access_token || localStorage.getItem('nethra_token') || '';
   const [quota, setQuota] = useState<Quota>({used:0,remaining:6,max:6,date:'',can_book:true});
   const [groups, setGroups] = useState<{ref:string;id:number;status:string;pilgrims:PilgrimRecord[]}[]>([]);
@@ -104,14 +110,24 @@ export default function Darshan() {
     setVisitDate(t.toISOString().slice(0,10));
   },[]);
 
-  const up=(id:string,patch:Partial<Pilgrim>)=>setPilgrims(prev=>prev.map(p=>p.id===id?{...p,...patch}:p));
+  // Keep a ref that always holds current pilgrims — used by validate() to avoid stale closures
+  const pilgrimsRef = useRef<Pilgrim[]>([]);
+  const up=(id:string,patch:Partial<Pilgrim>)=>setPilgrims(prev=>{
+    const next=prev.map(p=>p.id===id?{...p,...patch}:p);
+    pilgrimsRef.current=next;
+    return next;
+  });
+  // Sync ref when pilgrims changes from external sources (setCount etc)
+  useEffect(()=>{pilgrimsRef.current=pilgrims;},[pilgrims]);
   const addFeed=(id:string,text:string,color:string)=>setFeed(f=>[{id:id+Date.now(),text,color},...f].slice(0,12));
 
   async function validate(id:string){
-    const p=pilgrims.find(x=>x.id===id); if(!p||p.validation==='checking') return;
+    // Use ref to always get current state — avoids stale closure bug
+    const current = pilgrimsRef.current;
+    const p=current.find(x=>x.id===id); if(!p||p.validation==='checking') return;
     const ca=p.aadhaar.replace(/\s/g,''); const cp=p.phone.replace(/\D/g,'').slice(-10);
     if (ca.length!==12||cp.length!==10) return;
-    const idx=pilgrims.findIndex(x=>x.id===id)+1;
+    const idx=current.findIndex(x=>x.id===id)+1;
     up(id,{validation:'checking',validation_msg:''});
     addFeed(id,`Checking Pilgrim ${idx}...`,'#64b5f6');
     try {
@@ -129,18 +145,15 @@ export default function Darshan() {
   }
 
   function onAadhaar(id:string,v:string){ up(id,{aadhaar:fmtAadhaar(v),validation:'idle',validation_msg:'',aadhaar_last4:''}); }
-  function onAadhaarBlur(id:string){ const p=pilgrims.find(x=>x.id===id); if(p&&p.aadhaar.replace(/\s/g,'').length===12&&p.phone.length===10) validate(id); }
+  function onAadhaarBlur(id:string){ const p=pilgrimsRef.current.find(x=>x.id===id); if(p&&p.aadhaar.replace(/\s/g,'').length===12&&p.phone.replace(/\D/g,'').length===10) validate(id); }
   function onPhone(id:string,v:string){
-    const d=v.replace(/\D/g,'').slice(0,10); up(id,{phone:d,validation:'idle',validation_msg:''});
-    // Use functional update to avoid stale closure - check current state
-    setPilgrims(prev=>{
-      const p=prev.find(x=>x.id===id);
-      if (p&&p.aadhaar.replace(/\s/g,'').length===12&&d.length===10){
-        // Trigger validation after state settles
-        setTimeout(()=>validate(id),400);
-      }
-      return prev;
-    });
+    const d=v.replace(/\D/g,'').slice(0,10);
+    up(id,{phone:d,validation:'idle',validation_msg:''});
+    // Read aadhaar from ref (always current) then trigger validation
+    const currentAadhaar = pilgrimsRef.current.find(x=>x.id===id)?.aadhaar || '';
+    if (currentAadhaar.replace(/\s/g,'').length===12 && d.length===10){
+      setTimeout(()=>validate(id),300);
+    }
   }
 
   function setCount(n:number){ if(n<1||n>quota.remaining) return; setPilgrims(prev=>n>prev.length?[...prev,...Array(n-prev.length).fill(null).map(mkPilgrim)]:prev.slice(0,n)); }
@@ -202,7 +215,7 @@ export default function Darshan() {
   const R=50,circ=2*Math.PI*R;
 
   return (
-    <div style={{display:'grid',gridTemplateColumns:'var(--darshan-cols, 260px 1fr 300px)',gap:14,minHeight:'calc(100vh - 120px)'}}>
+    <div style={{display:isMob(w)?'flex':'grid',flexDirection:'column',gridTemplateColumns:'260px 1fr 300px',gap:14,minHeight:isMob(w)?'auto':'calc(100vh - 120px)',alignItems:'start'}}>
       <style>{`
         @media (max-width: 1023px) { :root { --darshan-cols: 1fr; } .darshan-col2, .darshan-col3 { display: none !important; } }
         @media (min-width: 1024px) { :root { --darshan-cols: 260px 1fr 300px; } }
@@ -316,7 +329,7 @@ export default function Darshan() {
 
               {/* IDENTITY */}
               <div style={{fontSize:9,fontWeight:800,color:'#8899bb',letterSpacing:1,textTransform:'uppercase',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><User size={9}/> Identity</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+              <div style={{display:'grid',gridTemplateColumns:isMob(w)?'1fr':'1fr 1fr',gap:10,marginBottom:14}}>
                 <div style={{gridColumn:'1/-1'}}>
                   <label style={L}>Full Name (as on Aadhaar) *</label>
                   <input value={p.full_name} onChange={e=>up(p.id,{full_name:e.target.value})} placeholder="Full name" style={I}/>
@@ -324,8 +337,19 @@ export default function Darshan() {
                 <div>
                   <label style={L}><CreditCard size={9} style={{display:'inline',marginRight:3}}/>Aadhaar *</label>
                   <div style={{display:'flex',gap:6}}>
-                    <input value={p.aadhaar} onChange={e=>onAadhaar(p.id,e.target.value)} onBlur={()=>onAadhaarBlur(p.id)}
-                      placeholder="0000 0000 0000" maxLength={14} style={{...I,fontFamily:'monospace',letterSpacing:2,flex:1}}/>
+                    <input 
+                      value={p.aadhaar} 
+                      onChange={e=>onAadhaar(p.id,e.target.value)} 
+                      onBlur={()=>onAadhaarBlur(p.id)}
+                      placeholder="0000 0000 0000" 
+                      maxLength={14}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      style={{...I,fontFamily:'monospace',letterSpacing:1,flex:1,minWidth:0}}/>
                     {p.aadhaar.replace(/\s/g,'').length===12&&p.phone.length===10&&p.validation!=='valid'&&(
                       <button onClick={()=>validate(p.id)} disabled={p.validation==='checking'}
                         style={{padding:'0 10px',borderRadius:8,background:'rgba(0,212,170,0.1)',border:'1px solid rgba(0,212,170,0.25)',color:'#00d4aa',fontSize:10,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>
@@ -366,7 +390,7 @@ export default function Darshan() {
 
               {/* LOCATION */}
               <div style={{fontSize:9,fontWeight:800,color:'#8899bb',letterSpacing:1,textTransform:'uppercase',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><MapPin size={9}/> Location & Constituency</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+              <div style={{display:'grid',gridTemplateColumns:isMob(w)?'1fr':'1fr 1fr',gap:10,marginBottom:14}}>
                 <div>
                   <label style={L}>Mandal *</label>
                   <input value={p.mandal} onChange={e=>up(p.id,{mandal:e.target.value})} placeholder="e.g. Kuppam" style={I}/>
@@ -395,7 +419,7 @@ export default function Darshan() {
 
               {/* POLITICAL CONNECTION */}
               <div style={{fontSize:9,fontWeight:800,color:'#8899bb',letterSpacing:1,textTransform:'uppercase',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><Tag size={9}/> Political Connection</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              <div style={{display:'grid',gridTemplateColumns:isMob(w)?'1fr':'1fr 1fr',gap:10}}>
                 <div style={{gridColumn:'1/-1'}}>
                   <label style={L}>Relationship to Politician</label>
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -492,7 +516,7 @@ export default function Darshan() {
               const mandals=[...new Set(all.map(p=>p.mandal).filter(Boolean))];
               return (<div style={C}>
                 <div style={{fontSize:10,fontWeight:700,color:'#8899bb',textTransform:'uppercase',letterSpacing:0.8,marginBottom:10}}>Today's Intel</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <div style={{display:'grid',gridTemplateColumns:isMob(w)?'1fr':'1fr 1fr',gap:8}}>
                   <div style={{background:'rgba(0,200,100,0.06)',border:'1px solid rgba(0,200,100,0.12)',borderRadius:8,padding:'8px 10px'}}>
                     <div style={{fontSize:18,fontWeight:800,color:'#00c864',fontFamily:'Space Grotesk'}}>{workers}</div>
                     <div style={{fontSize:9,color:'#8899bb'}}>Party workers</div>
