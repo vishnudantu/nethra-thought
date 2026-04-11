@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, X, Scale, CheckCircle, AlertCircle, ThumbsUp, ThumbsDown, Minus, FileText, CreditCard as Edit2, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, X, Scale, CheckCircle, AlertCircle, ThumbsUp, ThumbsDown, Minus, FileText, CreditCard as Edit2, Trash2, Eye, Sparkles, Loader2 } from 'lucide-react';
+import { T, AIPanel, getToken } from '../components/ui/ModuleLayout';
 import { api } from '../lib/api';
 
 interface Bill {
@@ -199,6 +200,22 @@ export default function Legislative() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [aiInsight, setAiInsight] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+
+  async function getDraftQuestion() {
+    setAnalyzing(true);
+    try {
+      const r = await fetch('/api/parliamentary/ai-question', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: 'key constituency issues', ministry: 'relevant state ministry', question_type: 'starred' }),
+      });
+      const d = await r.json();
+      setAiInsight(d.question || '');
+    } catch (_) {}
+    setAnalyzing(false);
+  }
   const [selected, setSelected] = useState<Partial<Bill> | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');

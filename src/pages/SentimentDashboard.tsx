@@ -1,226 +1,153 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, TrendingUp, TrendingDown, BarChart3, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { TrendingUp, TrendingDown, Minus, Zap, RefreshCw, Loader2, Activity, Newspaper, AlertTriangle, Star } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
-import type { SentimentScore } from '../lib/types';
-
-function SentimentModal({ score, onClose, onSave }: {
-  score: Partial<SentimentScore> | null;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  const [form, setForm] = useState({
-    score_date: score?.score_date || new Date().toISOString().split('T')[0],
-    overall_score: score?.overall_score || 60,
-    news_score: score?.news_score || 60,
-    social_score: score?.social_score || 60,
-    whatsapp_score: score?.whatsapp_score || 60,
-    grievance_score: score?.grievance_score || 60,
-    ground_score: score?.ground_score || 60,
-  });
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    const payload = {
-      ...form,
-      channel_breakdown: {
-        news: form.news_score,
-        social: form.social_score,
-        whatsapp: form.whatsapp_score,
-        grievance: form.grievance_score,
-        ground: form.ground_score,
-      },
-    };
-    if (score?.id) {
-      await api.update('sentiment_scores', score.id, payload);
-    } else {
-      await api.create('sentiment_scores', payload);
-    }
-    setSaving(false);
-    onSave();
-    onClose();
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="glass-card rounded-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]"
-        style={{ border: '1px solid rgba(255,255,255,0.12)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <h2 className="font-bold text-lg" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
-            {score?.id ? 'Edit Sentiment Score' : 'Add Sentiment Score'}
-          </h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(255,255,255,0.08)' }}>
-            <X size={16} style={{ color: '#8899bb' }} />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Date</label>
-            <input type="date" className="input-field" value={form.score_date}
-              onChange={e => setForm({ ...form, score_date: e.target.value })} />
-          </div>
-          {[
-            ['Overall Score', 'overall_score'],
-            ['News Score', 'news_score'],
-            ['Social Score', 'social_score'],
-            ['WhatsApp Score', 'whatsapp_score'],
-            ['Grievance Score', 'grievance_score'],
-            ['Ground Score', 'ground_score'],
-          ].map(([label, key]) => (
-            <div key={key} className="flex items-center gap-3">
-              <div style={{ fontSize: 12, color: '#8899bb', width: 140 }}>{label}</div>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                className="input-field"
-                value={form[key as keyof typeof form]}
-                onChange={e => setForm({ ...form, [key]: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-3 p-5 border-t border-white/10">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button onClick={handleSave} className="btn-primary flex-1" disabled={saving}>
-            {saving ? 'Saving...' : score?.id ? 'Update' : 'Save'}
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
+import { T, AIPanel, Stat, Loading, getToken, useW, isMob, isTab } from '../components/ui/ModuleLayout';
 
 export default function SentimentDashboard() {
-  const [scores, setScores] = useState<SentimentScore[]>([]);
+  const w = useW();
+  const [scores, setScores] = useState<any[]>([]);
+  const [current, setCurrent] = useState<any>(null);
+  const [mentions, setMentions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selected, setSelected] = useState<Partial<SentimentScore> | null>(null);
+  const [aiSummary, setAiSummary] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
 
-  async function fetchScores() {
+  async function load() {
     setLoading(true);
-    const data = await api.list('sentiment_scores', { order: 'score_date', dir: 'DESC', limit: '30' }) as SentimentScore[];
-    setScores(data || []);
+    try {
+      const [hist, cur, med] = await Promise.all([
+        api.get('/api/sentiment/history'),
+        api.get('/api/sentiment/current'),
+        api.list('media_mentions', { order: 'published_at', dir: 'DESC', limit: '15' }),
+      ]);
+      setScores((hist as any[]) || []);
+      setCurrent(cur);
+      setMentions((med as any[]) || []);
+    } catch (_) {}
     setLoading(false);
   }
 
-  useEffect(() => { fetchScores(); }, []);
+  async function analyse() {
+    setAnalyzing(true);
+    try {
+      const r = await fetch('/api/sentiment/ai-summary', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+      });
+      const d = await r.json();
+      setAiSummary(d.summary || '');
+    } catch (_) {}
+    setAnalyzing(false);
+  }
 
-  const latest = scores[0];
-  const prev = scores[1];
-  const delta = latest && prev ? latest.overall_score - prev.overall_score : 0;
+  useEffect(() => { load(); }, []);
 
-  const trend = scores.slice(0, 14).reverse();
+  const score = current?.overall_score || 0;
+  const scoreColor = score >= 70 ? '#00c864' : score >= 45 ? '#ffa726' : '#ff5555';
+  const trend = scores.length >= 2 ? scores[0]?.overall_score - scores[1]?.overall_score : 0;
+  const TrendIcon = trend > 0 ? TrendingUp : trend < 0 ? TrendingDown : Minus;
+  const trendColor = trend > 0 ? '#00c864' : trend < 0 ? '#ff5555' : '#8899bb';
+
+  const chartData = [...scores].reverse().map(s => ({
+    date: new Date(s.score_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+    score: s.overall_score,
+  }));
+
+  const sentCounts = { Positive: mentions.filter(m => m.sentiment === 'Positive').length, Negative: mentions.filter(m => m.sentiment === 'Negative').length, Neutral: mentions.filter(m => m.sentiment === 'Neutral').length };
+
+  if (loading) return <Loading text="Loading sentiment data..." />;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #00d4aa, #1e88e5)' }}>
-            <BarChart3 size={18} style={{ color: '#060b18' }} />
-          </div>
-          <div>
-            <h2 className="font-bold text-xl" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Sentiment Dashboard</h2>
-            <p style={{ fontSize: 12, color: '#8899bb' }}>Track constituency mood and trend signals</p>
-          </div>
-        </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setSelected(null); setModalOpen(true); }}>
-          <Plus size={14} /> Add Score
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Top stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10 }}>
+        <Stat label="Sentiment Score" value={`${score}/100`} color={scoreColor} icon={Activity} />
+        <Stat label="Trend (vs yesterday)" value={`${trend >= 0 ? '+' : ''}${trend}`} color={trendColor} icon={TrendIcon} />
+        <Stat label="Media Mentions" value={mentions.length} color="#42a5f5" icon={Newspaper} />
+        <Stat label="Negative Coverage" value={sentCounts.Negative} color="#ff5555" icon={AlertTriangle} />
+      </div>
+
+      {/* AI Analysis */}
+      {(aiSummary || analyzing) && (
+        <AIPanel title="Sentiment Analysis" content={aiSummary} loading={analyzing} onClose={() => setAiSummary('')} />
+      )}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={analyse} disabled={analyzing}
+          style={{ ...T.primary, opacity: analyzing ? 0.65 : 1 }}>
+          {analyzing ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Analysing...</> : <><Zap size={13} />AI Analysis</>}
         </button>
+        <button onClick={load} style={T.ghost}><RefreshCw size={13} />Refresh</button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass-card rounded-2xl p-5">
-          <div style={{ fontSize: 12, color: '#8899bb' }}>Overall Mood Index</div>
-          <div style={{ fontSize: 40, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>
-            {loading ? '—' : (latest?.overall_score ?? 0)}
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            {delta >= 0 ? <TrendingUp size={14} style={{ color: '#00c864' }} /> : <TrendingDown size={14} style={{ color: '#ff5555' }} />}
-            <span style={{ fontSize: 12, color: delta >= 0 ? '#00c864' : '#ff5555' }}>
-              {delta >= 0 ? '+' : ''}{delta} vs last update
-            </span>
-          </div>
+      {/* Chart + breakdown */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr' : '1fr 300px', gap: 14 }}>
+        <div style={{ ...T.card, padding: '18px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#f0f4ff', marginBottom: 14 }}>7-Day Sentiment Trend</div>
+          {chartData.length > 1 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="date" tick={{ fill: '#8899bb', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fill: '#8899bb', fontSize: 10 }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip contentStyle={{ background: '#0d1628', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f0f4ff', fontSize: 12 }} />
+                <Line type="monotone" dataKey="score" stroke="#00d4aa" strokeWidth={2.5} dot={{ fill: '#00d4aa', r: 4 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8899bb', fontSize: 13 }}>Not enough data yet — check back tomorrow</div>
+          )}
         </div>
-        {[
-          { label: 'News', value: latest?.news_score ?? 0, color: '#42a5f5' },
-          { label: 'Social', value: latest?.social_score ?? 0, color: '#00d4aa' },
-          { label: 'WhatsApp', value: latest?.whatsapp_score ?? 0, color: '#00c864' },
-          { label: 'Grievance', value: latest?.grievance_score ?? 0, color: '#ffa726' },
-          { label: 'Ground', value: latest?.ground_score ?? 0, color: '#ab47bc' },
-        ].slice(0, 2).map(card => (
-          <div key={card.label} className="glass-card rounded-2xl p-5">
-            <div style={{ fontSize: 12, color: '#8899bb' }}>{card.label} Score</div>
-            <div style={{ fontSize: 32, fontWeight: 800, color: card.color, fontFamily: 'Space Grotesk' }}>
-              {loading ? '—' : card.value}
-            </div>
-          </div>
-        ))}
-      </div>
 
-      <div className="glass-card rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>14‑Day Trend</h3>
-        </div>
-        {loading ? (
-          <div className="shimmer h-24 rounded-xl" />
-        ) : (
-          <div className="flex items-end gap-2 h-28">
-            {trend.map((t, i) => (
-              <div key={t.id} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full rounded-t-md" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                  <motion.div
-                    className="w-full rounded-t-md"
-                    style={{ height: `${(t.overall_score / 100) * 100}%`, background: 'linear-gradient(180deg, #00d4aa, #1e88e5)' }}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${(t.overall_score / 100) * 100}%` }}
-                    transition={{ delay: i * 0.03, duration: 0.5 }}
-                  />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Score ring */}
+          <div style={{ ...T.card, padding: 18, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14 }}>Today</div>
+            <svg width="110" height="110" style={{ transform: 'rotate(-90deg)', display: 'block', margin: '0 auto' }}>
+              <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="10" />
+              <circle cx="55" cy="55" r="46" fill="none" stroke={scoreColor} strokeWidth="10"
+                strokeDasharray={`${2 * Math.PI * 46}`} strokeDashoffset={`${2 * Math.PI * 46 * (1 - score / 100)}`}
+                strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
+            </svg>
+            <div style={{ fontSize: 30, fontWeight: 900, color: scoreColor, fontFamily: 'Space Grotesk', marginTop: 8 }}>{score}</div>
+            <div style={{ fontSize: 11, color: '#8899bb' }}>/ 100</div>
+          </div>
+          {/* Sentiment breakdown */}
+          <div style={{ ...T.card, padding: 16 }}>
+            {[['Positive', '#00c864', sentCounts.Positive], ['Neutral', '#8899bb', sentCounts.Neutral], ['Negative', '#ff5555', sentCounts.Negative]].map(([l, c, v]) => (
+              <div key={l as string} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, width: 55, color: '#8899bb' }}>{l}</span>
+                <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: mentions.length ? `${(v as number) / mentions.length * 100}%` : '0%', background: c as string, transition: 'width 0.6s', borderRadius: 3 }} />
                 </div>
-                <span style={{ fontSize: 9, color: '#8899bb' }}>{new Date(t.score_date).getDate()}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: c as string, width: 20, textAlign: 'right' }}>{v}</span>
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      <div className="glass-card rounded-2xl p-5">
-        <h3 className="font-semibold mb-3" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Channel Breakdown</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          {[
-            { label: 'News', value: latest?.news_score ?? 0, color: '#42a5f5' },
-            { label: 'Social', value: latest?.social_score ?? 0, color: '#00d4aa' },
-            { label: 'WhatsApp', value: latest?.whatsapp_score ?? 0, color: '#00c864' },
-            { label: 'Grievance', value: latest?.grievance_score ?? 0, color: '#ffa726' },
-            { label: 'Ground', value: latest?.ground_score ?? 0, color: '#ab47bc' },
-          ].map(card => (
-            <div key={card.label} className="text-center p-3 rounded-xl"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: card.color, fontFamily: 'Space Grotesk' }}>{card.value}</div>
-              <div style={{ fontSize: 11, color: '#8899bb' }}>{card.label}</div>
-            </div>
-          ))}
         </div>
       </div>
 
-      <AnimatePresence>
-        {modalOpen && (
-          <SentimentModal
-            score={selected}
-            onClose={() => { setModalOpen(false); setSelected(null); }}
-            onSave={fetchScores}
-          />
-        )}
-      </AnimatePresence>
+      {/* Media feed */}
+      <div style={{ ...T.card, padding: '14px 0' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#f0f4ff', padding: '0 16px', marginBottom: 10 }}>Media Feed</div>
+        {mentions.length === 0
+          ? <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: '#8899bb' }}>No media mentions yet. Run OmniScan to pull coverage.</div>
+          : mentions.map((m, i) => {
+            const sc = m.sentiment === 'Positive' ? '#00c864' : m.sentiment === 'Negative' ? '#ff5555' : '#8899bb';
+            return (
+              <div key={m.id || i} style={{ padding: '11px 16px', borderBottom: i < mentions.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <span style={{ fontSize: 9, padding: '3px 7px', borderRadius: 5, background: `${sc}18`, color: sc, fontWeight: 700, flexShrink: 0, marginTop: 2, textTransform: 'uppercase' }}>{m.sentiment}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: '#f0f4ff', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.headline}</div>
+                  <div style={{ fontSize: 11, color: '#8899bb', marginTop: 3 }}>{m.source} · {m.published_at ? new Date(m.published_at).toLocaleDateString('en-IN') : ''}</div>
+                </div>
+                {m.url && <a href={m.url} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#42a5f5', flexShrink: 0, marginTop: 2 }}>↗</a>}
+              </div>
+            );
+          })}
+      </div>
     </div>
   );
 }

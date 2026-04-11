@@ -1,220 +1,196 @@
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Plus, X, MapPin, FileAudio, Sparkles } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { Mic, MicOff, Zap, FileText, MapPin, User, Loader2, Plus, RefreshCw, Radio } from 'lucide-react';
 import { api } from '../lib/api';
-import type { VoiceReport } from '../lib/types';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
 
-const CLASSIFICATIONS = ['Grievance', 'Project Update', 'Media Report', 'Field Intel', 'General'];
+interface VoiceReport { id: string; reporter_name: string; reporter_role?: string; classification: string; transcript: string; location?: string; created_at: string; }
 
-function VoiceModal({ report, onClose, onSave }: {
-  report: Partial<VoiceReport> | null;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  const [form, setForm] = useState({
-    reporter_name: report?.reporter_name || '',
-    reporter_role: report?.reporter_role || '',
-    transcript: report?.transcript || '',
-    classification: report?.classification || 'General',
-    language: report?.language || 'Telugu',
-    location: report?.location || '',
-    gps_lat: report?.gps_lat || '',
-    gps_lng: report?.gps_lng || '',
-  });
-  const [saving, setSaving] = useState(false);
+const CLASS_COLOR: Record<string, string> = { urgent: '#ff5555', incident: '#ffa726', feedback: '#42a5f5', update: '#00c864', general: '#8899bb' };
 
-  async function handleSave() {
-    if (!form.transcript) return;
-    setSaving(true);
-    const payload = {
-      ...form,
-      gps_lat: form.gps_lat ? parseFloat(String(form.gps_lat)) : null,
-      gps_lng: form.gps_lng ? parseFloat(String(form.gps_lng)) : null,
-    };
-    if (report?.id) await api.update('voice_reports', report.id, payload);
-    else await api.create('voice_reports', payload);
-    setSaving(false);
-    onSave();
-    onClose();
+export default function VoiceIntelligence() {
+  const w = useW();
+  const [reports, setReports] = useState<VoiceReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState('');
+  const [summarizing, setSummarizing] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [filter, setFilter] = useState('all');
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await api.list('voice_reports', { order: 'created_at', dir: 'DESC', limit: '50' });
+      setReports((data as VoiceReport[]) || []);
+    } catch (_) {}
+    setLoading(false);
   }
 
+  async function getSummary() {
+    setSummarizing(true);
+    try {
+      const r = await fetch('/api/voice/ai-summary', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+      });
+      const d = await r.json();
+      setSummary(d.summary || '');
+    } catch (_) {}
+    setSummarizing(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const urgent = reports.filter(r => r.classification === 'urgent').length;
+  const locations = [...new Set(reports.map(r => r.location).filter(Boolean))].length;
+  const filtered = filter === 'all' ? reports : reports.filter(r => r.classification === filter);
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="glass-card rounded-2xl w-full max-w-2xl overflow-y-auto max-h-[90vh]"
-        style={{ border: '1px solid rgba(255,255,255,0.12)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <h2 className="font-bold text-lg" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
-            {report?.id ? 'Edit Voice Report' : 'Add Voice Report'}
-          </h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(255,255,255,0.08)' }}>
-            <X size={16} style={{ color: '#8899bb' }} />
-          </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10 }}>
+        <Stat label="Total Reports" value={reports.length} color="#42a5f5" icon={FileText} />
+        <Stat label="Urgent Reports" value={urgent} color="#ff5555" icon={Radio} />
+        <Stat label="Locations Covered" value={locations} color="#00c864" icon={MapPin} />
+        <Stat label="Field Workers" value={[...new Set(reports.map(r => r.reporter_name))].length} color="#ab47bc" icon={User} />
+      </div>
+
+      {(summary || summarizing) && (
+        <AIPanel title="Field Intelligence Summary" content={summary} loading={summarizing} onClose={() => setSummary('')} />
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 5, flex: 1, flexWrap: 'wrap' }}>
+          {['all', 'urgent', 'incident', 'feedback', 'update', 'general'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={T.pill(filter === f)}>
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
         </div>
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Reporter Name</label>
-              <input className="input-field" value={form.reporter_name} onChange={e => setForm({ ...form, reporter_name: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Reporter Role</label>
-              <input className="input-field" value={form.reporter_role} onChange={e => setForm({ ...form, reporter_role: e.target.value })} />
-            </div>
+        <button onClick={getSummary} disabled={summarizing} style={{ ...T.primary, flexShrink: 0, opacity: summarizing ? 0.65 : 1 }}>
+          {summarizing ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Summarising...</> : <><Zap size={13} />AI Summary</>}
+        </button>
+        <button onClick={() => setShowForm(true)} style={{ ...T.ghost, flexShrink: 0 }}><Plus size={13} />Add Report</button>
+        <button onClick={load} style={{ ...T.ghost, flexShrink: 0, padding: '9px' }}><RefreshCw size={13} /></button>
+      </div>
+
+      {loading ? <Loading text="Loading field reports..." />
+        : filtered.length === 0 ? (
+          <Empty icon={Mic} title="No field reports yet" sub="Karyakartas can submit voice reports via the app or you can add them manually." action="Add First Report" onAction={() => setShowForm(true)} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filtered.map(r => {
+              const cc = CLASS_COLOR[r.classification] || '#8899bb';
+              return (
+                <motion.div key={r.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  style={{ ...T.card, padding: '14px 16px', borderLeft: r.classification === 'urgent' ? '3px solid #ff5555' : undefined }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: `${cc}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Mic size={15} style={{ color: cc }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff' }}>{r.reporter_name}</span>
+                        {r.reporter_role && <span style={{ fontSize: 11, color: '#8899bb' }}>{r.reporter_role}</span>}
+                        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 5, background: `${cc}15`, color: cc, fontWeight: 700, textTransform: 'uppercase', marginLeft: 'auto' }}>{r.classification}</span>
+                      </div>
+                      {r.location && <div style={{ fontSize: 11, color: '#8899bb', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={10} />{r.location}</div>}
+                      <p style={{ fontSize: 13, color: '#d0d8ee', margin: 0, lineHeight: 1.6 }}>{r.transcript}</p>
+                      <div style={{ fontSize: 11, color: '#8899bb', marginTop: 6 }}>{new Date(r.created_at).toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Classification</label>
-              <select className="input-field" value={form.classification} onChange={e => setForm({ ...form, classification: e.target.value })}>
-                {CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Language</label>
-              <select className="input-field" value={form.language} onChange={e => setForm({ ...form, language: e.target.value })}>
-                {['Telugu', 'English', 'Hindi', 'Urdu'].map(l => <option key={l}>{l}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Transcript *</label>
-            <textarea className="input-field" rows={4} value={form.transcript} onChange={e => setForm({ ...form, transcript: e.target.value })} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Location</label>
-            <input className="input-field" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>GPS Lat</label>
-              <input className="input-field" value={form.gps_lat} onChange={e => setForm({ ...form, gps_lat: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>GPS Lng</label>
-              <input className="input-field" value={form.gps_lng} onChange={e => setForm({ ...form, gps_lng: e.target.value })} />
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-3 p-5 border-t border-white/10">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button onClick={handleSave} className="btn-primary flex-1" disabled={saving}>
-            {saving ? 'Saving...' : report?.id ? 'Update' : 'Save'}
-          </button>
-        </div>
-      </motion.div>
+        )}
+
+      {showForm && (
+        <Modal onClose={() => setShowForm(false)} title="Add Field Report">
+          <AddReportForm onSave={() => { setShowForm(false); load(); }} />
+        </Modal>
+      )}
     </div>
   );
 }
 
-export default function VoiceIntelligence() {
-  const [reports, setReports] = useState<VoiceReport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selected, setSelected] = useState<Partial<VoiceReport> | null>(null);
+function AddReportForm({ onSave }: { onSave: () => void }) {
+  const [form, setForm] = useState({ reporter_name: '', reporter_role: 'Karyakarta', transcript: '', location: '', classification: 'general' });
+  const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const mediaRef = useRef<MediaRecorder | null>(null);
+  const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
-  async function fetchReports() {
-    setLoading(true);
-    const data = await api.list('voice_reports', { order: 'created_at', dir: 'DESC', limit: '50' }) as VoiceReport[];
-    setReports(data || []);
-    setLoading(false);
+  async function toggleRecord() {
+    if (recording && mediaRef.current) { mediaRef.current.stop(); setRecording(false); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: Blob[] = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = e => chunks.push(e.data);
+      mr.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          setBusy(true);
+          try {
+            const r = await fetch('/api/voice/transcribe', {
+              method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio_base64: base64, mimeType: 'audio/webm' }),
+            });
+            const d = await r.json();
+            if (d.transcript) f('transcript', d.transcript);
+          } catch (_) {}
+          setBusy(false);
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mr.start();
+      mediaRef.current = mr;
+      setRecording(true);
+    } catch (_) {}
   }
 
-  useEffect(() => { fetchReports(); }, []);
+  async function save() {
+    if (!form.reporter_name || !form.transcript) return;
+    setBusy(true);
+    await api.create('voice_reports', form);
+    setBusy(false);
+    onSave();
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #00d4aa, #42a5f5)' }}>
-            <Mic size={18} style={{ color: '#060b18' }} />
-          </div>
-          <div>
-            <h2 className="font-bold text-xl" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Voice Intelligence</h2>
-            <p style={{ fontSize: 12, color: '#8899bb' }}>Capture field voice reports and classify them instantly</p>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div><label style={T.label}>Reporter Name *</label><input value={form.reporter_name} onChange={e => f('reporter_name', e.target.value)} placeholder="Karyakarta name" style={T.input} /></div>
+        <div><label style={T.label}>Location</label><input value={form.location} onChange={e => f('location', e.target.value)} placeholder="Village / Mandal" style={T.input} /></div>
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <label style={{ ...T.label, margin: 0 }}>Report / Transcript *</label>
+          <button onClick={toggleRecord}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 8, background: recording ? 'rgba(255,85,85,0.12)' : 'rgba(0,212,170,0.08)', border: `1px solid ${recording ? 'rgba(255,85,85,0.3)' : 'rgba(0,212,170,0.2)'}`, color: recording ? '#ff5555' : '#00d4aa', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            {recording ? <><MicOff size={11} />Stop</> : <><Mic size={11} />Record</>}
+          </button>
         </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setSelected(null); setModalOpen(true); }}>
-          <Plus size={14} /> Add Voice Report
-        </button>
+        <textarea value={form.transcript} onChange={e => f('transcript', e.target.value)}
+          placeholder="Type the field report or use record button to transcribe voice..." rows={4}
+          style={{ ...T.input, resize: 'vertical' }} />
+        {busy && <div style={{ fontSize: 11, color: '#8899bb', marginTop: 4 }}>Transcribing...</div>}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Total Reports', value: reports.length, icon: FileAudio, color: '#42a5f5' },
-          { label: 'Grievance Reports', value: reports.filter(r => r.classification === 'Grievance').length, icon: Sparkles, color: '#ffa726' },
-          { label: 'Field Intel', value: reports.filter(r => r.classification === 'Field Intel').length, icon: MapPin, color: '#00d4aa' },
-        ].map((card, i) => (
-          <motion.div key={card.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-            className="glass-card rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${card.color}20` }}>
-                <card.icon size={16} style={{ color: card.color }} />
-              </div>
-            </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: card.color, fontFamily: 'Space Grotesk' }}>
-              {loading ? '—' : card.value}
-            </div>
-            <div style={{ fontSize: 11, color: '#8899bb' }}>{card.label}</div>
-          </motion.div>
-        ))}
+      <div>
+        <label style={T.label}>Classification</label>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {['urgent', 'incident', 'feedback', 'update', 'general'].map(c => (
+            <button key={c} onClick={() => f('classification', c)} style={T.pill(form.classification === c)}>{c}</button>
+          ))}
+        </div>
       </div>
-
-      <div className="space-y-3">
-        {loading ? Array(3).fill(0).map((_, i) => (
-          <div key={i} className="glass-card rounded-2xl p-5">
-            <div className="shimmer h-4 w-2/3 rounded mb-2" />
-            <div className="shimmer h-3 w-1/2 rounded" />
-          </div>
-        )) : reports.map((r, i) => (
-          <motion.div
-            key={r.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            className="glass-card-hover rounded-2xl p-5 cursor-pointer"
-            onClick={() => { setSelected(r); setModalOpen(true); }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(66,165,245,0.15)', border: '1px solid rgba(66,165,245,0.25)' }}>
-                <Mic size={16} style={{ color: '#42a5f5' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{r.reporter_name || 'Unknown Reporter'}</div>
-                  <span style={{ fontSize: 11, color: '#8899bb' }}>{r.reporter_role || 'Field Worker'}</span>
-                  <span className="px-2 py-0.5 rounded text-xs" style={{ background: 'rgba(0,212,170,0.15)', color: '#00d4aa' }}>
-                    {r.classification}
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: '#8899bb', marginTop: 4 }} className="line-clamp-2">
-                  {r.transcript}
-                </div>
-                <div className="flex items-center gap-2 mt-2" style={{ fontSize: 11, color: '#6677aa' }}>
-                  <MapPin size={12} /> {r.location || 'No location'}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <AnimatePresence>
-        {modalOpen && (
-          <VoiceModal
-            report={selected}
-            onClose={() => { setModalOpen(false); setSelected(null); }}
-            onSave={fetchReports}
-          />
-        )}
-      </AnimatePresence>
+      <button onClick={save} disabled={busy || !form.reporter_name || !form.transcript}
+        style={{ ...T.primary, justifyContent: 'center', width: '100%', opacity: busy || !form.reporter_name || !form.transcript ? 0.5 : 1 }}>
+        {busy ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Submit Report'}
+      </button>
     </div>
   );
 }

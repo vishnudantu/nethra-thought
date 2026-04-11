@@ -202,7 +202,11 @@ export default function Darshan() {
   const R=50,circ=2*Math.PI*R;
 
   return (
-    <div style={{display:'grid',gridTemplateColumns:'260px 1fr 300px',gap:14,height:'calc(100vh - 80px)',overflow:'hidden'}}>
+    <div style={{display:'grid',gridTemplateColumns:'var(--darshan-cols, 260px 1fr 300px)',gap:14,minHeight:'calc(100vh - 120px)'}}>
+      <style>{`
+        @media (max-width: 1023px) { :root { --darshan-cols: 1fr; } .darshan-col2, .darshan-col3 { display: none !important; } }
+        @media (min-width: 1024px) { :root { --darshan-cols: 260px 1fr 300px; } }
+      `}</style>
 
       {/* COL 1: QUOTA + HISTORY */}
       <div style={{display:'flex',flexDirection:'column',gap:12,overflow:'hidden'}}>

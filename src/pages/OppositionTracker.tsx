@@ -1,231 +1,208 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Eye, X, AlertTriangle, Search } from 'lucide-react';
+import { Plus, Shield, Zap, AlertTriangle, TrendingDown, Eye, X, Loader2, Sparkles } from 'lucide-react';
 import { api } from '../lib/api';
-import Badge from '../components/ui/Badge';
-import type { OppositionIntel } from '../lib/types';
+import { useAuth } from '../lib/auth';
+import { useBreakpoint, card, label, inputStyle, btnPrimary, aiPanel } from '../lib/responsive';
 
-const TYPES = ['Speech', 'Visit', 'Media', 'Social', 'Campaign', 'Policy', 'Other'];
-const SENTIMENTS = ['Positive', 'Neutral', 'Negative'];
+interface Intel {
+  id: string;
+  opponent_name: string;
+  activity_type: string;
+  description: string;
+  platform: string;
+  threat_level: number;
+  detected_at: string;
+  source_url?: string;
+}
 
-function IntelModal({ intel, onClose, onSave }: { intel: Partial<OppositionIntel> | null; onClose: () => void; onSave: () => void }) {
-  const [form, setForm] = useState({
-    opponent_name: intel?.opponent_name || '',
-    opponent_party: intel?.opponent_party || '',
-    opponent_constituency: intel?.opponent_constituency || '',
-    activity_type: intel?.activity_type || 'Speech',
-    description: intel?.description || '',
-    source: intel?.source || '',
-    detected_at: intel?.detected_at ? intel.detected_at.substring(0, 16) : new Date().toISOString().substring(0, 16),
-    sentiment_toward_us: intel?.sentiment_toward_us || 'Neutral',
-    threat_level: intel?.threat_level || 5,
-    ai_analysis: intel?.ai_analysis || '',
-  });
-  const [saving, setSaving] = useState(false);
+const ACTIVITY_TYPES = ['All','Attack Ad','Misinformation','Rally','Social Media','Press Conference','Door-to-Door','Policy Announcement'];
+const THREAT_COLORS = (n: number) => n >= 8 ? '#ff5555' : n >= 5 ? '#ffa726' : '#00c864';
 
-  async function handleSave() {
-    if (!form.opponent_name || !form.description) return;
-    setSaving(true);
-    if (intel?.id) await api.update('opposition_intelligence', intel.id, form);
-    else await api.create('opposition_intelligence', form);
-    setSaving(false);
-    onSave();
-    onClose();
+export default function OppositionTracker() {
+  const { session } = useAuth();
+  const { isMobile } = useBreakpoint();
+  const token = session?.access_token || localStorage.getItem('nethra_token') || '';
+  const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const [intel, setIntel] = useState<Intel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('All');
+  const [analysis, setAnalysis] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const data = await api.list('opposition_intelligence', { order: 'detected_at', dir: 'DESC', limit: '50' });
+    setIntel((data as Intel[]) || []);
+    setLoading(false);
   }
 
+  async function runAnalysis() {
+    setAnalyzing(true);
+    try {
+      const r = await fetch('/api/opposition/ai-analysis', { method: 'POST', headers: h });
+      const d = await r.json();
+      setAnalysis(d.analysis || '');
+    } catch (_) {}
+    setAnalyzing(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = filter === 'All' ? intel : intel.filter(i => i.activity_type === filter);
+  const highThreats = intel.filter(i => i.threat_level >= 7).length;
+  const avgThreat = intel.length ? Math.round(intel.reduce((s, i) => s + i.threat_level, 0) / intel.length) : 0;
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="glass-card rounded-2xl w-full max-w-2xl overflow-y-auto max-h-[90vh]"
-        style={{ border: '1px solid rgba(255,255,255,0.12)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <h2 className="font-bold text-lg" style={{ fontFamily: 'Space Grotesk', color: '#f0f4ff' }}>
-            {intel?.id ? 'Edit Opposition Intel' : 'Add Opposition Intel'}
-          </h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(255,255,255,0.08)' }}>
-            <X size={16} style={{ color: '#8899bb' }} />
-          </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 3}, 1fr)`, gap: 10 }}>
+        {[
+          { label: 'Total Signals', value: intel.length, color: '#42a5f5', icon: Eye },
+          { label: 'High Threats', value: highThreats, color: '#ff5555', icon: AlertTriangle },
+          { label: 'Avg Threat Level', value: `${avgThreat}/10`, color: avgThreat >= 7 ? '#ff5555' : avgThreat >= 4 ? '#ffa726' : '#00c864', icon: Shield },
+        ].map(s => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} style={{ ...card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${s.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={16} style={{ color: s.color }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: 'Space Grotesk', lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: '#8899bb', marginTop: 2 }}>{s.label}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* AI Analysis */}
+      {analysis && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={aiPanel}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={13} style={{ color: '#00d4aa' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#00d4aa' }}>AI THREAT ASSESSMENT</span>
+            </div>
+            <button onClick={() => setAnalysis('')} style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer' }}><X size={13} /></button>
+          </div>
+          <p style={{ fontSize: 13, color: '#d0d8ee', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{analysis}</p>
+        </motion.div>
+      )}
+
+      {/* Controls */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+          {ACTIVITY_TYPES.slice(0, isMobile ? 4 : 8).map(t => (
+            <button key={t} onClick={() => setFilter(t)}
+              style={{ padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filter === t ? 'rgba(0,212,170,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${filter === t ? 'rgba(0,212,170,0.4)' : 'rgba(255,255,255,0.08)'}`, color: filter === t ? '#00d4aa' : '#8899bb' }}>
+              {t}
+            </button>
+          ))}
         </div>
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Opponent Name *</label>
-              <input className="input-field" value={form.opponent_name} onChange={e => setForm({ ...form, opponent_name: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Party</label>
-              <input className="input-field" value={form.opponent_party} onChange={e => setForm({ ...form, opponent_party: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Constituency</label>
-              <input className="input-field" value={form.opponent_constituency} onChange={e => setForm({ ...form, opponent_constituency: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Activity Type</label>
-              <select className="input-field" value={form.activity_type} onChange={e => setForm({ ...form, activity_type: e.target.value })}>
-                {TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Description *</label>
-            <textarea className="input-field" rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Detected At</label>
-              <input type="datetime-local" className="input-field" value={form.detected_at} onChange={e => setForm({ ...form, detected_at: e.target.value })} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Sentiment</label>
-              <select className="input-field" value={form.sentiment_toward_us} onChange={e => setForm({ ...form, sentiment_toward_us: e.target.value })}>
-                {SENTIMENTS.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Threat Level (1–10)</label>
-              <input type="number" min={1} max={10} className="input-field" value={form.threat_level}
-                onChange={e => setForm({ ...form, threat_level: parseInt(e.target.value) || 1 })} />
-            </div>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>Source</label>
-            <input className="input-field" value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: '#8899bb', marginBottom: 6, display: 'block' }}>AI Analysis</label>
-            <textarea className="input-field" rows={2} value={form.ai_analysis} onChange={e => setForm({ ...form, ai_analysis: e.target.value })} />
-          </div>
+        <button onClick={runAnalysis} disabled={analyzing}
+          style={{ ...btnPrimary, flexShrink: 0, opacity: analyzing ? 0.7 : 1 }}>
+          {analyzing ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Analyzing...</> : <><Zap size={13} />AI Analysis</>}
+        </button>
+        <button onClick={() => setShowForm(true)}
+          style={{ padding: '9px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <Plus size={13} /> Add Intel
+        </button>
+      </div>
+
+      {/* Intel feed */}
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#8899bb' }}>
+          <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
+          <div style={{ fontSize: 13 }}>Loading intelligence...</div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-white/10">
-          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button onClick={handleSave} className="btn-primary flex-1" disabled={saving}>
-            {saving ? 'Saving...' : intel?.id ? 'Update' : 'Add Intel'}
-          </button>
+      ) : filtered.length === 0 ? (
+        <div style={{ ...card, padding: 40, textAlign: 'center' }}>
+          <Shield size={32} style={{ color: '#8899bb', margin: '0 auto 12px', opacity: 0.3 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f4ff', marginBottom: 6 }}>No opposition intel logged</div>
+          <div style={{ fontSize: 12, color: '#8899bb', marginBottom: 16 }}>Track opposition activities to generate AI threat assessments</div>
+          <button onClick={() => setShowForm(true)} style={btnPrimary}><Plus size={13} />Add First Intel</button>
         </div>
-      </motion.div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtered.map(item => (
+            <motion.div key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              style={{ ...card, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${THREAT_COLORS(item.threat_level)}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: THREAT_COLORS(item.threat_level), flexShrink: 0 }}>
+                  {item.threat_level}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{item.opponent_name}</span>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', color: '#8899bb' }}>{item.activity_type}</span>
+                    {item.platform && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'rgba(30,136,229,0.1)', color: '#42a5f5' }}>{item.platform}</span>}
+                  </div>
+                  <p style={{ fontSize: 13, color: '#d0d8ee', margin: 0, lineHeight: 1.5 }}>{item.description}</p>
+                </div>
+                <div style={{ fontSize: 11, color: '#8899bb', flexShrink: 0 }}>
+                  {new Date(item.detected_at).toLocaleDateString('en-IN')}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showForm && <AddIntelForm onClose={() => setShowForm(false)} onSave={() => { setShowForm(false); load(); }} />}
+      </AnimatePresence>
     </div>
   );
 }
 
-export default function OppositionTracker() {
-  const [items, setItems] = useState<OppositionIntel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selected, setSelected] = useState<Partial<OppositionIntel> | null>(null);
-  const [search, setSearch] = useState('');
+function AddIntelForm({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+  const [form, setForm] = useState({ opponent_name: '', activity_type: 'Social Media', description: '', platform: '', threat_level: 5 });
+  const [saving, setSaving] = useState(false);
+  const f = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
 
-  async function fetchItems() {
-    setLoading(true);
-    const data = await api.list('opposition_intelligence', { order: 'detected_at', dir: 'DESC', limit: '50' }) as OppositionIntel[];
-    setItems(data || []);
-    setLoading(false);
+  async function save() {
+    if (!form.opponent_name || !form.description) return;
+    setSaving(true);
+    await api.create('opposition_intelligence', { ...form, detected_at: new Date().toISOString() });
+    setSaving(false);
+    onSave();
   }
 
-  useEffect(() => { fetchItems(); }, []);
-
-  const filtered = items.filter(i =>
-    !search || i.opponent_name.toLowerCase().includes(search.toLowerCase()) ||
-    i.activity_type.toLowerCase().includes(search.toLowerCase()) ||
-    i.description.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const highThreat = items.filter(i => i.threat_level >= 7).length;
-
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #ff8c42, #ff5555)' }}>
-            <Eye size={18} style={{ color: '#060b18' }} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(6,11,24,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        style={{ background: '#0d1628', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, width: '100%', maxWidth: 480 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#f0f4ff' }}>Log Opposition Intel</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899bb', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={label}>Opponent Name *</label><input value={form.opponent_name} onChange={e => f('opponent_name', e.target.value)} placeholder="Opponent or party name" style={inputStyle} /></div>
+          <div><label style={label}>Activity Type</label>
+            <select value={form.activity_type} onChange={e => f('activity_type', e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+              {ACTIVITY_TYPES.slice(1).map(t => <option key={t}>{t}</option>)}
+            </select>
           </div>
+          <div><label style={label}>Platform</label><input value={form.platform} onChange={e => f('platform', e.target.value)} placeholder="e.g. Twitter, WhatsApp, TV" style={inputStyle} /></div>
+          <div><label style={label}>Description *</label><textarea value={form.description} onChange={e => f('description', e.target.value)} placeholder="What did they do?" rows={3} style={{ ...inputStyle, resize: 'vertical' }} /></div>
           <div>
-            <h2 className="font-bold text-xl" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Opposition Tracker</h2>
-            <p style={{ fontSize: 12, color: '#8899bb' }}>Monitor opposition activity, threats, and narratives</p>
+            <label style={{ ...label, marginBottom: 8 }}>Threat Level: <span style={{ color: THREAT_COLORS(form.threat_level) }}>{form.threat_level}/10</span></label>
+            <input type="range" min={1} max={10} value={form.threat_level} onChange={e => f('threat_level', parseInt(e.target.value))} style={{ width: '100%', accentColor: '#00d4aa' }} />
           </div>
         </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setSelected(null); setModalOpen(true); }}>
-          <Plus size={14} /> Add Intel
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 240 }}>
-          <Search size={14} style={{ color: '#8899bb' }} />
-          <input className="text-sm bg-transparent border-none outline-none text-white placeholder-gray-500 w-full"
-            placeholder="Search opposition intel..."
-            value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8899bb', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ ...btnPrimary, flex: 2, justifyContent: 'center', opacity: saving ? 0.7 : 1 }}>
+            {saving ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Save Intel'}
+          </button>
         </div>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-          style={{ background: 'rgba(255,85,85,0.1)', border: '1px solid rgba(255,85,85,0.2)' }}>
-          <AlertTriangle size={13} style={{ color: '#ff5555' }} />
-          <span style={{ fontSize: 12, color: '#ff7777' }}>{highThreat} high‑threat items</span>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {loading ? Array(3).fill(0).map((_, i) => (
-          <div key={i} className="glass-card rounded-2xl p-5">
-            <div className="shimmer h-4 w-2/3 rounded mb-2" />
-            <div className="shimmer h-3 w-1/2 rounded" />
-          </div>
-        )) : filtered.map((item, i) => (
-          <motion.div
-            key={item.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            className="glass-card-hover rounded-2xl p-5 cursor-pointer"
-            onClick={() => { setSelected(item); setModalOpen(true); }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(255,85,85,0.15)', border: '1px solid rgba(255,85,85,0.25)' }}>
-                <Eye size={16} style={{ color: '#ff5555' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{item.opponent_name}</div>
-                  <Badge variant={item.threat_level >= 7 ? 'danger' : item.threat_level >= 4 ? 'warning' : 'neutral'}>
-                    Threat {item.threat_level}
-                  </Badge>
-                  <Badge variant={item.sentiment_toward_us === 'Negative' ? 'danger' : item.sentiment_toward_us === 'Positive' ? 'success' : 'neutral'}>
-                    {item.sentiment_toward_us}
-                  </Badge>
-                </div>
-                <div style={{ fontSize: 12, color: '#8899bb', marginTop: 4 }} className="line-clamp-2">
-                  {item.description}
-                </div>
-                <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  <span style={{ fontSize: 11, color: '#6677aa' }}>{item.activity_type}</span>
-                  <span style={{ fontSize: 11, color: '#6677aa' }}>{item.opponent_party}</span>
-                  <span style={{ fontSize: 11, color: '#6677aa' }}>{new Date(item.detected_at).toLocaleString('en-IN')}</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <AnimatePresence>
-        {modalOpen && (
-          <IntelModal
-            intel={selected}
-            onClose={() => { setModalOpen(false); setSelected(null); }}
-            onSave={fetchItems}
-          />
-        )}
-      </AnimatePresence>
+      </motion.div>
     </div>
   );
 }

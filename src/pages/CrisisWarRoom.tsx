@@ -1,102 +1,95 @@
-import { AlertTriangle, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import CrudPage, { type CrudField } from '../components/ui/CrudPage';
+import { motion } from 'framer-motion';
+import { AlertTriangle, Zap, RefreshCw, Loader2, Shield, Radio } from 'lucide-react';
 import { api } from '../lib/api';
-
-const incidentFields: CrudField[] = [
-  { key: 'title', label: 'Incident Title', required: true },
-  { key: 'crisis_type', label: 'Crisis Type' },
-  { key: 'severity', label: 'Severity (1-10)', type: 'number' },
-  { key: 'status', label: 'Status', type: 'select', options: ['open', 'contained', 'resolved'] },
-  { key: 'location', label: 'Location' },
-  { key: 'detected_at', label: 'Detected At', type: 'datetime' },
-  { key: 'summary', label: 'Summary', type: 'textarea' },
-  { key: 'impact_score', label: 'Impact Score', type: 'number' },
-  { key: 'owner', label: 'Owner' },
-  { key: 'response_plan', label: 'Response Plan', type: 'textarea' },
-];
-
-const actionFields: CrudField[] = [
-  { key: 'incident_id', label: 'Incident ID', required: true },
-  { key: 'action_type', label: 'Action Type', required: true },
-  { key: 'description', label: 'Description', type: 'textarea' },
-  { key: 'owner', label: 'Owner' },
-  { key: 'status', label: 'Status', type: 'select', options: ['pending', 'in_progress', 'completed'] },
-  { key: 'due_at', label: 'Due At', type: 'datetime' },
-  { key: 'completed_at', label: 'Completed At', type: 'datetime' },
-  { key: 'notes', label: 'Notes', type: 'textarea' },
-];
+import { T, AIPanel, Stat, Loading, getToken, useW, isMob } from '../components/ui/ModuleLayout';
 
 export default function CrisisWarRoom() {
-  const [metrics, setMetrics] = useState<{ open?: number; high?: number; actions?: number }>({});
-  const [running, setRunning] = useState(false);
+  const w = useW();
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [aiInsight, setAiInsight] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
 
-  async function fetchMetrics() {
-    try {
-      const data = await api.get('/api/crisis-war-room/overview') as { open?: number; high?: number; actions?: number };
-      setMetrics(data || {});
-    } catch {
-      setMetrics({});
-    }
+  async function load() {
+    setLoading(true);
+    try { const d = await api.get('/api/crisis-war-room/overview'); setData(d); } catch (_) {}
+    setLoading(false);
   }
 
-  async function runScan() {
-    setRunning(true);
-    try {
-      await api.post('/api/crisis-war-room/scan', {});
-      await fetchMetrics();
-    } finally {
-      setRunning(false);
-    }
+  async function scan() {
+    setScanning(true);
+    try { await api.post('/api/crisis-war-room/scan', {}); await load(); } catch (_) {}
+    setScanning(false);
   }
 
-  useEffect(() => { fetchMetrics(); }, []);
+  async function getInsight() {
+    setAnalyzing(true);
+    try {
+      const r = await fetch('/api/ai-assistant', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: `Based on this crisis data, what is the most serious threat right now and what are the top 3 immediate actions I should take? Data: ${JSON.stringify(data)}` }] }),
+      });
+      setAiInsight(await r.text());
+    } catch (_) {}
+    setAnalyzing(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const critical = data?.alerts?.filter((a: any) => a.severity === 'critical')?.length || 0;
+  const active = data?.alerts?.filter((a: any) => a.status === 'active')?.length || 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h2 className="font-bold text-xl" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Crisis War Room</h2>
-          <p style={{ fontSize: 12, color: '#8899bb' }}>Activate response playbooks and coordinate crisis actions.</p>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Space Grotesk', margin: 0 }}>Crisis War Room</h1>
+          <p style={{ fontSize: 13, color: '#8899bb', margin: '4px 0 0' }}>Real-time threat monitoring and crisis response</p>
         </div>
-        <button onClick={runScan} className="btn-primary flex items-center gap-2" disabled={running}>
-          <Play size={14} /> {running ? 'Scanning...' : 'Scan Alerts'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={getInsight} disabled={analyzing} style={{ ...T.primary, opacity: analyzing ? 0.65 : 1 }}>
+            {analyzing ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Analysing...</> : <><Zap size={13} />AI Assessment</>}
+          </button>
+          <button onClick={scan} disabled={scanning} style={T.ghost}>
+            {scanning ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Scanning...</> : <><Radio size={13} />Scan Now</>}
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        {[
-          { label: 'Open Incidents', value: metrics.open ?? 0 },
-          { label: 'High Severity', value: metrics.high ?? 0 },
-          { label: 'Open Actions', value: metrics.actions ?? 0 },
-        ].map(card => (
-          <div key={card.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="text-xs" style={{ color: '#8899bb' }}>{card.label}</div>
-            <div className="text-2xl font-bold mt-1" style={{ color: '#f0f4ff' }}>{card.value}</div>
-          </div>
-        ))}
+      {(aiInsight || analyzing) && <AIPanel title="Crisis Assessment" content={aiInsight} loading={analyzing} onClose={() => setAiInsight('')} />}
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 10 }}>
+        <Stat label="Critical Alerts" value={critical} color="#ff5555" icon={AlertTriangle} />
+        <Stat label="Active Issues" value={active} color="#ffa726" icon={Radio} />
+        <Stat label="Threats Resolved" value={(data?.resolved || 0)} color="#00c864" icon={Shield} />
       </div>
 
-      <CrudPage
-        table="crisis_incidents"
-        title="Crisis Incidents"
-        subtitle="Track incidents, severity, and response plans"
-        icon={AlertTriangle}
-        fields={incidentFields}
-        searchFields={['title', 'crisis_type', 'status']}
-        order="detected_at"
-      />
-
-      <CrudPage
-        table="warroom_actions"
-        title="War Room Actions"
-        subtitle="Response tasks, ownership, and execution"
-        icon={AlertTriangle}
-        fields={actionFields}
-        searchFields={['action_type', 'status', 'owner']}
-        order="created_at"
-        variant="section"
-      />
+      {loading ? <Loading text="Loading crisis data..." /> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {data?.alerts?.length > 0 ? data.alerts.map((a: any, i: number) => {
+            const sc = a.severity === 'critical' ? '#ff5555' : a.severity === 'high' ? '#ffa726' : '#42a5f5';
+            return (
+              <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.05 }}
+                style={{ ...T.card, padding: '14px 16px', borderLeft: `3px solid ${sc}` }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, background: `${sc}15`, color: sc, fontWeight: 700, textTransform: 'uppercase' }}>{a.severity}</span>
+                  <span style={{ fontSize: 12, color: '#8899bb' }}>{a.type}</span>
+                </div>
+                <p style={{ fontSize: 13, color: '#f0f4ff', margin: 0, lineHeight: 1.5 }}>{a.description}</p>
+                {a.recommended_action && <div style={{ fontSize: 12, color: '#00d4aa', marginTop: 6 }}>→ {a.recommended_action}</div>}
+              </motion.div>
+            );
+          }) : (
+            <div style={{ ...T.card, padding: 40, textAlign: 'center' }}>
+              <Shield size={36} style={{ color: '#00c864', opacity: 0.3, margin: '0 auto 14px', display: 'block' }} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#f0f4ff', marginBottom: 6 }}>No active crises</div>
+              <div style={{ fontSize: 13, color: '#8899bb' }}>Run a scan to detect emerging threats</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

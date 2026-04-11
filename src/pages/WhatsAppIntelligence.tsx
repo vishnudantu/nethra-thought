@@ -1,379 +1,148 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  MessageSquare, AlertTriangle, TrendingUp, Shield, Zap, Radio,
-  RefreshCw, Send, Filter, Search, Eye, CheckCircle2, XCircle,
-  Phone, Clock, BarChart3, Flame, Info, ChevronDown, Plus,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { MessageSquare, Zap, AlertTriangle, Flame, ShieldAlert, Plus, Loader2, X, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
 
-interface WaMessage {
-  id: string;
-  politician_id: string;
-  received_at: string;
-  sender_phone: string;
-  message_type: string;
-  content: string;
-  classification: string;
-  sentiment: string;
-  urgency_score: number;
-  is_viral: number;
-  viral_count: number;
-  is_misinformation: number;
-  routed_to: string;
-  action_taken: string;
-  created_at: string;
-}
+interface WMsg { id: string; content: string; sender_name?: string; classification: string; sentiment: string; urgency_score: number; is_viral: number; is_misinformation: number; created_at: string; }
 
-const CLASS_META: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  grievance:       { label: 'Grievance',       color: '#ff7777', bg: 'rgba(255,85,85,0.12)',   icon: AlertTriangle },
-  emergency:       { label: 'Emergency',       color: '#ff3333', bg: 'rgba(255,50,50,0.15)',    icon: Zap },
-  misinformation:  { label: 'Misinfo',         color: '#ffa726', bg: 'rgba(255,167,38,0.12)',  icon: Shield },
-  opposition:      { label: 'Opposition',      color: '#a78bfa', bg: 'rgba(124,58,237,0.12)',  icon: Radio },
-  praise:          { label: 'Praise',          color: '#00c864', bg: 'rgba(0,200,100,0.12)',   icon: TrendingUp },
-  project:         { label: 'Project',         color: '#64b5f6', bg: 'rgba(30,136,229,0.12)',  icon: BarChart3 },
-  darshan:         { label: 'Darshan',         color: '#ffa726', bg: 'rgba(255,167,38,0.12)',  icon: Info },
-  volunteer:       { label: 'Volunteer',       color: '#00d4aa', bg: 'rgba(0,212,170,0.12)',   icon: CheckCircle2 },
-  general:         { label: 'General',         color: '#8899bb', bg: 'rgba(136,153,187,0.1)',  icon: MessageSquare },
-};
-
-const SENTIMENT_COLOR: Record<string, string> = {
-  positive: '#00c864', negative: '#ff5555', neutral: '#8899bb',
-};
-
-function timeAgo(d: string) {
-  const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  if (m < 1440) return `${Math.floor(m/60)}h ago`;
-  return `${Math.floor(m/1440)}d ago`;
-}
+const CLASS_COLOR: Record<string, string> = { complaint: '#ffa726', request: '#42a5f5', support: '#00c864', feedback: '#ab47bc', threat: '#ff5555', misinformation: '#ff5555', general: '#8899bb' };
 
 export default function WhatsAppIntelligence() {
-  const { activePolitician } = useAuth();
-  const [messages, setMessages] = useState<WaMessage[]>([]);
+  const w = useW();
+  const [msgs, setMsgs] = useState<WMsg[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analysis, setAnalysis] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
   const [filter, setFilter] = useState('all');
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<WaMessage | null>(null);
   const [showInject, setShowInject] = useState(false);
-  const [injectPhone, setInjectPhone] = useState('');
-  const [injectContent, setInjectContent] = useState('');
-  const [injecting, setInjecting] = useState(false);
-  const [injectStatus, setInjectStatus] = useState('');
 
-  const BASE = (import.meta as any).env?.VITE_API_URL || '';
-
-  const fetchMessages = useCallback(async () => {
+  async function load() {
     setLoading(true);
     try {
-      const data = await api.list('whatsapp_intelligence', { order: 'created_at', dir: 'DESC' }) as WaMessage[];
-      setMessages(data || []);
+      const data = await api.list('whatsapp_intelligence', { order: 'created_at', dir: 'DESC', limit: '60' });
+      setMsgs((data as WMsg[]) || []);
     } catch (_) {}
     setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchMessages(); }, [fetchMessages]);
-  useEffect(() => {
-    const t = setInterval(fetchMessages, 30000);
-    return () => clearInterval(t);
-  }, [fetchMessages]);
-
-  const filtered = messages.filter(m => {
-    if (filter !== 'all' && m.classification !== filter) return false;
-    if (search && !m.content?.toLowerCase().includes(search.toLowerCase()) &&
-        !m.sender_phone?.includes(search)) return false;
-    return true;
-  });
-
-  const stats = {
-    total: messages.length,
-    viral: messages.filter(m => m.is_viral).length,
-    misinfo: messages.filter(m => m.is_misinformation).length,
-    emergency: messages.filter(m => m.classification === 'emergency').length,
-    grievances: messages.filter(m => m.classification === 'grievance').length,
-    urgent: messages.filter(m => m.urgency_score >= 7).length,
-  };
-
-  async function injectMessage() {
-    if (!injectContent.trim()) return;
-    setInjecting(true);
-    setInjectStatus('');
-    try {
-      await api.post('/api/whatsapp/inject', {
-        sender_phone: injectPhone || '+91TEST',
-        content: injectContent,
-        politician_id: activePolitician?.id,
-      });
-      setInjectStatus('Message injected successfully');
-      setInjectContent('');
-      setInjectPhone('');
-      await fetchMessages();
-      setTimeout(() => { setShowInject(false); setInjectStatus(''); }, 1500);
-    } catch (e: any) {
-      setInjectStatus('Error: ' + e.message);
-    }
-    setInjecting(false);
   }
 
-  const webhookUrl = `${BASE}/api/whatsapp/webhook?politician_id=${activePolitician?.id || 'YOUR_ID'}`;
+  async function analyse() {
+    setAnalyzing(true);
+    try {
+      const r = await fetch('/api/whatsapp/ai-analysis', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+      });
+      const d = await r.json();
+      setAnalysis(d.analysis || '');
+    } catch (_) {}
+    setAnalyzing(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const viral = msgs.filter(m => m.is_viral).length;
+  const misinfo = msgs.filter(m => m.is_misinformation).length;
+  const urgent = msgs.filter(m => m.urgency_score >= 7).length;
+
+  const filtered = filter === 'all' ? msgs
+    : filter === 'viral' ? msgs.filter(m => m.is_viral)
+    : filter === 'misinfo' ? msgs.filter(m => m.is_misinformation)
+    : filter === 'urgent' ? msgs.filter(m => m.urgency_score >= 7)
+    : msgs.filter(m => m.classification === filter);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk, sans-serif' }}>
-            WhatsApp Intelligence
-          </h1>
-          <p style={{ fontSize: 13, color: '#8899bb', marginTop: 4 }}>
-            Live feed from all forwarded messages — classified, scored, and routed automatically
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowInject(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
-            style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.25)', color: '#00d4aa' }}>
-            <Plus size={14} /> Inject Test Message
-          </button>
-          <button onClick={fetchMessages}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#8899bb' }}>
-            <RefreshCw size={14} />
-          </button>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10 }}>
+        <Stat label="Total Messages" value={msgs.length} color="#42a5f5" icon={MessageSquare} />
+        <Stat label="Urgent" value={urgent} color="#ff5555" icon={AlertTriangle} />
+        <Stat label="Viral Content" value={viral} color="#ffa726" icon={Flame} />
+        <Stat label="Misinformation" value={misinfo} color="#ff5555" icon={ShieldAlert} />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        {[
-          { label: 'Total Messages', value: stats.total,     color: '#00d4aa', icon: MessageSquare },
-          { label: 'Viral',          value: stats.viral,     color: '#ff5555', icon: Flame },
-          { label: 'Misinformation', value: stats.misinfo,   color: '#ffa726', icon: Shield },
-          { label: 'Emergency',      value: stats.emergency, color: '#ff3333', icon: Zap },
-          { label: 'Grievances',     value: stats.grievances,color: '#ff7777', icon: AlertTriangle },
-          { label: 'High Urgency',   value: stats.urgent,    color: '#a78bfa', icon: TrendingUp },
-        ].map(s => {
-          const Icon = s.icon;
-          return (
-            <div key={s.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between mb-2">
-                <Icon size={15} style={{ color: s.color }} />
-                {s.label === 'Viral' && stats.viral > 0 && (
-                  <span style={{ fontSize: 9, color: '#ff5555', fontWeight: 700 }}>LIVE</span>
-                )}
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: 'Space Grotesk' }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: '#8899bb', marginTop: 2 }}>{s.label}</div>
-            </div>
-          );
-        })}
-      </div>
+      {(analysis || analyzing) && (
+        <AIPanel title="WhatsApp Intelligence Analysis" content={analysis} loading={analyzing} onClose={() => setAnalysis('')} />
+      )}
 
-      {/* Webhook Config Banner */}
-      <div className="rounded-xl p-4" style={{ background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.15)' }}>
-        <div className="flex items-start gap-3 flex-wrap">
-          <div style={{ flexShrink: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#00d4aa', marginBottom: 4 }}>⚡ WEBHOOK URL — Configure in AiSensy / Wati</div>
-            <code style={{ fontSize: 11, color: '#8899bb', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-              {webhookUrl}
-            </code>
-          </div>
-          <button onClick={() => navigator.clipboard.writeText(webhookUrl)}
-            style={{ marginLeft: 'auto', fontSize: 11, color: '#00d4aa', background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
-            Copy URL
-          </button>
-        </div>
-      </div>
-
-      {/* Filters + Search */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#8899bb' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search messages..."
-            className="pl-9 pr-4 py-2 rounded-xl text-sm"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f4ff', outline: 'none', width: 220 }} />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {['all', 'emergency', 'grievance', 'misinformation', 'opposition', 'praise', 'viral'].map(f => (
-            <button key={f} onClick={() => setFilter(f === 'viral' ? 'all' : f)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={{
-                background: filter === f ? 'rgba(0,212,170,0.15)' : 'rgba(255,255,255,0.05)',
-                color: filter === f ? '#00d4aa' : '#8899bb',
-                border: `1px solid ${filter === f ? 'rgba(0,212,170,0.3)' : 'rgba(255,255,255,0.08)'}`,
-              }}>
-              {f === 'all' ? 'All' : f === 'viral' ? '🔴 Viral' : f.charAt(0).toUpperCase() + f.slice(1)}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 5, flex: 1, flexWrap: 'wrap' }}>
+          {['all', 'urgent', 'viral', 'misinfo', 'complaint', 'request', 'support'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={T.pill(filter === f)}>
+              {f === 'misinfo' ? 'Misinformation' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: 12, color: '#8899bb' }}>
-          {filtered.length} messages
-        </div>
+        <button onClick={analyse} disabled={analyzing} style={{ ...T.primary, flexShrink: 0, opacity: analyzing ? 0.65 : 1 }}>
+          {analyzing ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Analysing...</> : <><Zap size={13} />AI Analysis</>}
+        </button>
+        <button onClick={() => setShowInject(true)} style={{ ...T.ghost, flexShrink: 0 }}><Plus size={13} />Add Message</button>
+        <button onClick={load} style={{ ...T.ghost, flexShrink: 0, padding: '9px' }}><RefreshCw size={13} /></button>
       </div>
 
-      {/* Message Feed */}
-      <div className="space-y-3">
-        {loading ? (
-          [1,2,3,4,5].map(i => (
-            <div key={i} className="rounded-2xl p-4 shimmer" style={{ background: 'rgba(255,255,255,0.04)', height: 90 }} />
-          ))
-        ) : filtered.length === 0 ? (
-          <div className="py-20 text-center" style={{ color: '#8899bb' }}>
-            <MessageSquare size={40} className="mx-auto mb-3 opacity-20" />
-            <p style={{ fontSize: 14 }}>No messages yet. Configure the webhook URL in AiSensy or Wati to start receiving messages.</p>
-          </div>
+      {loading ? <Loading text="Loading messages..." />
+        : filtered.length === 0 ? (
+          <Empty icon={MessageSquare} title="No messages found"
+            sub="Messages come in via webhook. You can also manually add messages to test." action="Add Test Message" onAction={() => setShowInject(true)} />
         ) : (
-          filtered.map((msg, i) => {
-            const meta = CLASS_META[msg.classification] || CLASS_META.general;
-            const Icon = meta.icon;
-            const isUrgent = msg.urgency_score >= 8;
-            return (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.02 }}
-                onClick={() => setSelected(msg === selected ? null : msg)}
-                className="rounded-2xl p-4 cursor-pointer transition-all"
-                style={{
-                  background: isUrgent ? 'rgba(255,50,50,0.06)' : msg.is_viral ? 'rgba(255,85,85,0.04)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${isUrgent ? 'rgba(255,80,80,0.25)' : msg.is_viral ? 'rgba(255,85,85,0.15)' : 'rgba(255,255,255,0.08)'}`,
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  {/* Icon */}
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: meta.bg }}>
-                    <Icon size={16} style={{ color: meta.color }} />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 100, background: meta.bg, color: meta.color }}>
-                        {meta.label}
-                      </span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: SENTIMENT_COLOR[msg.sentiment] }}>
-                        {msg.sentiment}
-                      </span>
-                      {msg.is_viral ? (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#ff5555', background: 'rgba(255,85,85,0.12)', padding: '2px 7px', borderRadius: 100 }}>
-                          🔴 VIRAL ({msg.viral_count}x)
-                        </span>
-                      ) : null}
-                      {msg.is_misinformation ? (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#ffa726', background: 'rgba(255,167,38,0.12)', padding: '2px 7px', borderRadius: 100 }}>
-                          ⚠️ MISINFO
-                        </span>
-                      ) : null}
-                      {isUrgent && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#ff3333', background: 'rgba(255,50,50,0.12)', padding: '2px 7px', borderRadius: 100 }}>
-                          🚨 URGENT
-                        </span>
-                      )}
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(136,153,187,0.5)' }}>
-                        {timeAgo(msg.created_at)}
-                      </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {filtered.map(m => {
+              const cc = CLASS_COLOR[m.classification] || '#8899bb';
+              const urgC = m.urgency_score >= 7 ? '#ff5555' : m.urgency_score >= 4 ? '#ffa726' : '#8899bb';
+              return (
+                <motion.div key={m.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  style={{ ...T.card, padding: '13px 16px', borderLeft: m.is_misinformation || m.urgency_score >= 8 ? `3px solid ${urgC}` : undefined }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 5, background: `${cc}18`, color: cc, fontWeight: 700, textTransform: 'uppercase' }}>{m.classification}</span>
+                      {m.is_viral ? <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 5, background: 'rgba(255,167,38,0.12)', color: '#ffa726', fontWeight: 700 }}>VIRAL</span> : null}
+                      {m.is_misinformation ? <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 5, background: 'rgba(255,85,85,0.12)', color: '#ff5555', fontWeight: 700 }}>MISINFO</span> : null}
                     </div>
-
-                    <p style={{ fontSize: 13, color: '#e0e8ff', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: selected === msg ? undefined : 2, WebkitBoxOrient: 'vertical' }}>
-                      {msg.content}
-                    </p>
-
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="flex items-center gap-1" style={{ fontSize: 11, color: '#8899bb' }}>
-                        <Phone size={11} />{msg.sender_phone || 'Unknown'}
-                      </span>
-                      <span style={{ fontSize: 11, color: '#8899bb' }}>
-                        Score: <strong style={{ color: msg.urgency_score >= 7 ? '#ff5555' : '#f0f4ff' }}>{msg.urgency_score}/10</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  <ChevronDown size={14} style={{ color: '#8899bb', transform: selected === msg ? 'rotate(180deg)' : 'none', transition: '0.2s', flexShrink: 0, marginTop: 4 }} />
-                </div>
-
-                {/* Expanded detail */}
-                <AnimatePresence>
-                  {selected === msg && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                      style={{ overflow: 'hidden', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        {[
-                          { label: 'Received', value: new Date(msg.received_at).toLocaleString('en-IN') },
-                          { label: 'Type', value: msg.message_type },
-                          { label: 'Routed To', value: msg.routed_to || '—' },
-                          { label: 'Action Taken', value: msg.action_taken || 'Pending' },
-                        ].map(d => (
-                          <div key={d.label} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                            <div style={{ fontSize: 10, color: '#8899bb', marginBottom: 3 }}>{d.label}</div>
-                            <div style={{ fontSize: 12, color: '#f0f4ff', fontWeight: 600 }}>{d.value}</div>
-                          </div>
-                        ))}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {m.sender_name && <div style={{ fontSize: 12, fontWeight: 600, color: '#8899bb', marginBottom: 4 }}>{m.sender_name}</div>}
+                      <p style={{ fontSize: 13, color: '#d0d8ee', margin: 0, lineHeight: 1.55 }}>{m.content}</p>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 11, color: '#8899bb' }}>
+                        <span style={{ color: urgC }}>Urgency {m.urgency_score}/10</span>
+                        <span>{new Date(m.created_at).toLocaleDateString('en-IN')}</span>
                       </div>
-                      {msg.is_misinformation ? (
-                        <div className="mt-3 p-3 rounded-xl" style={{ background: 'rgba(255,167,38,0.08)', border: '1px solid rgba(255,167,38,0.2)' }}>
-                          <div style={{ fontSize: 11, color: '#ffa726', fontWeight: 700, marginBottom: 4 }}>⚠️ Misinformation Detected — Suggested Action</div>
-                          <p style={{ fontSize: 12, color: '#8899bb' }}>Draft a rebuttal and broadcast to party workers immediately. Document evidence before the claim spreads further.</p>
-                        </div>
-                      ) : null}
-                      {msg.classification === 'grievance' && (
-                        <div className="mt-3 p-3 rounded-xl" style={{ background: 'rgba(255,85,85,0.06)', border: '1px solid rgba(255,85,85,0.15)' }}>
-                          <div style={{ fontSize: 11, color: '#ff7777', fontWeight: 700, marginBottom: 4 }}>📋 Auto-created as Grievance</div>
-                          <p style={{ fontSize: 12, color: '#8899bb' }}>This message has been automatically logged as a constituent grievance and is visible in the Grievances module.</p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Inject Modal */}
-      <AnimatePresence>
-        {showInject && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }}
-            onClick={e => { if (e.target === e.currentTarget) setShowInject(false); }}>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              className="glass-card rounded-2xl p-6 w-full max-w-md">
-              <h3 style={{ color: '#f0f4ff', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Inject Test Message</h3>
-              <p style={{ fontSize: 12, color: '#8899bb', marginBottom: 16 }}>Simulate an incoming WhatsApp message for testing classification.</p>
-              <div className="space-y-4">
-                <div>
-                  <label style={{ fontSize: 11, color: '#8899bb', display: 'block', marginBottom: 6 }}>Sender Phone (optional)</label>
-                  <input value={injectPhone} onChange={e => setInjectPhone(e.target.value)} placeholder="+91 98765 43210"
-                    className="input-field w-full" />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: '#8899bb', display: 'block', marginBottom: 6 }}>Message Content *</label>
-                  <textarea value={injectContent} onChange={e => setInjectContent(e.target.value)}
-                    placeholder="Try: 'Road in our village is broken, please fix it' or 'This is fake news about the minister'"
-                    rows={4} className="input-field w-full" style={{ resize: 'none' }} />
-                </div>
-                {injectStatus && (
-                  <div style={{ fontSize: 12, color: injectStatus.includes('Error') ? '#ff7777' : '#00d4aa', padding: '8px 12px', borderRadius: 8, background: injectStatus.includes('Error') ? 'rgba(255,85,85,0.1)' : 'rgba(0,212,170,0.1)' }}>
-                    {injectStatus}
+                    </div>
                   </div>
-                )}
-                <div className="flex gap-3">
-                  <button onClick={() => setShowInject(false)} className="btn-secondary flex-1">Cancel</button>
-                  <button onClick={injectMessage} disabled={injecting || !injectContent.trim()} className="btn-primary flex-1 flex items-center justify-center gap-2">
-                    {injecting ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} /> : <Send size={14} />}
-                    {injecting ? 'Injecting...' : 'Inject'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+                </motion.div>
+              );
+            })}
+          </div>
         )}
-      </AnimatePresence>
+
+      {showInject && (
+        <Modal onClose={() => setShowInject(false)} title="Add Test Message" maxW={440}>
+          <InjectForm onSave={() => { setShowInject(false); load(); }} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function InjectForm({ onSave }: { onSave: () => void }) {
+  const [content, setContent] = useState('');
+  const [sender, setSender] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (!content.trim()) return;
+    setBusy(true);
+    try {
+      await fetch('/api/whatsapp/inject', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, sender_name: sender }),
+      });
+      onSave();
+    } catch (_) { setBusy(false); }
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div><label style={T.label}>Sender Name</label><input value={sender} onChange={e => setSender(e.target.value)} placeholder="Constituent name (optional)" style={T.input} /></div>
+      <div><label style={T.label}>Message Content *</label><textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Type the WhatsApp message..." rows={4} style={{ ...T.input, resize: 'vertical' }} /></div>
+      <button onClick={save} disabled={busy || !content.trim()} style={{ ...T.primary, justifyContent: 'center', width: '100%', opacity: busy || !content.trim() ? 0.5 : 1 }}>
+        {busy ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Saving...</> : 'Add Message'}
+      </button>
     </div>
   );
 }

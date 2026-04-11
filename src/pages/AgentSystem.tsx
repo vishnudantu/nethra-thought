@@ -1,92 +1,92 @@
-import { Bot, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import CrudPage, { type CrudField } from '../components/ui/CrudPage';
+import { motion } from 'framer-motion';
+import { Bot, Play, Activity, CheckCircle, Loader2, Zap, Clock } from 'lucide-react';
 import { api } from '../lib/api';
-
-const fields: CrudField[] = [
-  { key: 'agent_type', label: 'Agent Type', required: true },
-  { key: 'task_type', label: 'Task Type' },
-  { key: 'description', label: 'Task Description', type: 'textarea' },
-  { key: 'status', label: 'Status', type: 'select', options: ['pending', 'in_progress', 'completed', 'failed'] },
-  { key: 'result', label: 'Result Summary', type: 'textarea' },
-  { key: 'assigned_to', label: 'Assigned To' },
-];
+import { T, AIPanel, Stat, Loading, getToken, useW, isMob } from '../components/ui/ModuleLayout';
 
 export default function AgentSystem() {
-  const [metrics, setMetrics] = useState<{ summary?: Record<string, number>; recent?: { agent_type: string; total: number }[] }>({});
+  const w = useW();
+  const [metrics, setMetrics] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [aiReport, setAiReport] = useState('');
+  const [reporting, setReporting] = useState(false);
 
-  async function fetchMetrics() {
-    try {
-      const data = await api.get('/api/agent-system/metrics') as { summary?: Record<string, number>; recent?: { agent_type: string; total: number }[] };
-      setMetrics(data || {});
-    } catch {
-      setMetrics({});
-    }
+  async function load() {
+    setLoading(true);
+    try { const d = await api.get('/api/agent-system/metrics'); setMetrics(d); } catch (_) {}
+    setLoading(false);
   }
 
-  async function runAgents() {
+  async function run() {
     setRunning(true);
-    try {
-      await api.post('/api/agent-system/run', {});
-      await fetchMetrics();
-    } finally {
-      setRunning(false);
-    }
+    try { await api.post('/api/agent-system/run', {}); await load(); } catch (_) {}
+    setRunning(false);
   }
 
-  useEffect(() => { fetchMetrics(); }, []);
+  async function getReport() {
+    setReporting(true);
+    try {
+      const r = await fetch('/api/ai-assistant', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: `Summarise what the AI agents have done, what was most valuable, and what should run next. Metrics: ${JSON.stringify(metrics)}` }] }),
+      });
+      setAiReport(await r.text());
+    } catch (_) {}
+    setReporting(false);
+  }
 
-  const summary = metrics.summary || {};
+  useEffect(() => { load(); }, []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h2 className="font-bold text-xl" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Autonomous Agent System</h2>
-          <p style={{ fontSize: 12, color: '#8899bb' }}>24x7 agents triage sentiment, crisis, and misinformation signals.</p>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Space Grotesk', margin: 0 }}>Agent System</h1>
+          <p style={{ fontSize: 13, color: '#8899bb', margin: '4px 0 0' }}>Autonomous AI agents running constituency intelligence tasks</p>
         </div>
-        <button onClick={runAgents} className="btn-primary flex items-center gap-2" disabled={running}>
-          <Play size={14} /> {running ? 'Running...' : 'Run Agents Now'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={getReport} disabled={reporting} style={{ ...T.primary, opacity: reporting ? 0.65 : 1 }}>
+            {reporting ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Generating...</> : <><Zap size={13} />Agent Report</>}
+          </button>
+          <button onClick={run} disabled={running} style={T.ghost}>
+            {running ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Running...</> : <><Play size={13} />Run Agents</>}
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: 'Pending', value: summary.pending ?? 0, color: '#ffb74d' },
-          { label: 'In Progress', value: summary.in_progress ?? 0, color: '#42a5f5' },
-          { label: 'Completed', value: summary.completed ?? 0, color: '#00d4aa' },
-          { label: 'Failed', value: summary.failed ?? 0, color: '#ff5555' },
-        ].map(card => (
-          <div key={card.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="text-xs" style={{ color: '#8899bb' }}>{card.label}</div>
-            <div className="text-2xl font-bold mt-1" style={{ color: card.color }}>{card.value}</div>
-          </div>
-        ))}
+      {(aiReport || reporting) && <AIPanel title="Agent Activity Report" content={aiReport} loading={reporting} onClose={() => setAiReport('')} />}
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 10 }}>
+        <Stat label="Tasks Completed" value={metrics?.completed || 0} color="#00c864" icon={CheckCircle} />
+        <Stat label="Running Now" value={metrics?.running || 0} color="#42a5f5" icon={Activity} />
+        <Stat label="Queued" value={metrics?.queued || 0} color="#ffa726" icon={Clock} />
       </div>
 
-      {metrics.recent?.length ? (
-        <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Recent Agent Runs (7 days)</div>
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs" style={{ color: '#8899bb' }}>
-            {metrics.recent.map(item => (
-              <div key={item.agent_type} className="flex items-center justify-between">
-                <span>{item.agent_type}</span>
-                <span style={{ color: '#f0f4ff' }}>{item.total}</span>
+      {loading ? <Loading text="Loading agent data..." /> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {metrics?.recent_tasks?.map((t: any, i: number) => (
+            <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
+              style={{ ...T.card, padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: t.status === 'completed' ? 'rgba(0,200,100,0.1)' : 'rgba(66,165,245,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Bot size={15} style={{ color: t.status === 'completed' ? '#00c864' : '#42a5f5' }} />
               </div>
-            ))}
-          </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f4ff' }}>{t.task_name || t.name}</div>
+                {t.result_summary && <div style={{ fontSize: 12, color: '#8899bb', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.result_summary}</div>}
+              </div>
+              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, background: t.status === 'completed' ? 'rgba(0,200,100,0.1)' : 'rgba(66,165,245,0.1)', color: t.status === 'completed' ? '#00c864' : '#42a5f5', fontWeight: 700 }}>{t.status}</span>
+            </motion.div>
+          )) || (
+            <div style={{ ...T.card, padding: 40, textAlign: 'center' }}>
+              <Bot size={36} style={{ color: '#8899bb', opacity: 0.2, margin: '0 auto 14px', display: 'block' }} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#f0f4ff', marginBottom: 6 }}>No agent activity yet</div>
+              <div style={{ fontSize: 13, color: '#8899bb', marginBottom: 18 }}>Run the agents to start autonomous intelligence gathering</div>
+              <button onClick={run} style={T.primary}><Play size={13} />Run Agents</button>
+            </div>
+          )}
         </div>
-      ) : null}
-
-      <CrudPage
-        table="agent_tasks"
-        title="Agent Tasks"
-        subtitle="Monitor AI agent tasks and outcomes"
-        icon={Bot}
-        fields={fields}
-        searchFields={['agent_type', 'task_type', 'status']}
-      />
+      )}
     </div>
   );
 }

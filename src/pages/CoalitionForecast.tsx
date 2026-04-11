@@ -1,81 +1,86 @@
-import { Handshake, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import CrudPage, { type CrudField } from '../components/ui/CrudPage';
+import { motion } from 'framer-motion';
+import { Users2, Zap, TrendingUp, RefreshCw, Loader2, BarChart3 } from 'lucide-react';
 import { api } from '../lib/api';
-
-const fields: CrudField[] = [
-  { key: 'scenario_name', label: 'Scenario Name', required: true },
-  { key: 'total_seats', label: 'Total Seats', type: 'number' },
-  { key: 'majority_mark', label: 'Majority Mark', type: 'number' },
-  { key: 'seat_projections', label: 'Seat Projections (JSON)', type: 'json' },
-  { key: 'alliances', label: 'Alliances (JSON)', type: 'json' },
-  { key: 'probability', label: 'Win Probability (%)', type: 'number' },
-  { key: 'risk_level', label: 'Risk Level', type: 'select', options: ['low', 'moderate', 'high', 'critical'] },
-  { key: 'status', label: 'Status', type: 'select', options: ['draft', 'active', 'archived'] },
-  { key: 'notes', label: 'Notes', type: 'textarea' },
-];
+import { T, AIPanel, Stat, Loading, getToken, useW, isMob } from '../components/ui/ModuleLayout';
 
 export default function CoalitionForecast() {
-  const [overview, setOverview] = useState<{ total?: number; active?: number; top?: { scenario_name: string; probability: number; risk_level: string } | null }>({});
+  const w = useW();
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [aiInsight, setAiInsight] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
 
-  async function fetchOverview() {
-    try {
-      const data = await api.get('/api/coalition-forecast/overview') as { total?: number; active?: number; top?: { scenario_name: string; probability: number; risk_level: string } | null };
-      setOverview(data || {});
-    } catch {
-      setOverview({});
-    }
+  async function load() {
+    setLoading(true);
+    try { const d = await api.get('/api/coalition-forecast/overview'); setData(d); } catch (_) {}
+    setLoading(false);
   }
 
-  async function runForecast() {
+  async function run() {
     setRunning(true);
-    try {
-      await api.post('/api/coalition-forecast/run', {});
-      await fetchOverview();
-    } finally {
-      setRunning(false);
-    }
+    try { await api.post('/api/coalition-forecast/run', {}); await load(); } catch (_) {}
+    setRunning(false);
   }
 
-  useEffect(() => { fetchOverview(); }, []);
+  async function getInsight() {
+    setAnalyzing(true);
+    try {
+      const r = await fetch('/api/ai-assistant', {
+        method: 'POST', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: `Based on this coalition data, what alliance strategy would maximise seat count in the next election? What are the risks of each option? Data: ${JSON.stringify(data)}` }] }),
+      });
+      setAiInsight(await r.text());
+    } catch (_) {}
+    setAnalyzing(false);
+  }
+
+  useEffect(() => { load(); }, []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h2 className="font-bold text-xl" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Coalition Forecasting</h2>
-          <p style={{ fontSize: 12, color: '#8899bb' }}>Model alliances, seat math, and coalition viability.</p>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Space Grotesk', margin: 0 }}>Coalition Forecast</h1>
+          <p style={{ fontSize: 13, color: '#8899bb', margin: '4px 0 0' }}>AI-powered seat projection and alliance analysis</p>
         </div>
-        <button onClick={runForecast} className="btn-primary flex items-center gap-2" disabled={running}>
-          <Play size={14} /> {running ? 'Running...' : 'Run Forecast'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={getInsight} disabled={analyzing} style={{ ...T.primary, opacity: analyzing ? 0.65 : 1 }}>
+            {analyzing ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Analysing...</> : <><Zap size={13} />AI Strategy</>}
+          </button>
+          <button onClick={run} disabled={running} style={T.ghost}>
+            {running ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />Running...</> : <><RefreshCw size={13} />Run Forecast</>}
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        {[
-          { label: 'Scenarios', value: overview.total ?? 0 },
-          { label: 'Active', value: overview.active ?? 0 },
-          { label: 'Top Scenario', value: overview.top?.scenario_name || '—' },
-        ].map(card => (
-          <div key={card.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="text-xs" style={{ color: '#8899bb' }}>{card.label}</div>
-            <div className="text-lg font-bold mt-1" style={{ color: '#f0f4ff' }}>{card.value}</div>
-            {card.label === 'Top Scenario' && overview.top?.probability !== undefined && (
-              <div style={{ fontSize: 11, color: '#8899bb' }}>{overview.top.probability}% · {overview.top.risk_level}</div>
-            )}
-          </div>
-        ))}
-      </div>
+      {(aiInsight || analyzing) && <AIPanel title="Coalition Strategy" content={aiInsight} loading={analyzing} onClose={() => setAiInsight('')} />}
 
-      <CrudPage
-        table="coalition_scenarios"
-        title="Coalition Scenarios"
-        subtitle="Manage scenarios, alliances, and seat projections"
-        icon={Handshake}
-        fields={fields}
-        searchFields={['scenario_name', 'status', 'risk_level']}
-      />
+      {loading ? <Loading text="Loading coalition data..." /> : !data ? (
+        <div style={{ ...T.card, padding: 40, textAlign: 'center' }}>
+          <Users2 size={36} style={{ color: '#8899bb', opacity: 0.2, margin: '0 auto 14px', display: 'block' }} />
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#f0f4ff', marginBottom: 6 }}>No forecast data yet</div>
+          <div style={{ fontSize: 13, color: '#8899bb', marginBottom: 18 }}>Run the forecast engine to generate alliance projections</div>
+          <button onClick={run} style={T.primary}><Zap size={13} />Run Forecast</button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: isMob(w) ? '1fr' : '1fr 1fr', gap: 14 }}>
+          {data.scenarios?.map((s: any, i: number) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
+              style={{ ...T.card, padding: 18, borderColor: i === 0 ? 'rgba(0,212,170,0.3)' : 'rgba(255,255,255,0.08)' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff', marginBottom: 4 }}>{s.name}</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: i === 0 ? '#00d4aa' : '#42a5f5', fontFamily: 'Space Grotesk', marginBottom: 4 }}>{s.projected_seats}</div>
+              <div style={{ fontSize: 12, color: '#8899bb', marginBottom: 8 }}>projected seats</div>
+              <p style={{ fontSize: 12, color: '#d0d8ee', margin: 0, lineHeight: 1.6 }}>{s.analysis}</p>
+            </motion.div>
+          )) || (
+            <div style={{ ...T.card, padding: 18, gridColumn: '1/-1' }}>
+              <pre style={{ fontSize: 12, color: '#d0d8ee', margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(data, null, 2)}</pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
