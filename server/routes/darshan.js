@@ -241,8 +241,12 @@ router.post('/bookings', authMiddleware, async (req, res) => {
       await connection.query(
         `INSERT INTO darshan_pilgrims 
          (booking_id, politician_id, full_name, phone, aadhaar_hash, aadhaar_last4, age, 
-          gender, darshan_type, address, visit_date, validation_status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'valid', NOW())`,
+          gender, darshan_type, address, visit_date, validation_status,
+          mandal, village, town, assembly_segment, voter_id,
+          party_connection, referral_name, is_constituency_voter, occupation, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'valid',
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, NOW())`,
         [
           bookingId,
           politician_id,
@@ -254,7 +258,17 @@ router.post('/bookings', authMiddleware, async (req, res) => {
           pilgrim.gender,
           pilgrim.darshan_type || 'SSD Darshan',
           pilgrim.address || '',
-          visit_date
+          visit_date,
+          pilgrim.mandal || null,
+          pilgrim.village || null,
+          pilgrim.town || null,
+          pilgrim.assembly_segment || null,
+          pilgrim.voter_id || null,
+          pilgrim.party_connection || 'general_public',
+          pilgrim.referral_name || null,
+          pilgrim.is_constituency_voter ?? null,
+          pilgrim.occupation || null,
+          pilgrim.notes || null
         ]
       );
     }
