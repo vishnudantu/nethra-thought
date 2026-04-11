@@ -799,84 +799,65 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk, sans-serif' }}>
-            Super Admin Command Center
-          </h1>
-          <p style={{ fontSize: 13, color: '#8899bb', marginTop: 4 }}>
-            Platform intelligence, feature provisioning, and strategic oversight
-          </p>
+    <div className="space-y-0">
+      {/* ── COMMAND HEADER ── */}
+      <div style={{ padding: '24px 0 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <div style={{ width: 4, height: 28, borderRadius: 2, background: 'linear-gradient(180deg,#00d4aa,#1e88e5)' }} />
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Space Grotesk, sans-serif', letterSpacing: -0.5, margin: 0 }}>
+                Platform Command
+              </h1>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingLeft: 14 }}>
+              <span style={{ fontSize: 12, color: '#8899bb' }}>
+                {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+              <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
+              <span style={{ fontSize: 12, color: stats.critical > 0 ? '#ff7777' : '#00c864', fontWeight: 700 }}>
+                {stats.critical > 0 ? `${stats.critical} Critical` : '● All Systems Stable'}
+              </span>
+              <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
+              <span style={{ fontSize: 12, color: '#8899bb' }}>{stats.total} Politicians Active</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => handleNavigate('website-admin')}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#d0d8ee', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <LayoutDashboard size={13} /> Website CMS
+            </button>
+            <button onClick={() => { setFounderError(''); setShowFounderProfile(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#d0d8ee', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <Settings2 size={13} /> Founder Profile
+            </button>
+            <button onClick={() => { setShowDeploy(true); setDeployError(''); setDeploySuccess(''); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#00d4aa,#1e88e5)', color: '#060b18', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none' }}>
+              <Plus size={14} /> Deploy Politician
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleNavigate('website-admin')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0f4ff', fontSize: 13 }}
-          >
-            <LayoutDashboard size={16} />
-            Website CMS
-          </button>
-          <button
-            onClick={() => { setFounderError(''); setShowFounderProfile(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0f4ff', fontSize: 13 }}
-          >
-            <Settings2 size={16} />
-            Edit Founder Profile
-          </button>
-          <button
-            onClick={() => { setShowDeploy(true); setDeployError(''); setDeploySuccess(''); }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all"
-            style={{ background: 'linear-gradient(135deg, #00d4aa, #1e88e5)', color: '#060b18', fontSize: 13 }}
-          >
-            <Plus size={16} />
-            Deploy Politician
-          </button>
-        </div>
-      </div>
 
-      {founderMetrics && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* ── PULSE METRICS ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginTop: 20 }}>
           {[
-            { label: 'Active Politicians', value: founderMetrics.total_politicians, color: '#00d4aa' },
-            { label: 'Live Sessions', value: founderMetrics.total_users, color: '#42a5f5' },
-            { label: 'Open Alerts', value: founderMetrics.open_alerts, color: '#ff5555' },
-            { label: 'Recent Briefings', value: founderMetrics.recent_briefings, color: '#1e88e5' },
-            { label: 'MRR (₹)', value: founderMetrics.mrr, color: '#00c864' },
-          ].map(stat => (
-            <div key={stat.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="text-xs font-semibold" style={{ color: '#8899bb' }}>{stat.label}</div>
-              <div className="text-2xl font-bold mt-1" style={{ color: stat.color, fontFamily: 'Space Grotesk, sans-serif' }}>{stat.value}</div>
+            { label: 'Politicians', value: stats.total, sub: `${stats.live} live`, accent: '#00d4aa', bar: (stats.live/Math.max(stats.total,1))*100 },
+            { label: 'Performance', value: `${stats.avgPerf}`, sub: 'avg score', accent: '#42a5f5', bar: stats.avgPerf },
+            { label: 'Winning Index', value: `${stats.avgWinning}`, sub: 'platform avg', accent: '#ab47bc', bar: stats.avgWinning },
+            { label: 'Grievances', value: stats.openGrievances, sub: 'open cases', accent: stats.openGrievances > 10 ? '#ff7777' : '#ffa726', bar: Math.min(stats.openGrievances*5, 100) },
+            { label: 'Briefings', value: founderMetrics?.recent_briefings ?? 0, sub: 'generated', accent: '#26c6da', bar: 70 },
+            { label: 'Threats', value: stats.highThreats, sub: 'high priority', accent: stats.highThreats > 0 ? '#ff5555' : '#00c864', bar: Math.min(stats.highThreats*20, 100) },
+          ].map(m => (
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', bottom: 0, left: 0, height: 2, width: `${m.bar}%`, background: m.accent, borderRadius: '0 1px 0 0', transition: 'width 0.6s ease' }} />
+              <div style={{ fontSize: 10, color: '#8899bb', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 6 }}>{m.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: m.accent, fontFamily: 'Space Grotesk', lineHeight: 1 }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#8899bb', marginTop: 4 }}>{m.sub}</div>
             </div>
           ))}
         </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        {[
-          { label: 'Total Politicians', value: stats.total, color: '#00d4aa', icon: Building2 },
-          { label: 'Live Now', value: stats.live, color: '#4caf90', icon: BadgeCheck },
-          { label: 'At Risk', value: stats.critical, color: '#ff5555', icon: Ban },
-          { label: 'Avg Performance', value: stats.avgPerf, color: '#42a5f5', icon: Sparkles },
-          { label: 'Winning Index', value: stats.avgWinning, color: '#00d4aa', icon: ClipboardCheck },
-          { label: 'High Threats', value: stats.highThreats, color: '#ff6b6b', icon: Shield },
-        ].map(stat => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.label} className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${stat.color}18` }}>
-                  <Icon size={17} style={{ color: stat.color }} />
-                </div>
-              </div>
-              <div className="text-3xl font-bold mb-1" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk, sans-serif' }}>{stat.value}</div>
-              <div style={{ fontSize: 12, color: '#8899bb' }}>{stat.label}</div>
-            </div>
-          );
-        })}
       </div>
+
 
       {deploySuccess && (
         <motion.div
@@ -941,274 +922,111 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
             Loading...
           </div>
         ) : tab === 'overview' ? (
-          <div className="p-5 space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+          <div style={{ padding: '20px 20px 24px' }}>
+
+            {/* ── SECTION HEADER ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <div className="text-lg font-semibold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Founder Command Dashboard</div>
-                <div style={{ fontSize: 12, color: '#8899bb' }}>Live ops, performance rankings, and platform control</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff', letterSpacing: 0.2 }}>All Politicians</div>
+                <div style={{ fontSize: 11, color: '#8899bb', marginTop: 2 }}>{filteredOverview.length} accounts · sorted by performance</div>
               </div>
-              <div className="flex items-center gap-2">
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => { setTab('reports'); setReportPoliticianId(''); }}
-                  className="btn-secondary flex items-center gap-2">
-                  <FileBarChart2 size={14} /> Generate Weekly Reports
+                  style={{ display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius:9,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',color:'#aabbd0',fontSize:11,fontWeight:600,cursor:'pointer' }}>
+                  <FileBarChart2 size={12} /> Reports
                 </button>
                 <button onClick={() => { setTab('access'); }}
-                  className="btn-primary flex items-center gap-2">
-                  <Settings2 size={14} /> Manage Access
+                  style={{ display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius:9,background:'rgba(0,212,170,0.1)',border:'1px solid rgba(0,212,170,0.25)',color:'#00d4aa',fontSize:11,fontWeight:600,cursor:'pointer' }}>
+                  <Settings2 size={12} /> Manage Access
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Platform Health</div>
-                  <Badge variant={stats.critical > 0 ? 'danger' : 'success'}>
-                    {stats.critical > 0 ? `${stats.critical} Critical` : 'Stable'}
-                  </Badge>
-                </div>
-                <div className="space-y-3 mt-4 text-xs" style={{ color: '#8899bb' }}>
-                  <div className="flex items-center justify-between"><span>Live Politicians</span><span style={{ color: '#f0f4ff' }}>{stats.live}/{stats.total}</span></div>
-                  <div className="flex items-center justify-between"><span>Active Modules</span><span style={{ color: '#f0f4ff' }}>{activeModules}</span></div>
-                  <div className="flex items-center justify-between"><span>Active Features</span><span style={{ color: '#f0f4ff' }}>{activeFeatures}</span></div>
-                  <div className="flex items-center justify-between"><span>Open Grievances</span><span style={{ color: '#f0f4ff' }}>{stats.openGrievances}</span></div>
-                  <div className="flex items-center justify-between"><span>High Threats</span><span style={{ color: '#f0f4ff' }}>{stats.highThreats}</span></div>
-                  <div className="flex items-center justify-between"><span>Avg Sentiment</span><span style={{ color: '#f0f4ff' }}>{stats.avgSentiment}</span></div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center justify-between text-xs mb-1" style={{ color: '#8899bb' }}>
-                    <span>Average Performance</span><span style={{ color: '#f0f4ff' }}>{stats.avgPerf}</span>
+            {/* ── REGION GROUPING ── */}
+            {(() => {
+              const regions: Record<string, typeof filteredOverview> = {};
+              filteredOverview.forEach(p => {
+                const r = p.state || 'Other';
+                if (!regions[r]) regions[r] = [];
+                regions[r].push(p);
+              });
+              return Object.entries(regions).map(([region, pols]) => (
+                <div key={region} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#8899bb', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    {region} · {pols.length} politician{pols.length !== 1 ? 's' : ''}
                   </div>
-                  <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${stats.avgPerf}%`, background: 'linear-gradient(135deg, #00d4aa, #1e88e5)' }} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 10 }}>
+                    {pols.map(p => {
+                      const perf = p.performance ?? 0;
+                      const perfColor = perf >= 70 ? '#00d4aa' : perf >= 40 ? '#ffa726' : '#ff5555';
+                      const initials = p.full_name.split(' ').map((n:string)=>n[0]).slice(0,2).join('').toUpperCase();
+                      const accentColor = p.color_primary || '#00d4aa';
+                      return (
+                        <div key={p.id}
+                          style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '14px 16px', position: 'relative', overflow: 'hidden', cursor: 'default' }}
+                          onMouseEnter={e => (e.currentTarget.style.background='rgba(255,255,255,0.05)')}
+                          onMouseLeave={e => (e.currentTarget.style.background='rgba(255,255,255,0.025)')}
+                        >
+                          {/* left accent */}
+                          <div style={{ position:'absolute',left:0,top:0,bottom:0,width:3,background:accentColor,borderRadius:'14px 0 0 14px',opacity:0.7 }} />
+
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingLeft: 6 }}>
+                            {/* Avatar */}
+                            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${accentColor}22`, border: `1px solid ${accentColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: accentColor, flexShrink: 0, fontFamily: 'Space Grotesk' }}>
+                              {initials}
+                            </div>
+
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.full_name}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: perfColor }}>{perf}</span>
+                                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.is_active ? '#00c864' : '#666' }} />
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 11, color: '#8899bb', marginTop: 2 }}>{p.designation} · {p.constituency_name}</div>
+
+                              {/* Performance bar */}
+                              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', width: `${perf}%`, background: `linear-gradient(90deg,${perfColor}88,${perfColor})`, borderRadius: 2, transition: 'width 0.6s ease' }} />
+                                </div>
+                                <span style={{ fontSize: 9, color: '#8899bb', whiteSpace: 'nowrap' }}>{p.open_grievances ?? 0} open</span>
+                              </div>
+
+                              {/* Action buttons */}
+                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                                <button onClick={() => { setTab('access'); setSelectedAccessPolitician(p.id); }}
+                                  style={{ fontSize: 10, padding: '4px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#8899bb', cursor: 'pointer', fontWeight: 600 }}>
+                                  Access
+                                </button>
+                                <button onClick={() => { setTab('reports'); setReportPoliticianId(p.id); }}
+                                  style={{ fontSize: 10, padding: '4px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#8899bb', cursor: 'pointer', fontWeight: 600 }}>
+                                  Report
+                                </button>
+                                <span style={{ marginLeft: 'auto', fontSize: 9, padding: '3px 8px', borderRadius: 6, background: p.is_active ? 'rgba(0,200,100,0.08)' : 'rgba(255,255,255,0.04)', color: p.is_active ? '#00c864' : '#666', fontWeight: 700, border: `1px solid ${p.is_active ? 'rgba(0,200,100,0.15)' : 'rgba(255,255,255,0.06)'}` }}>
+                                  {p.subscription_status || 'active'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-
-              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Top Performers</div>
-                  <Badge variant="info">Winning Index</Badge>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {topPerformers.map(p => (
-                    <div key={p.id} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
-                        style={{ background: `linear-gradient(135deg, ${p.color_primary || '#00d4aa'}, ${p.color_secondary || '#1e88e5'})`, color: '#060b18' }}>
-                        {p.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-sm" style={{ color: '#f0f4ff' }}>{p.full_name}</div>
-                        <div className="text-xs truncate" style={{ color: '#8899bb' }}>{p.constituency_name}</div>
-                      </div>
-                      <div className="text-xs font-semibold" style={{ color: '#00d4aa' }}>{p.performance}</div>
-                    </div>
-                  ))}
-                  {topPerformers.length === 0 && (
-                    <div className="text-xs" style={{ color: '#8899bb' }}>No performance data yet.</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Risk Watch</div>
-                  <Badge variant={riskWatch.length ? 'warning' : 'success'}>{riskWatch.length ? 'Needs Attention' : 'Clear'}</Badge>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {riskWatch.map(p => (
-                    <div key={p.id} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
-                        style={{ background: 'rgba(255,85,85,0.15)', color: '#ff5555' }}>
-                        !
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-sm" style={{ color: '#f0f4ff' }}>{p.full_name}</div>
-                        <div className="text-xs truncate" style={{ color: '#8899bb' }}>{p.constituency_name}</div>
-                      </div>
-                      <Badge variant={healthVariant(p.health)}>{p.health}</Badge>
-                    </div>
-                  ))}
-                  {riskWatch.length === 0 && (
-                    <div className="text-xs" style={{ color: '#8899bb' }}>No high-risk profiles right now.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Platform Intelligence Feed</div>
-                <Badge variant={founderFeed.length ? 'info' : 'neutral'}>{founderFeed.length ? 'Live' : 'Idle'}</Badge>
-              </div>
-              <div className="mt-4 space-y-3 text-xs" style={{ color: '#8899bb' }}>
-                {founderFeed.map(item => (
-                  <div key={item.id} className="flex items-start gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full mt-1" style={{ background: 'rgba(0,212,170,0.7)' }} />
-                    <div>
-                      <div style={{ color: '#f0f4ff', fontSize: 12 }}>{item.opponent_name || 'Signal'} — {item.activity_type}</div>
-                      <div style={{ color: '#8899bb' }}>{item.description}</div>
-                    </div>
-                  </div>
-                ))}
-                {!founderFeed.length && (
-                  <div className="text-xs" style={{ color: '#8899bb' }}>No intelligence alerts right now.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Future Radar</div>
-                  <Badge variant="warning">10-Year Vision</Badge>
-                </div>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {[...futureModules.map(m => m.label), ...futureFeatures.map(f => f.label)].slice(0, 8).map(item => (
-                    <div key={item} className="rounded-xl px-3 py-2 text-xs"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: '#8899bb' }}>
-                      {item}
-                    </div>
-                  ))}
-                  {futureModules.length + futureFeatures.length === 0 && (
-                    <div className="text-xs" style={{ color: '#8899bb' }}>No future-lab modules configured yet.</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="text-sm font-semibold" style={{ color: '#f0f4ff' }}>Founder Controls</div>
-                <div className="text-xs mt-1" style={{ color: '#8899bb' }}>Assign modules, unlock features, and generate intelligence</div>
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button onClick={() => setTab('access')} className="btn-secondary text-xs flex items-center gap-2">
-                    <SlidersHorizontal size={12} /> Module Access
-                  </button>
-                  <button onClick={() => setTab('reports')} className="btn-secondary text-xs flex items-center gap-2">
-                    <FileBarChart2 size={12} /> Weekly Reports
-                  </button>
-                  <button onClick={() => setShowModuleModal(true)} className="btn-primary text-xs flex items-center gap-2">
-                    <Plus size={12} /> Add Module
-                  </button>
-                  <button onClick={() => setShowFeatureModal(true)} className="btn-primary text-xs flex items-center gap-2">
-                    <Plus size={12} /> Add Feature
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <div className="text-lg font-semibold" style={{ color: '#f0f4ff', fontFamily: 'Space Grotesk' }}>Politician Live Board</div>
-                <div style={{ fontSize: 12, color: '#8899bb' }}>Status, momentum, and winning analysis per constituency</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {filteredOverview.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="glass-card-hover rounded-2xl p-5"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl flex items-center justify-center font-bold"
-                        style={{ background: `linear-gradient(135deg, ${p.color_primary || '#00d4aa'}, ${p.color_secondary || '#1e88e5'})`, color: '#060b18' }}>
-                        {p.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                      </div>
-                      <div>
-                        <div className="font-semibold" style={{ color: '#f0f4ff', fontSize: 15 }}>{p.full_name}</div>
-                        <div style={{ fontSize: 11, color: '#8899bb' }}>{p.party} • {p.constituency_name}, {p.state}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
-                      <Badge variant={healthVariant(p.health)}>{p.health}</Badge>
-                      <button
-                        onClick={() => togglePoliticianStatus(p as unknown as Politician)}
-                        className="px-2.5 py-1.5 rounded-lg flex items-center gap-1"
-                        style={{ background: 'rgba(255,255,255,0.06)', color: '#8899bb', fontSize: 11 }}
-                      >
-                        {p.is_active ? <ToggleRight size={14} style={{ color: '#00d4aa' }} /> : <ToggleLeft size={14} />}
-                        {p.is_active ? 'On' : 'Off'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-                    {[
-                      { label: 'Performance', value: p.performance, color: '#00d4aa' },
-                      { label: 'Winning Index', value: p.winning, color: '#42a5f5' },
-                      { label: 'Momentum', value: p.momentum, color: '#ffa726' },
-                    ].map(metric => (
-                      <div key={metric.label} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: metric.color }}>{metric.value}</div>
-                        <div style={{ fontSize: 10, color: '#8899bb' }}>{metric.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between text-xs" style={{ color: '#8899bb' }}>
-                      <span>Performance</span>
-                      <span style={{ color: '#f0f4ff' }}>{p.performance}%</span>
-                    </div>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{ width: `${p.performance}%`, background: `linear-gradient(135deg, ${p.color_primary || '#00d4aa'}, ${p.color_secondary || '#1e88e5'})` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-                    {[
-                      { label: 'Open Grievances', value: p.open_grievances ?? 0, color: '#ff6b6b' },
-                      { label: 'High Threats', value: p.high_threats ?? 0, color: '#ff7a59' },
-                      { label: 'Sentiment Avg', value: p.sentiment_avg ?? 0, color: '#00d4aa' },
-                    ].map(metric => (
-                      <div key={metric.label} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: metric.color }}>{metric.value}</div>
-                        <div style={{ fontSize: 10, color: '#8899bb' }}>{metric.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-4">
-                    <button
-                      onClick={() => { setTab('access'); setSelectedAccessPolitician(p.id); }}
-                      className="btn-secondary text-xs flex items-center gap-1.5"
-                    >
-                      <SlidersHorizontal size={12} /> Configure Access
-                    </button>
-                    <button
-                      onClick={() => { setTab('reports'); setReportPoliticianId(p.id); }}
-                      className="btn-primary text-xs flex items-center gap-1.5"
-                    >
-                      <FileBarChart2 size={12} /> Generate Report
-                    </button>
-                    <button
-                      onClick={() => deletePolitician(p.id)}
-                      className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ background: 'rgba(255,85,85,0.08)', color: '#ff5555' }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+              ));
+            })()}
 
             {filteredOverview.length === 0 && (
-              <div className="py-16 text-center" style={{ color: '#8899bb' }}>
-                <Building2 size={40} className="mx-auto mb-3 opacity-30" />
-                <p>No politicians found. Deploy a politician to get started.</p>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: '#8899bb', fontSize: 13 }}>
+                No politicians found. Deploy the first one.
               </div>
             )}
           </div>
         ) : tab === 'access' ? (
+
           <div className="p-5 space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>

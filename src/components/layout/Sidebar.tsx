@@ -223,8 +223,13 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
         })}
       </nav>
 
+      {!collapsed && isSuperAdmin && (
+        <div style={{ padding: '8px 12px 4px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <AIModelSwitcher compact={false} />
+        </div>
+      )}
       {!collapsed && (
-        <div className="p-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="p-3" style={{ borderTop: isSuperAdmin ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
           {isSuperAdmin && allPoliticians.length > 1 && (
             <div className="relative mb-2">
               <button
@@ -295,11 +300,7 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
                   {isSuperAdmin ? 'Super Admin' : 'Online'}
                 </span>
               </div>
-              {isSuperAdmin && (
-                <div style={{ marginBottom: 8 }}>
-                  <AIModelSwitcher compact={false} />
-                </div>
-              )}
+
               <button
                 onClick={handleSignOut}
                 disabled={signingOut}
