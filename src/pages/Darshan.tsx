@@ -132,16 +132,31 @@ export default function Darshan() {
   function onAadhaarBlur(id:string){ const p=pilgrims.find(x=>x.id===id); if(p&&p.aadhaar.replace(/\s/g,'').length===12&&p.phone.length===10) validate(id); }
   function onPhone(id:string,v:string){
     const d=v.replace(/\D/g,'').slice(0,10); up(id,{phone:d,validation:'idle',validation_msg:''});
-    const p=pilgrims.find(x=>x.id===id);
-    if (p&&p.aadhaar.replace(/\s/g,'').length===12&&d.length===10) setTimeout(()=>validate(id),300);
+    // Use functional update to avoid stale closure - check current state
+    setPilgrims(prev=>{
+      const p=prev.find(x=>x.id===id);
+      if (p&&p.aadhaar.replace(/\s/g,'').length===12&&d.length===10){
+        // Trigger validation after state settles
+        setTimeout(()=>validate(id),400);
+      }
+      return prev;
+    });
   }
 
   function setCount(n:number){ if(n<1||n>quota.remaining) return; setPilgrims(prev=>n>prev.length?[...prev,...Array(n-prev.length).fill(null).map(mkPilgrim)]:prev.slice(0,n)); }
 
+  // Can submit if: all names filled, visit date set, no INVALID pilgrims
+  // validation='idle' or 'error' is allowed (network issues shouldn't block staff)
+  // validation='checking' blocks (wait for result)
+  const hasInvalid = pilgrims.some(p=>p.validation==='invalid');
+  const hasChecking = pilgrims.some(p=>p.validation==='checking');
+  const allNamed = pilgrims.every(p=>p.full_name.trim().length>1);
+  const allAadhaarFilled = pilgrims.every(p=>p.aadhaar.replace(/\s/g,'').length===12);
+  const allPhoneFilled = pilgrims.every(p=>p.phone.length===10);
   const allReady = pilgrims.length>0
-    && pilgrims.every(p=>p.validation==='valid'||p.validation==='error')
-    && !pilgrims.some(p=>p.validation==='invalid')
-    && pilgrims.every(p=>p.full_name.trim().length>1)
+    && allNamed
+    && !hasInvalid
+    && !hasChecking
     && !!visitDate;
 
   async function submit(){
@@ -304,8 +319,16 @@ export default function Darshan() {
                 </div>
                 <div>
                   <label style={L}><CreditCard size={9} style={{display:'inline',marginRight:3}}/>Aadhaar *</label>
-                  <input value={p.aadhaar} onChange={e=>onAadhaar(p.id,e.target.value)} onBlur={()=>onAadhaarBlur(p.id)}
-                    placeholder="0000 0000 0000" maxLength={14} style={{...I,fontFamily:'monospace',letterSpacing:2}}/>
+                  <div style={{display:'flex',gap:6}}>
+                    <input value={p.aadhaar} onChange={e=>onAadhaar(p.id,e.target.value)} onBlur={()=>onAadhaarBlur(p.id)}
+                      placeholder="0000 0000 0000" maxLength={14} style={{...I,fontFamily:'monospace',letterSpacing:2,flex:1}}/>
+                    {p.aadhaar.replace(/\s/g,'').length===12&&p.phone.length===10&&p.validation!=='valid'&&(
+                      <button onClick={()=>validate(p.id)} disabled={p.validation==='checking'}
+                        style={{padding:'0 10px',borderRadius:8,background:'rgba(0,212,170,0.1)',border:'1px solid rgba(0,212,170,0.25)',color:'#00d4aa',fontSize:10,fontWeight:700,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>
+                        {p.validation==='checking'?'...':'Check'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label style={L}><Phone size={9} style={{display:'inline',marginRight:3}}/>Mobile *</label>
@@ -396,10 +419,18 @@ export default function Darshan() {
           <AnimatePresence>
             {pilgrims.length>0&&<motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} style={{...C,display:'flex',alignItems:'center',gap:12,border:allReady?'1px solid rgba(0,212,170,0.3)':'1px solid rgba(255,255,255,0.08)',marginBottom:24}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:700,color:'#f0f4ff'}}>{pilgrims.filter(p=>p.validation==='valid').length} of {pilgrims.length} validated</div>
-                {!visitDate&&<div style={{fontSize:10,color:'#ffa726',marginTop:2}}>Select visit date</div>}
-                {pilgrims.some(p=>p.validation==='invalid')&&<div style={{fontSize:10,color:'#ff7777',marginTop:2}}>Some pilgrims not eligible</div>}
-                {pilgrims.every(p=>p.validation==='idle')&&<div style={{fontSize:10,color:'#8899bb',marginTop:2}}>Enter Aadhaar + Phone to validate</div>}
+                <div style={{fontSize:12,fontWeight:700,color:'#f0f4ff'}}>
+                  {pilgrims.filter(p=>p.validation==='valid').length} of {pilgrims.length} verified
+                </div>
+                {!visitDate&&<div style={{fontSize:10,color:'#ffa726',marginTop:2}}>Select visit date above</div>}
+                {hasInvalid&&<div style={{fontSize:10,color:'#ff7777',marginTop:2}}>Remove ineligible pilgrims first</div>}
+                {hasChecking&&<div style={{fontSize:10,color:'#64b5f6',marginTop:2}}>Waiting for verification...</div>}
+                {!hasInvalid&&!hasChecking&&allNamed&&visitDate&&pilgrims.some(p=>p.validation==='idle')&&(
+                  <div style={{fontSize:10,color:'#ffa726',marginTop:2}}>
+                    {allAadhaarFilled&&allPhoneFilled?'Click Check to verify eligibility':'Fill Aadhaar + Phone to verify'}
+                  </div>
+                )}
+                {allReady&&pilgrims.every(p=>p.validation==='valid')&&<div style={{fontSize:10,color:'#00d4aa',marginTop:2}}>All pilgrims verified ✓</div>}
               </div>
               <button onClick={submit} disabled={!allReady||submitting||quota.remaining===0}
                 style={{...BTN,opacity:(!allReady||quota.remaining===0)?0.4:1}}>
