@@ -1113,7 +1113,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                   value={selectedAccessPolitician}
                   onChange={e => setSelectedAccessPolitician(e.target.value)}
                   className="input-field"
-                  style={{ minWidth: 220 }}
+                  style={{ minWidth: isMob(w) ? '100%' : 220, width: isMob(w) ? '100%' : 'auto' }}
                 >
                   {politicians.map(p => (
                     <option key={p.id} value={p.id}>{p.full_name}</option>
@@ -1173,7 +1173,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                   value={selectedAccessPolitician}
                   onChange={e => setSelectedAccessPolitician(e.target.value)}
                   className="input-field"
-                  style={{ minWidth: 220 }}
+                  style={{ minWidth: isMob(w) ? '100%' : 220, width: isMob(w) ? '100%' : 'auto' }}
                 >
                   {politicians.map(p => (
                     <option key={p.id} value={p.id}>{p.full_name}</option>
@@ -1420,7 +1420,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                 <p>No platform users yet.</p>
               </div>
             ) : users.map(u => (
-              <div key={u.id} className="flex items-center gap-4 p-4">
+              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, flexWrap: "wrap" }}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                   style={{ background: 'rgba(30,136,229,0.15)', color: '#1e88e5' }}>
                   <UserCheck size={16} />
@@ -1479,7 +1479,7 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#8899bb', letterSpacing: 1, textTransform: 'uppercase', display: 'block', marginBottom: 10 }}>
                   Designation *
                 </label>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMob(w) ? 2 : 3}, 1fr)`, gap: 8 }}>
                   {(Object.entries(DESIGNATION_CONFIG) as [string, typeof DESIGNATION_CONFIG[keyof typeof DESIGNATION_CONFIG]][]).map(([key, cfg]) => (
                     <button
                       key={key}

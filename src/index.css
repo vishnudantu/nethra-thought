@@ -21,6 +21,44 @@
   --text-secondary: #8899bb;
 }
 
+
+/* ── MOBILE OVERFLOW PREVENTION ── */
+/* Prevent any child from causing horizontal scroll */
+#root, #root > * {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* All flex rows default to wrap on mobile */
+@media (max-width: 639px) {
+  .input-field {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* Ensure no fixed widths escape on mobile */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  textarea,
+  select {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* Smooth horizontal scroll for tab bars and carousels */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);

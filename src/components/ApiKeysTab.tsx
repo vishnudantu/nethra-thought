@@ -6,6 +6,7 @@ import {
   Shield, Zap, Bot
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useW, isMob } from './ui/ModuleLayout';
 import Badge from './ui/Badge';
 
 interface ApiKeyRecord {
@@ -71,6 +72,7 @@ export default function ApiKeysTab({
   orTestPrompt, setOrTestPrompt, orTestResponse, setOrTestResponse,
   orTesting, setOrTesting, orTestStatus, setOrTestStatus, testOpenRouter
 }: Props) {
+  const w = useW();
   // Platform keys state
   const [showValues, setShowValues] = useState<Record<string, boolean>>({});
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
@@ -268,7 +270,7 @@ export default function ApiKeysTab({
             return (
               <div key={keyName} className="rounded-xl p-4"
                 style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${isActive ? 'rgba(0,212,170,0.15)' : 'rgba(255,255,255,0.06)'}` }}>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div style={{ display: "flex", alignItems: isMob(w) ? "flex-start" : "center", gap: isMob(w) ? 10 : 12, flexWrap: isMob(w) ? "wrap" : "nowrap" }}>
                   {/* Key icon */}
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: isActive ? `${suggested?.color || '#00d4aa'}18` : 'rgba(255,255,255,0.06)' }}>
@@ -298,16 +300,16 @@ export default function ApiKeysTab({
                     </div>
                   </div>
 
-                  {/* Input + buttons */}
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
+                  {/* Input + buttons — full width on mobile */}
+                  <div style={{ width: '100%', display: 'flex', gap: 7, alignItems: 'center', marginTop: isMob(w) ? 8 : 0 }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
                       <input
                         type={showValues[keyName] ? 'text' : 'password'}
                         className="input-field"
                         placeholder={isActive ? 'Replace key...' : 'Paste key or value...'}
                         value={keyInputs[keyName] || ''}
                         onChange={e => setKeyInputs(p => ({ ...p, [keyName]: e.target.value }))}
-                        style={{ width: 220, paddingRight: 32, fontSize: 12 }}
+                        style={{ width: '100%', paddingRight: 32, fontSize: 12 }}
                         onKeyDown={e => { if (e.key === 'Enter') savePlatformKey(keyName); }}
                       />
                       <button type="button"
@@ -321,13 +323,13 @@ export default function ApiKeysTab({
                       onClick={() => savePlatformKey(keyName)}
                       disabled={saving[keyName] || !masterKeyConfigured || !(keyInputs[keyName] || '').trim()}
                       className="btn-primary text-xs flex items-center gap-1 flex-shrink-0"
-                      style={{ opacity: !masterKeyConfigured || !(keyInputs[keyName] || '').trim() ? 0.4 : 1 }}>
+                      style={{ opacity: !masterKeyConfigured || !(keyInputs[keyName] || '').trim() ? 0.4 : 1, padding: '8px 14px' }}>
                       {saving[keyName] ? <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} /> : <Check size={12} />}
                       Save
                     </button>
                     {isActive && (
                       <button onClick={() => deletePlatformKey(keyName)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0"
                         style={{ background: 'rgba(255,85,85,0.08)', color: '#ff5555' }}>
                         <Trash2 size={12} />
                       </button>
@@ -503,7 +505,7 @@ export default function ApiKeysTab({
             <div className="font-semibold" style={{ color: '#f0f4ff', fontSize: 15 }}>Per-Politician API Keys</div>
             <div style={{ fontSize: 11, color: '#8899bb' }}>Override any key for a specific politician. Overrides platform keys. Useful for billing per-client.</div>
           </div>
-          <select value={selectedPolId} onChange={e => setSelectedPolId(e.target.value)} className="input-field" style={{ minWidth: 200 }}>
+          <select value={selectedPolId} onChange={e => setSelectedPolId(e.target.value)} className="input-field" style={{ minWidth: isMob(w) ? '100%' : 200, width: isMob(w) ? '100%' : 'auto' }}>
             {politicians.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
           </select>
         </div>
@@ -517,7 +519,7 @@ export default function ApiKeysTab({
             return (
               <div key={keyName} className="rounded-xl p-4"
                 style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${isActive ? 'rgba(30,136,229,0.18)' : 'rgba(255,255,255,0.06)'}` }}>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div style={{ display: "flex", alignItems: isMob(w) ? "flex-start" : "center", gap: isMob(w) ? 10 : 12, flexWrap: isMob(w) ? "wrap" : "nowrap" }}>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: isActive ? `${suggested?.color || '#1e88e5'}18` : 'rgba(255,255,255,0.06)' }}>
                     <Key size={14} style={{ color: isActive ? (suggested?.color || '#1e88e5') : '#8899bb' }} />
@@ -531,29 +533,33 @@ export default function ApiKeysTab({
                     <code style={{ fontSize: 10, color: '#6677aa', fontFamily: 'monospace' }}>{keyName}</code>
                     {existing?.key_hint && <span style={{ fontSize: 11, color: '#8899bb', marginLeft: 8 }}>{existing.key_hint}</span>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input type="password" className="input-field" placeholder={isActive ? 'Replace...' : 'Paste key...'}
-                      value={polKeyInputs[keyName] || ''}
-                      onChange={e => setPolKeyInputs(p => ({ ...p, [keyName]: e.target.value }))}
-                      style={{ width: 180, fontSize: 12 }} />
-                    <input className="input-field" placeholder="Monthly limit"
-                      value={polKeyLimits[keyName] || ''}
-                      onChange={e => setPolKeyLimits(p => ({ ...p, [keyName]: e.target.value }))}
-                      style={{ width: 110, fontSize: 12 }} />
-                    <button onClick={() => savePolKey(keyName)}
-                      disabled={polSaving[keyName] || !masterKeyConfigured || !(polKeyInputs[keyName] || '').trim()}
-                      className="btn-primary text-xs flex items-center gap-1 flex-shrink-0"
-                      style={{ opacity: !masterKeyConfigured || !(polKeyInputs[keyName] || '').trim() ? 0.4 : 1 }}>
-                      {polSaving[keyName] ? <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} /> : <Check size={12} />}
-                      Save
-                    </button>
-                    {isActive && (
-                      <button onClick={() => deletePolKey(keyName)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg"
-                        style={{ background: 'rgba(255,85,85,0.08)', color: '#ff5555' }}>
-                        <Trash2 size={12} />
+                  <div style={{ width: '100%', display: 'flex', flexDirection: isMob(w) ? 'column' : 'row', gap: 7, alignItems: isMob(w) ? 'stretch' : 'center', marginTop: isMob(w) ? 8 : 0 }}>
+                    <div style={{ display: 'flex', gap: 7, flex: 1 }}>
+                      <input type="password" className="input-field" placeholder={isActive ? 'Replace...' : 'Paste key...'}
+                        value={polKeyInputs[keyName] || ''}
+                        onChange={e => setPolKeyInputs(p => ({ ...p, [keyName]: e.target.value }))}
+                        style={{ flex: 2, fontSize: 12, minWidth: 0 }} />
+                      <input className="input-field" placeholder="Limit"
+                        value={polKeyLimits[keyName] || ''}
+                        onChange={e => setPolKeyLimits(p => ({ ...p, [keyName]: e.target.value }))}
+                        style={{ flex: 1, fontSize: 12, minWidth: 0 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+                      <button onClick={() => savePolKey(keyName)}
+                        disabled={polSaving[keyName] || !masterKeyConfigured || !(polKeyInputs[keyName] || '').trim()}
+                        className="btn-primary text-xs flex items-center gap-1 flex-shrink-0"
+                        style={{ opacity: !masterKeyConfigured || !(polKeyInputs[keyName] || '').trim() ? 0.4 : 1, padding: '8px 14px', flex: isMob(w) ? 1 : undefined, justifyContent: 'center' }}>
+                        {polSaving[keyName] ? <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(6,11,24,0.3)', borderTopColor: '#060b18' }} /> : <Check size={12} />}
+                        Save
                       </button>
-                    )}
+                      {isActive && (
+                        <button onClick={() => deletePolKey(keyName)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0"
+                          style={{ background: 'rgba(255,85,85,0.08)', color: '#ff5555' }}>
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

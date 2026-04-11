@@ -75,7 +75,7 @@ function MediaModal({ mention, onClose, onSave }: {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label style={{ fontSize: 12, color: '#8899bb', display: 'block', marginBottom: 6 }}>Sentiment</label>
               <select className="input-field" value={form.sentiment} onChange={e => setForm({ ...form, sentiment: e.target.value as MediaMention['sentiment'] })}>

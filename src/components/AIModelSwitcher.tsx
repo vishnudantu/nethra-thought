@@ -86,6 +86,7 @@ const INDIAN_LANGUAGES = [
 export default function AIModelSwitcher({ compact = false }: { compact?: boolean }) {
   const { session } = useAuth();
   const token = session?.access_token || localStorage.getItem('nethra_token') || '';
+  const w = useW();
   const [open, setOpen] = useState(false);
   const [activeProvider, setActiveProvider] = useState('groq');
   const [activeModel, setActiveModel] = useState('llama-3.3-70b-versatile');
@@ -263,7 +264,7 @@ export default function AIModelSwitcher({ compact = false }: { compact?: boolean
                     <div style={{ fontSize: 11, color: '#8899bb', marginBottom: 12 }}>
                       AI will respond in this language for chat, briefings, content, and SMS drafts.
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMob(w) ? 3 : 4}, 1fr)`, gap: 8 }}>
                       {INDIAN_LANGUAGES.map(lang => {
                         const isActive = activeLanguage === lang.code;
                         return (
