@@ -2591,6 +2591,85 @@ app.post('/api/founder/settings', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── PHOTO UPLOAD ────────────────────────────────────────────
+// POST /api/founder/politicians/:id/photo
+// Accepts base64 image, resizes to 400x400, saves to static dir
+app.post('/api/founder/politicians/:id/photo', authMiddleware, async (req, res) => {
+  try {
+    const polId = parseInt(req.params.id);
+    // Super admin can upload for anyone; politician can upload for self
+    if (req.user.role !== 'super_admin' && req.user.politician_id !== polId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const { image_base64, mime_type = 'image/jpeg' } = req.body;
+    if (!image_base64) return res.status(400).json({ error: 'image_base64 required' });
+
+    // Strip data URL prefix if present
+    const base64Data = image_base64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    if (buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Image too large. Max 10MB.' });
+    }
+
+    // Use sharp if available, otherwise save raw
+    let finalBuffer = buffer;
+    let ext = 'jpg';
+    try {
+      const sharp = (await import('sharp')).default;
+      finalBuffer = await sharp(buffer)
+        .resize(400, 400, { fit: 'cover', position: 'face' })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+    } catch (sharpErr) {
+      console.warn('[photo-upload] sharp not available, saving original');
+      ext = mime_type.includes('png') ? 'png' : 'jpg';
+    }
+
+    // Save to frontend static directory
+    const { writeFile, mkdir } = await import('fs/promises');
+    const uploadDir = '/var/www/thoughtfirst-frontend/uploads';
+    try { await mkdir(uploadDir, { recursive: true }); } catch(_) {}
+
+    const filename = `politician-${polId}-${Date.now()}.${ext}`;
+    const filepath = `${uploadDir}/${filename}`;
+    await writeFile(filepath, finalBuffer);
+
+    const photo_url = `/uploads/${filename}`;
+
+    // Update DB
+    await pool.query('UPDATE politician_profiles SET photo_url = ? WHERE id = ?', [photo_url, polId]);
+
+    console.log(`[photo-upload] Saved ${filename} for politician ${polId}`);
+    res.json({ success: true, photo_url });
+  } catch (e) {
+    console.error('[photo-upload]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/founder/politicians/:id/photo  — remove photo
+app.delete('/api/founder/politicians/:id/photo', authMiddleware, async (req, res) => {
+  try {
+    const polId = parseInt(req.params.id);
+    if (req.user.role !== 'super_admin' && req.user.politician_id !== polId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const [[pol]] = await pool.query('SELECT photo_url FROM politician_profiles WHERE id = ?', [polId]);
+    if (pol?.photo_url && pol.photo_url.startsWith('/uploads/')) {
+      try {
+        const { unlink } = await import('fs/promises');
+        await unlink(`/var/www/thoughtfirst-frontend${pol.photo_url}`);
+      } catch(_) {}
+    }
+    await pool.query('UPDATE politician_profiles SET photo_url = NULL WHERE id = ?', [polId]);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ Nethra API running on http://localhost:${PORT}`);
   console.log(`   DB: ${process.env.DB_HOST}/${process.env.DB_NAME} | AI: Mistral\n`);

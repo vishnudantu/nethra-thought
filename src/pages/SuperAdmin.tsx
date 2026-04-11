@@ -9,6 +9,7 @@ import { api } from '../lib/api';
 import ApiKeysTab from '../components/ApiKeysTab';
 import { useAuth } from '../lib/auth';
 import Badge from '../components/ui/Badge';
+import PhotoUpload from '../components/PhotoUpload';
 import type { AdminReport, FeatureAccess, FeatureFlag, FeatureModule, ModuleAccess } from '../lib/types';
 
 interface Politician {
@@ -972,9 +973,15 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
                           <div style={{ paddingLeft: 8 }}>
                             {/* Name row */}
                             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                              <div style={{ width:34, height:34, borderRadius:9, background:`${accentColor}18`, border:`1px solid ${accentColor}33`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:accentColor, flexShrink:0, fontFamily:'Space Grotesk' }}>
-                                {initials}
-                              </div>
+                              <PhotoUpload
+                                politicianId={p.id}
+                                currentPhotoUrl={(p as any).photo_url || null}
+                                politicianName={p.full_name}
+                                size="sm"
+                                onPhotoUpdated={(url) => {
+                                  setOverview(prev => prev.map(x => x.id === p.id ? { ...x, photo_url: url } as any : x));
+                                }}
+                              />
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4 }}>
                                   <div style={{ fontSize:12, fontWeight:700, color:'#f0f4ff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.full_name}</div>

@@ -1,3 +1,4 @@
+import PhotoUpload, { PhotoActions } from '../components/PhotoUpload';
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, MapPin, Phone, Mail, Globe, Twitter, Facebook, Instagram, CreditCard as Edit3, Save, X, Plus, Trash2, Award, BookOpen, Calendar, TrendingUp, Users, Map, Building, BarChart3, CheckCircle, Star } from 'lucide-react';
@@ -302,12 +303,16 @@ export default function Profile() {
             </div>
             <div className="px-6 pb-6 -mt-10 flex items-end justify-between flex-wrap gap-4">
               <div className="flex items-end gap-4">
-                <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black border-4"
-                  style={{ background: 'rgba(0,212,170,0.15)', borderColor: '#0f1629', color: '#00d4aa', fontFamily: 'Space Grotesk' }}>
-                  {selectedProfile.photo_url ? (
-                    <img src={selectedProfile.photo_url} alt={selectedProfile.full_name}
-                      className="w-full h-full object-cover rounded-2xl" />
-                  ) : (selectedProfile.display_name?.charAt(0) || selectedProfile.full_name?.charAt(0) || 'P')}
+                <div style={{ position:'relative' }}>
+                  <PhotoUpload
+                    politicianId={selectedProfile.id}
+                    currentPhotoUrl={selectedProfile.photo_url}
+                    politicianName={selectedProfile.full_name}
+                    size="lg"
+                    onPhotoUpdated={(url) => {
+                      setSelectedProfile((prev: any) => prev ? { ...prev, photo_url: url } : prev);
+                    }}
+                  />
                 </div>
                 <div className="pb-1">
                   <h2 style={{ fontFamily: 'Space Grotesk', fontSize: 22, fontWeight: 800, color: '#f0f4ff' }}>
