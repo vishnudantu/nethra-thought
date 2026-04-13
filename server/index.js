@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import 'dotenv/config';
 import pool from './db.js';
 import { signToken, authMiddleware } from './auth.js';
+import partiesRouter from './routes/parties.js';
 import {
   initQueues,
   enqueueOmniScan,
@@ -90,6 +91,7 @@ const PORT = process.env.PORT || 3002;
 app.use(cors({ origin: process.env.FRONTEND_URL || '*', methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
 app.use(express.json({ limit: '15mb' }));
 
+app.use('/api/parties', partiesRouter);
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 try { initQueues(); } catch(e) { console.warn('[queues] Init failed, server continues:', e.message); }
@@ -319,7 +321,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     try { await pool.query('UPDATE users SET last_login_at = NOW(), last_login_ip = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [req.ip, user.id]); } catch(_){}
-    const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
+    const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, tenant_id: user.tenant_id, primary_role: user.primary_role || 'mla', secondary_role: user.secondary_role || 'none' });
     let politician = null, allPoliticians = [];
     try {
       if (user.role === 'super_admin') {
@@ -330,7 +332,7 @@ app.post('/api/auth/login', async (req, res) => {
         politician = pols[0] || null; allPoliticians = pols;
       }
     } catch(polErr) { console.warn('[login] politician fetch failed:', polErr.message); }
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled || 0, display_name: user.display_name }, politician, allPoliticians });
+    res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, tenant_id: user.tenant_id, primary_role: user.primary_role || 'mla', secondary_role: user.secondary_role || 'none', two_factor_enabled: user.two_factor_enabled || 0, display_name: user.display_name }, politician, allPoliticians });
   } catch (err) { console.error('[login]', err.message, err.stack?.split('\n')[1]); res.status(500).json({ error: 'Server error: ' + err.message }); }
 });
 
@@ -375,7 +377,7 @@ app.post('/api/auth/2fa/verify', async (req, res) => {
   }
 
   await pool.query('UPDATE users SET last_login_at = NOW(), last_login_ip = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?', [req.ip, user.id]);
-  const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id });
+  const token = signToken({ id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, tenant_id: user.tenant_id, primary_role: user.primary_role || 'mla', secondary_role: user.secondary_role || 'none' });
   let politician = null, allPoliticians = [];
   if (user.role === 'super_admin') {
     const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE (role = 'politician' OR role IS NULL) AND role != 'admin' ORDER BY full_name");
@@ -384,7 +386,7 @@ app.post('/api/auth/2fa/verify', async (req, res) => {
     const [pols] = await pool.query("SELECT id,full_name,display_name,photo_url,party,designation,constituency_name,state,slug,color_primary,color_secondary,is_active FROM politician_profiles WHERE id = ? AND (role = 'politician' OR role IS NULL)", [user.politician_id]);
     politician = pols[0] || null; allPoliticians = pols;
   }
-  res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, two_factor_enabled: user.two_factor_enabled, display_name: user.display_name }, politician, allPoliticians });
+  res.json({ token, user: { id: user.id, email: user.email, role: user.role, politician_id: user.politician_id, tenant_id: user.tenant_id, primary_role: user.primary_role || 'mla', secondary_role: user.secondary_role || 'none', two_factor_enabled: user.two_factor_enabled, display_name: user.display_name }, politician, allPoliticians });
 });
 
 app.post('/api/auth/2fa/toggle', authMiddleware, async (req, res) => {
@@ -819,6 +821,8 @@ app.post('/api/politician_profiles', authMiddleware, async (req, res) => {
       else if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/)) clean[k] = v.slice(0,19).replace('T',' ');
       else clean[k] = v;
     }
+    clean.tenant_id = req.tenantId || 1;
+    clean.tenant_id = req.tenantId || 1;
     const cols = Object.keys(clean).map(k => `\`${k}\``).join(',');
     const ph = Object.keys(clean).map(() => '?').join(',');
     const [r] = await pool.query(`INSERT INTO politician_profiles (${cols}) VALUES (${ph})`, Object.values(clean));
@@ -837,7 +841,7 @@ app.put('/api/politician_profiles/:id', authMiddleware, async (req, res) => {
       else clean[k] = v;
     }
     const sets = Object.keys(clean).map(k => `\`${k}\` = ?`).join(',');
-    await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ?`, [...Object.values(clean), req.params.id]);
+    await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ? AND tenant_id = ?`, [...Object.values(clean), req.params.id, req.tenantId]);
     const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -998,8 +1002,8 @@ app.post('/api/ai-assistant', authMiddleware, async (req, res) => {
     res.end();
     if (save_content && polId && full) {
       const up = messages.filter(m=>m.role==='user').slice(-1)[0]?.content || '';
-      await pool.query('INSERT INTO ai_generated_content (politician_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,0)',
-        [polId, content_type || mode, (prompt_summary || up).slice(0, 500), full]);
+      await pool.query('INSERT INTO ai_generated_content (politician_id,tenant_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,?,0)',
+        [ (req.tenantId || 1), polId, content_type || mode, (prompt_summary || up).slice(0, 500), full ]);
     }
   } catch (e) {
     console.error('[ai-assistant]', e.message);
@@ -1571,22 +1575,23 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
     if (!clean.subscription_status) clean.subscription_status = 'active';
     if (!clean.color_primary) clean.color_primary = '#00d4aa';
     if (!clean.color_secondary) clean.color_secondary = '#1e88e5';
+    clean.tenant_id = req.tenantId || 1;
     const cols = Object.keys(clean).map(k => `\`${k}\``).join(',');
     const ph = Object.keys(clean).map(() => '?').join(',');
 
     // ═══════════════════════════════════════════════════════════════
     // AUTO-CONFIGURE MODULES BASED ON DESIGNATION
     // ═══════════════════════════════════════════════════════════════
-    const { getModulesForDesignation, hasMPLADS, isMinister } = await import('./services/designationModules.js');
+    const { resolveModules } = await import('./config/moduleRegistry.js');
     const politicianId = r.insertId;
     const designation = payload.designation || '';
     
     // Get modules for this designation
-    const config = getModulesForDesignation(designation);
+    const modules = resolveModules(payload.primary_role || 'mla', payload.secondary_role || 'none');
     
     // Enable modules for this politician
-    if (config && config.modules) {
-      const moduleRows = config.modules.map(moduleKey => 
+    if (modules && modules.length) {
+      const moduleRows = modules.map(moduleKey => 
         `(${politicianId}, '${moduleKey}', 1)`
       ).join(',');
       
@@ -1596,7 +1601,7 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
         ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled)
       `);
       
-      console.log(`[deploy] Auto-enabled ${config.modules.length} modules for ${designation}`);
+      console.log(`[deploy] Auto-enabled ${modules.length} modules for ${designation}`);
     }
     
     // Update minister-specific fields if applicable
@@ -1678,7 +1683,7 @@ app.put('/api/founder/politicians/:id', authMiddleware, async (req, res) => {
     }
     const sets = Object.keys(clean).map(k => `\`${k}\` = ?`).join(',');
     if (!sets) return res.status(400).json({ error: 'No fields to update' });
-    await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ?`, [...Object.values(clean), req.params.id]);
+    await pool.query(`UPDATE politician_profiles SET ${sets} WHERE id = ? AND tenant_id = ?`, [...Object.values(clean), req.params.id, req.tenantId]);
     const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (e) {
@@ -2647,7 +2652,7 @@ ${language !== 'english' ? `Write in ${language}.` : ''}
 ${typeGuide[content_type] || typeGuide.social_post}
 Generate ONLY the content. No explanations.`;
     const content = await aiComplete({ prompt, system: 'You write political content for Indian politicians.', politicianId: polId, endpoint: `content.${content_type}`, maxTokens: 400 });
-    await pool.query('INSERT INTO ai_generated_content (politician_id, content_type, prompt, content, is_saved) VALUES (?,?,?,?,0)', [polId, content_type, (context||'auto').slice(0,200), content]);
+    await pool.query('INSERT INTO ai_generated_content (politician_id,tenant_id,content_type,prompt,content,is_saved) VALUES (?,?,?,?,?,0)', [polId, (req.tenantId || 1), content_type, (context||'auto').slice(0,200), content]);
     res.json({ content, content_type, label: content_type.replace(/_/g,' ') });
   } catch (e) { console.error('[content-generate]', e.message); res.status(500).json({ error: e.message }); }
 });

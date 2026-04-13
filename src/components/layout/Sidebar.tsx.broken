@@ -9,20 +9,9 @@ import {
   Box, Flag, MessageCircleWarning, Radar, Bot, ShieldAlert, Network, LineChart, Handshake, FileCheck2,
   Users2, Cpu, Target, Wand2, Globe, AlertTriangle
 } from 'lucide-react';
-import { useAuth } from '../../lib/auth';
-
-// ══ RESPONSIVE HOOK (inline to avoid Vite tree-shaking) ══
-import { useState as _useStateW, useEffect as _useEffectW } from 'react';
-function useW() {
-  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
-  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
-  return _w;
-}
-const isMob = (_w: number) => _w < 640;
-// ════════════════════════════════════════════════════════════
-
-import { useI18n } from '../../lib/i18n';
 import { resolveModules, SIDEBAR_GROUPS } from '../config/moduleRegistry.js';
+import { useAuth } from '../../lib/auth';
+import { useI18n } from '../../lib/i18n';
 
 interface NavItem {
   id: string;
@@ -104,6 +93,9 @@ interface SidebarProps {
 
 export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps) {
   const { userRole, user, activePolitician, allPoliticians, setActivePolitician, signOut, hasModule } = useAuth();
+  const primaryRole = (user as any)?.primary_role || 'mla';
+  const secondaryRole = (user as any)?.secondary_role || 'none';
+  const activeModules = resolveModules(primaryRole, secondaryRole);
   const { t } = useI18n();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -123,7 +115,7 @@ export default function Sidebar({ active, onNavigate, collapsed }: SidebarProps)
       if (isFieldWorker) return fieldWorkerNavIds.has(item.id);
       if (isStaff && staffRestrictedIds.has(item.id)) return false;
       return (!item.adminOnly || isSuperAdmin || (isPoliticianAdmin && item.id === 'staff-management')) &&
-        (!item.moduleKey || hasModule(item.moduleKey));
+        (!item.moduleKey || activeModules.includes(item.moduleKey));
     });
   const finalItems = visibleItems.filter(i => i.id !== 'superadmin').concat(visibleItems.find(i => i.id === 'superadmin') ? [visibleItems.find(i => i.id === 'superadmin')!] : []);
 

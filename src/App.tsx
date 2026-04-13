@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './lib/auth';
 import { LanguageProvider } from './lib/i18n';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
+import PartyManager from './pages/PartyManager';
 import Dashboard from './pages/Dashboard';
 import Grievances from './pages/Grievances';
 import Events from './pages/Events';
@@ -57,7 +58,7 @@ function AppContent() {
   const { user, userRole, loading, hasModule } = useAuth();
   const [activePage, setActivePage] = useState('dashboard');
   const isSuperAdmin = userRole?.role === 'super_admin';
-  const superAdminPages = useMemo(() => new Set(['superadmin', 'website-admin']), []);
+  const superAdminPages = useMemo(() => new Set(['superadmin', 'website-admin', 'party-manager']), []);
 
   useEffect(() => {
     if (isSuperAdmin && !superAdminPages.has(activePage)) {
@@ -82,6 +83,16 @@ function AppContent() {
   }
 
   function renderPage() {
+    // Handle tenant-manager before super_admin check
+    // Handle party-manager before super_admin check
+    if (activePage === 'party-manager') {
+      return <PartyManager />;
+    }
+
+    if (activePage === 'party-manager') {
+      return <PartyManager />;
+    }
+
     if (isSuperAdmin) {
       return activePage === 'website-admin' ? <WebsiteAdmin /> : <SuperAdmin onNavigate={setActivePage} />;
     }
@@ -144,6 +155,7 @@ function AppContent() {
       case 'digital-twin': return <DigitalTwin />;
       case 'superadmin': return <SuperAdmin onNavigate={setActivePage} />;
       case 'ai-studio': return <AIStudio />;
+      case 'party-manager': return <PartyManager />;
       case 'staff-management': return <StaffManagement />;
       default: return <Dashboard onNavigate={setActivePage} />;
     }

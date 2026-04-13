@@ -76,6 +76,9 @@ interface DeployForm {
   party: string;
   designation: string;
   designation_type: 'mp_lok_sabha' | 'mp_rajya_sabha' | 'mla' | 'mlc' | 'mayor' | 'councillor';
+  primary_role: string;
+  secondary_role: string;
+  ministry_portfolio: string;
   constituency_name: string;
   state: string;
   lok_sabha_seat: string;
@@ -155,7 +158,7 @@ const DESIGNATION_CONFIG = {
 
 const defaultForm: DeployForm = {
   full_name: '', party: '', designation: 'Member of Parliament (Lok Sabha)',
-  designation_type: 'mp_lok_sabha',
+  designation_type: 'mp_lok_sabha', primary_role: 'mla', secondary_role: 'none', ministry_portfolio: '',
   constituency_name: '', state: '', lok_sabha_seat: '', assembly_segment: '',
   email: '', password: '', slug: '', color_primary: '#00d4aa', color_secondary: '#1e88e5',
   election_year: '', term_start: '', previous_terms: '0',
@@ -467,6 +470,9 @@ export default function SuperAdmin({ onNavigate }: { onNavigate?: (page: string)
         full_name: form.full_name,
         party: form.party || '',
         designation: form.designation || DESIGNATION_CONFIG[form.designation_type].designation,
+        primary_role: form.primary_role,
+        secondary_role: form.secondary_role,
+        ministry_portfolio: form.ministry_portfolio,
         constituency_name: form.constituency_name,
         state: form.state || '',
         lok_sabha_seat: form.lok_sabha_seat || '',
