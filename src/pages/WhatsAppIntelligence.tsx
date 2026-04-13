@@ -3,7 +3,17 @@ import { motion } from 'framer-motion';
 import { MessageSquare, Zap, AlertTriangle, Flame, ShieldAlert, Plus, Loader2, X, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../hooks/useResponsive';
+
+// Responsive hook — inline to prevent module initialization order issues
+import { useState as _useStateW, useEffect as _useEffectW } from 'react';
+function useW() {
+  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
+  return _w;
+}
+const isMob = (_w: number) => _w < 640;
+const isTab = (_w: number) => _w >= 640 && _w < 1024;
+
 
 interface WMsg { id: string; content: string; sender_name?: string; classification: string; sentiment: string; urgency_score: number; is_viral: number; is_misinformation: number; created_at: string; }
 

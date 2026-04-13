@@ -3,7 +3,17 @@ import { motion } from 'framer-motion';
 import { Box, Users, TrendingUp, AlertTriangle, Plus, Zap, MapPin, Loader2, User } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../hooks/useResponsive';
+
+// Responsive hook — inline to prevent module initialization order issues
+import { useState as _useStateW, useEffect as _useEffectW } from 'react';
+function useW() {
+  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
+  return _w;
+}
+const isMob = (_w: number) => _w < 640;
+const isTab = (_w: number) => _w >= 640 && _w < 1024;
+
 
 interface Booth { id: string; booth_number: string; booth_name?: string; location?: string; mandal?: string; total_voters?: number; expected_turnout?: number; agent_name?: string; historical_vote_percentage?: any; }
 

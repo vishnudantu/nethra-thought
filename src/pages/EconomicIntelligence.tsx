@@ -4,7 +4,17 @@ import { LineChart as LineChartIcon, Plus, TrendingUp, TrendingDown, Minus, Zap,
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
 import { T, AIPanel, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../hooks/useResponsive';
+
+// Responsive hook — inline to prevent module initialization order issues
+import { useState as _useStateW, useEffect as _useEffectW } from 'react';
+function useW() {
+  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
+  return _w;
+}
+const isMob = (_w: number) => _w < 640;
+const isTab = (_w: number) => _w >= 640 && _w < 1024;
+
 
 interface Indicator { id: string; indicator_type: string; mandal?: string; value: number; unit?: string; trend: string; recorded_date: string; source?: string; notes?: string; }
 

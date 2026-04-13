@@ -3,7 +3,17 @@ import { motion } from 'framer-motion';
 import { Mic, MicOff, Zap, FileText, MapPin, User, Loader2, Plus, RefreshCw, Radio } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../hooks/useResponsive';
+
+// Responsive hook — inline to prevent module initialization order issues
+import { useState as _useStateW, useEffect as _useEffectW } from 'react';
+function useW() {
+  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
+  return _w;
+}
+const isMob = (_w: number) => _w < 640;
+const isTab = (_w: number) => _w >= 640 && _w < 1024;
+
 
 interface VoiceReport { id: string; reporter_name: string; reporter_role?: string; classification: string; transcript: string; location?: string; created_at: string; }
 

@@ -6,7 +6,17 @@ import {
   Building2, User, Globe, Loader2, RefreshCw, AlertTriangle, Copy
 } from 'lucide-react';
 import { T, getToken } from './ui/ModuleLayout';;
-import { useW, isMob } from '../hooks/useResponsive';
+
+// Responsive hook — inline to prevent module initialization order issues
+import { useState as _useStateW, useEffect as _useEffectW } from 'react';
+function useW() {
+  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
+  return _w;
+}
+const isMob = (_w: number) => _w < 640;
+const isTab = (_w: number) => _w >= 640 && _w < 1024;
+
 
 interface ContextProfile {
   id: number;
