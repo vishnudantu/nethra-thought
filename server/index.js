@@ -1019,8 +1019,184 @@ app.post('/api/omniscan/trigger', async (req, res, next) => { req.user = { role:
   }
 });
 
+
 app.get('/api/omniscan/status', authMiddleware, async (req, res) => {
-  res.json(getQueuesStatus());
+  const { getOmniScanStatus } = await import('./services/omniscan.js');
+  const status = getOmniScanStatus();
+  res.json({
+    enabled: true,
+    omni: {
+      lastRun: status.lastRun,
+      lastError: status.lastError,
+      lastDurationMs: status.lastDurationMs,
+      counts: status.counts,
+      sources: status.sources
+    }
+  });
+});
+
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// POLITICIAN KEYWORDS MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+// Get keywords for current politician
+app.get('/api/keywords', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' 
+      ? (req.query.politician_id || req.user.politician_id) 
+      : req.user.politician_id;
+    
+    const [keywords] = await pool.query(
+      'SELECT id, keyword, keyword_type, is_active, created_at FROM politician_keywords WHERE politician_id = ? ORDER BY keyword_type DESC, keyword',
+      [polId]
+    );
+    
+    res.json({ keywords: keywords || [] });
+  } catch (e) {
+    console.error('[keywords-get]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add new keyword
+app.post('/api/keywords', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' 
+      ? req.body.politician_id 
+      : req.user.politician_id;
+    
+    const { keyword, keyword_type = 'custom' } = req.body;
+    
+    if (!keyword || keyword.trim().length < 2) {
+      return res.status(400).json({ error: 'Keyword must be at least 2 characters' });
+    }
+    
+    const cleanKeyword = keyword.trim().toLowerCase();
+    
+    // Check for duplicates
+    const [existing] = await pool.query(
+      'SELECT id FROM politician_keywords WHERE politician_id = ? AND keyword = ?',
+      [polId, cleanKeyword]
+    );
+    
+    if (existing.length) {
+      return res.status(409).json({ error: 'Keyword already exists' });
+    }
+    
+    const result = await pool.query(
+      'INSERT INTO politician_keywords (politician_id, keyword, keyword_type, is_active) VALUES (?, ?, ?, 1)',
+      [polId, cleanKeyword, keyword_type]
+    );
+    
+    res.json({ 
+      success: true, 
+      id: result.insertId, 
+      keyword: cleanKeyword,
+      message: 'Keyword added successfully' 
+    });
+  } catch (e) {
+    console.error('[keywords-add]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete keyword
+app.delete('/api/keywords/:id', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' 
+      ? req.query.politician_id 
+      : req.user.politician_id;
+    
+    // Verify ownership
+    const [keywords] = await pool.query(
+      'SELECT id FROM politician_keywords WHERE id = ? AND politician_id = ?',
+      [req.params.id, polId]
+    );
+    
+    if (!keywords.length) {
+      return res.status(404).json({ error: 'Keyword not found or unauthorized' });
+    }
+    
+    await pool.query('DELETE FROM politician_keywords WHERE id = ?', [req.params.id]);
+    
+    res.json({ success: true, message: 'Keyword deleted' });
+  } catch (e) {
+    console.error('[keywords-delete]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Toggle keyword active/inactive
+app.patch('/api/keywords/:id/toggle', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' 
+      ? req.query.politician_id 
+      : req.user.politician_id;
+    
+    const { is_active } = req.body;
+    
+    await pool.query(
+      'UPDATE politician_keywords SET is_active = ? WHERE id = ? AND politician_id = ?',
+      [is_active ? 1 : 0, req.params.id, polId]
+    );
+    
+    res.json({ success: true, message: 'Keyword updated' });
+  } catch (e) {
+    console.error('[keywords-toggle]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get suggested keywords (from profile)
+app.get('/api/keywords/suggestions', authMiddleware, async (req, res) => {
+  try {
+    const polId = req.user.role === 'super_admin' 
+      ? (req.query.politician_id || req.user.politician_id) 
+      : req.user.politician_id;
+    
+    const [[profile]] = await pool.query(
+      'SELECT full_name, display_name, constituency_name, party FROM politician_profiles WHERE id = ?',
+      [polId]
+    );
+    
+    const suggestions = [];
+    
+    if (profile.full_name) {
+      suggestions.push({ keyword: profile.full_name.toLowerCase(), type: 'name', source: 'Full Name' });
+      const nameParts = profile.full_name.split(' ');
+      if (nameParts.length > 1) {
+        suggestions.push({ keyword: nameParts.slice(0, 2).join(' ').toLowerCase(), type: 'name', source: 'First Names' });
+      }
+      suggestions.push({ keyword: nameParts.pop().toLowerCase(), type: 'name', source: 'Last Name' });
+    }
+    
+    if (profile.display_name) {
+      suggestions.push({ keyword: profile.display_name.toLowerCase(), type: 'name', source: 'Display Name' });
+    }
+    
+    if (profile.constituency_name) {
+      suggestions.push({ keyword: profile.constituency_name.toLowerCase(), type: 'constituency', source: 'Constituency' });
+      suggestions.push({ keyword: `${profile.constituency_name} MLA`.toLowerCase(), type: 'constituency', source: 'Constituency + MLA' });
+    }
+    
+    if (profile.party) {
+      suggestions.push({ keyword: profile.party.toLowerCase(), type: 'party', source: 'Party Name' });
+      if (profile.party.includes('Telugu Desam')) {
+        suggestions.push({ keyword: 'tdp', type: 'party', source: 'Party Abbreviation' });
+      }
+    }
+    
+    // Remove duplicates
+    const unique = suggestions.filter((v, i, a) => a.findIndex(t => t.keyword === v.keyword) === i);
+    
+    res.json({ suggestions: unique });
+  } catch (e) {
+    console.error('[keywords-suggestions]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // MEDIA SCRAPER API
@@ -1397,6 +1573,82 @@ app.post('/api/founder/politicians', authMiddleware, async (req, res) => {
     if (!clean.color_secondary) clean.color_secondary = '#1e88e5';
     const cols = Object.keys(clean).map(k => `\`${k}\``).join(',');
     const ph = Object.keys(clean).map(() => '?').join(',');
+
+    // ═══════════════════════════════════════════════════════════════
+    // AUTO-CONFIGURE MODULES BASED ON DESIGNATION
+    // ═══════════════════════════════════════════════════════════════
+    const { getModulesForDesignation, hasMPLADS, isMinister } = await import('./services/designationModules.js');
+    const politicianId = r.insertId;
+    const designation = payload.designation || '';
+    
+    // Get modules for this designation
+    const config = getModulesForDesignation(designation);
+    
+    // Enable modules for this politician
+    if (config && config.modules) {
+      const moduleRows = config.modules.map(moduleKey => 
+        `(${politicianId}, '${moduleKey}', 1)`
+      ).join(',');
+      
+      await pool.query(`
+        INSERT INTO politician_module_access (politician_id, module_key, is_enabled) 
+        VALUES ${moduleRows}
+        ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled)
+      `);
+      
+      console.log(`[deploy] Auto-enabled ${config.modules.length} modules for ${designation}`);
+    }
+    
+    // Update minister-specific fields if applicable
+    if (isMinister(designation)) {
+      const updateFields = [];
+      const updateValues = [];
+      
+      // Check if minister portfolio was provided
+      if (payload.minister_portfolio) {
+        updateFields.push('minister_portfolio = ?');
+        updateValues.push(payload.minister_portfolio);
+      }
+      
+      // Auto-detect cabinet minister
+      if (designation.toLowerCase().includes('cabinet')) {
+        updateFields.push('is_cabinet_minister = 1');
+      }
+      
+      // Auto-detect central vs state minister
+      if (designation.toLowerCase().includes('union') || designation.toLowerCase().includes('central')) {
+        updateFields.push('is_central_minister = 1');
+      }
+      
+      if (updateFields.length > 0) {
+        updateValues.push(politicianId);
+        await pool.query(
+          `UPDATE politician_profiles SET ${updateFields.join(', ')} WHERE id = ?`,
+          updateValues
+        );
+        console.log(`[deploy] Updated minister fields for ${designation}`);
+      }
+    }
+    
+    // Handle committee memberships if provided
+    if (payload.committee_memberships) {
+      await pool.query(
+        'UPDATE politician_profiles SET committee_memberships = ? WHERE id = ?',
+        [JSON.stringify(payload.committee_memberships), politicianId]
+      );
+    }
+    
+    // Handle party position if provided
+    if (payload.party_position) {
+      const partyLevel = payload.party_level || 'state';
+      await pool.query(
+        'UPDATE politician_profiles SET party_position = ?, party_level = ? WHERE id = ?',
+        [payload.party_position, partyLevel, politicianId]
+      );
+    }
+    
+    console.log(`[deploy] Politician ${politicianId} (${designation}) deployed with auto-configured modules`);
+
     const [r] = await pool.query(`INSERT INTO politician_profiles (${cols}) VALUES (${ph})`, Object.values(clean));
     const [rows] = await pool.query('SELECT * FROM politician_profiles WHERE id = ?', [r.insertId]);
     res.status(201).json(rows[0]);

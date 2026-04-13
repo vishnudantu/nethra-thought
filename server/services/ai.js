@@ -85,8 +85,19 @@ export async function aiComplete({ prompt, system, politicianId = null, endpoint
 
 export async function aiJSON({ prompt, system, politicianId, endpoint, maxTokens = 1000 }) {
   const text = await aiComplete({ prompt, system, politicianId, endpoint, maxTokens, temperature: 0.1, jsonMode: true });
+  
+  // Enhanced cleanup: Remove markdown, extract JSON array/object from any surrounding text
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(clean);
+  
+  // Try to extract JSON array or object if there's extra text
+  let jsonStr = clean;
+  if (!clean.startsWith('{') && !clean.startsWith('[')) {
+    const arrayMatch = clean.match(/\[[\s\S]*\]/);
+    const objectMatch = clean.match(/\{[\s\S]*\}/);
+    jsonStr = arrayMatch ? arrayMatch[0] : (objectMatch ? objectMatch[0] : clean);
+  }
+  
+  return JSON.parse(jsonStr);
 }
 
 export async function aiChat({ messages, system, politicianId = null, endpoint = 'general', maxTokens = 2048, temperature = 0.7, jsonMode = false, language = null }) {

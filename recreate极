@@ -1,0 +1,1 @@
+  letter_status ENUM('open','full') DEFAULT 'open',

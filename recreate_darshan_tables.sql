@@ -1,0 +1,44 @@
+DROP TABLE IF EXISTS darshan_pilgrims;
+DROP TABLE IF EXISTS darshan_letters;
+
+CREATE TABLE darshan_letters (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  politician_id INT UNSIGNED NOT NULL,
+  letter_date DATE NOT NULL,
+  pilgrims_used INT DEFAULT 0,
+  max_pilgrims INT DEFAULT 6,
+  letter_status ENUM('open','full') DEFAULT 'open',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_politician_date (politician_id, letter_date),
+  FOREIGN KEY (politician极) REFERENCES politician_profiles(id)
+);
+
+CREATE TABLE darshan_pilgrims (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  letter_id INT NOT NULL,
+  politician_id INT UNSIGNED NOT NULL,
+  booking_ref VARCHAR(30),
+  full_name VARCHAR(255) NOT NULL,
+  phone VARCHAR(10) NOT NULL,
+  aadhaar_hash VARCHAR(64) NOT NULL,
+  aadhaar_last4 VARCHAR(4),
+  age INT,
+  gender ENUM('Male','Female','Other'),
+  darshan_type VARCHAR(100) DEFAULT 'SSD Darshan',
+  address TEXT,
+  visit_date DATE,
+  approval_status ENUM('pending','approved','rejected') DEFAULT 'pending',
+  approved_by INT,
+  approved_at DATETIME,
+  contact_person VARCHAR(255),
+  contact_phone VARCHAR(15),
+  pickup_point VARCHAR(255),
+  shrine_contacts VARCHAR(255),
+  sms_sent TINYINT DEFAULT 0,
+  sms_sent_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (letter_id) REFERENCES darshan_letters(id),
+  FOREIGN KEY (politician_id) REFERENCES politician_profiles(id),
+  INDEX idx_politician_aadhaar (politician_id, aadhaar_hash),
+  INDEX idx_booking_ref (booking_ref)
+);

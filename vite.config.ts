@@ -17,9 +17,23 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      rollupOptions: {
+        // Prevent tree-shaking of hook files
+        treeshake: {
+          moduleSideEffects: true,
+        },
+        output: {
+          // Keep hooks in a separate chunk so they're never dropped
+          manualChunks(id) {
+            if (id.includes('src/hooks/')) return 'hooks';
+            if (id.includes('framer-motion')) return 'framer';
+            if (id.includes('recharts')) return 'recharts';
+            if (id.includes('lucide-react')) return 'lucide';
+          },
+        },
+      },
     },
     define: {
-      // Makes VITE_API_URL available in the built frontend
       'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
     },
   };
