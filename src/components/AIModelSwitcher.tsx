@@ -3,6 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, ChevronDown, Check, Zap, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 
+
+// Responsive hook — inline
+import { useState as _useStateW, useEffect as _useEffectW } from 'react';
+function useW() {
+  const [_w, _setW] = _useStateW(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  _useEffectW(() => { const _fn = () => _setW(window.innerWidth); window.addEventListener('resize', _fn); return () => window.removeEventListener('resize', _fn); }, []);
+  return _w;
+}
+const isMob = (_w: number) => _w < 640;
+
+
 interface Provider {
   id: string;
   name: string;
