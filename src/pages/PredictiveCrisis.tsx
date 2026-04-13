@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Radar, Zap, AlertTriangle, Eye, RefreshCw, Loader2, Clock } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface Alert { id: string; alert_type: string; probability: number; description: string; recommended_action: string; timeframe_days: number; status: string; created_at: string; }
 

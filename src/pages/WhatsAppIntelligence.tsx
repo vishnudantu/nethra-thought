@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { MessageSquare, Zap, AlertTriangle, Flame, ShieldAlert, Plus, Loader2, X, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface WMsg { id: string; content: string; sender_name?: string; classification: string; sentiment: string; urgency_score: number; is_viral: number; is_misinformation: number; created_at: string; }
 

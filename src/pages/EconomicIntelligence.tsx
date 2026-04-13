@@ -4,7 +4,7 @@ import { LineChart as LineChartIcon, Plus, TrendingUp, TrendingDown, Minus, Zap,
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
 import { T, AIPanel, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface Indicator { id: string; indicator_type: string; mandal?: string; value: number; unit?: string; trend: string; recorded_date: string; source?: string; notes?: string; }
 

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { FileCheck2, Plus, AlertTriangle, CheckCircle, Clock, Zap, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface Report { id: string; report_type: string; summary?: string; status: string; alerts?: any; created_at: string; }
 

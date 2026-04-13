@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, Zap, RefreshCw, Loader2, Shield, Radio } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 export default function CrisisWarRoom() {
   const w = useW();

@@ -11,7 +11,7 @@ import { useAuth } from '../lib/auth';
 import Badge from '../components/ui/Badge';
 import PhotoUpload from '../components/PhotoUpload';
 ;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 import type { AdminReport, FeatureAccess, FeatureFlag, FeatureModule, ModuleAccess } from '../lib/types';
 
 interface Politician {

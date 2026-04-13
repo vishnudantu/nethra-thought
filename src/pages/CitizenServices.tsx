@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Handshake, Plus, Zap, Loader2, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface Request { id: string; requester_name: string; request_type: string; status: string; description?: string; source?: string; created_at: string; }
 

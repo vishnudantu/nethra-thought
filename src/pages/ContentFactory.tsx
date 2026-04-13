@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Copy, Check, RefreshCw, FileText, MessageSquare, Mic, Newspaper, Send, Loader2 } from 'lucide-react';
 import { T, AIPanel, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 const TYPES = [
   { id: 'social_post', label: 'Social Post', icon: MessageSquare, hint: 'Twitter / Facebook' },

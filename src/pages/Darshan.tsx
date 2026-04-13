@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 ;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Pilgrim {

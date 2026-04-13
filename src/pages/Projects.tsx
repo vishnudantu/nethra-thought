@@ -4,7 +4,7 @@ import { FolderOpen, Zap, Plus, AlertTriangle, CheckCircle, Clock, TrendingUp, L
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
-import { useW, isMob } from '../../hooks/useResponsive';
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface Project { id: string; project_name: string; status: string; budget_allocated?: number; budget_spent?: number; progress_percent?: number; expected_completion?: string; mandal?: string; scheme?: string; description?: string; }
 
