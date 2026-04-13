@@ -17,24 +17,6 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
-      rollupOptions: {
-        treeshake: {
-          // Never tree-shake modules that export React hooks
-          // This prevents useW from being dropped
-          moduleSideEffects: (id) => {
-            if (id.includes('ModuleLayout') || id.includes('useResponsive') || id.includes('src/hooks')) return true;
-            return false;
-          },
-          propertyReadSideEffects: false,
-        },
-        output: {
-          manualChunks(id) {
-            if (id.includes('framer-motion')) return 'framer';
-            if (id.includes('recharts')) return 'recharts';
-            if (id.includes('lucide-react')) return 'lucide';
-          },
-        },
-      },
     },
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
