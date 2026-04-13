@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Building2, Sparkles, Plus, FileText, Loader2, X, Scale, Mic2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Question { id: string; question_text: string; ministry: string; question_type: string; status: string; topic: string; session?: string; created_at: string; }
 

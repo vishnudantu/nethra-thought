@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus, Zap, RefreshCw, Loader2, Activity, Newspaper, AlertTriangle, Star } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
-import { T, AIPanel, Stat, Loading, getToken, useW, isMob, isTab } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 export default function SentimentDashboard() {
   const w = useW();

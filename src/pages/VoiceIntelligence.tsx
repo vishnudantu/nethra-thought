@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Mic, MicOff, Zap, FileText, MapPin, User, Loader2, Plus, RefreshCw, Radio } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface VoiceReport { id: string; reporter_name: string; reporter_role?: string; classification: string; transcript: string; location?: string; created_at: string; }
 

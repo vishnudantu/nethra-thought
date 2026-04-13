@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Target, Plus, AlertTriangle, CheckCircle, Clock, Radio, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Update { id: string; booth_id?: string; update_type: string; description: string; status: string; reported_at: string; }
 

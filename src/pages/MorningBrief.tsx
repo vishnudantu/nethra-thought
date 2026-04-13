@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, RefreshCw, Clock, Sparkles, CheckCircle2, AlertTriangle, TrendingUp, Zap, Activity } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Loading, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Loading, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Brief { id: string; title: string; content: string; created_at: string; }
 

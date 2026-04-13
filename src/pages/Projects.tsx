@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FolderOpen, Zap, Plus, AlertTriangle, CheckCircle, Clock, TrendingUp, Loader2, X, IndianRupee } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Project { id: string; project_name: string; status: string; budget_allocated?: number; budget_spent?: number; progress_percent?: number; expected_completion?: string; mandal?: string; scheme?: string; description?: string; }
 

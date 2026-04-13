@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Box, Users, TrendingUp, AlertTriangle, Plus, Zap, MapPin, Loader2, User } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Booth { id: string; booth_number: string; booth_name?: string; location?: string; mandal?: string; total_voters?: number; expected_turnout?: number; agent_name?: string; historical_vote_percentage?: any; }
 

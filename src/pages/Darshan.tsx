@@ -6,7 +6,8 @@ import {
   AlertTriangle, Users, Building2, Vote, Tag
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { useW, isMob } from '../components/ui/ModuleLayout';
+;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Pilgrim {

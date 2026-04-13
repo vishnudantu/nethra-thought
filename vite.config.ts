@@ -18,14 +18,17 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       rollupOptions: {
-        // Prevent tree-shaking of hook files
         treeshake: {
-          moduleSideEffects: true,
+          // Never tree-shake modules that export React hooks
+          // This prevents useW from being dropped
+          moduleSideEffects: (id) => {
+            if (id.includes('ModuleLayout') || id.includes('useResponsive') || id.includes('src/hooks')) return true;
+            return false;
+          },
+          propertyReadSideEffects: false,
         },
         output: {
-          // Keep hooks in a separate chunk so they're never dropped
           manualChunks(id) {
-            if (id.includes('src/hooks/')) return 'hooks';
             if (id.includes('framer-motion')) return 'framer';
             if (id.includes('recharts')) return 'recharts';
             if (id.includes('lucide-react')) return 'lucide';

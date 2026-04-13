@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, Zap, ScanLine, Loader2, AlertTriangle, CheckCircle, Eye } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Stat, Loading, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 export default function DeepfakeShield() {
   const w = useW();

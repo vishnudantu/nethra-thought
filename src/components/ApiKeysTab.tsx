@@ -6,7 +6,8 @@ import {
   Shield, Zap, Bot
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { useW, isMob } from './ui/ModuleLayout';
+;
+import { useW, isMob } from '../hooks/useResponsive';
 import Badge from './ui/Badge';
 
 interface ApiKeyRecord {

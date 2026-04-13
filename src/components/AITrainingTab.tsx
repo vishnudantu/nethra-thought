@@ -5,7 +5,8 @@ import {
   ChevronDown, ChevronUp, Sparkles, ThumbsUp, ThumbsDown,
   Building2, User, Globe, Loader2, RefreshCw, AlertTriangle, Copy
 } from 'lucide-react';
-import { T, getToken, useW, isMob } from './ui/ModuleLayout';
+import { T, getToken } from './ui/ModuleLayout';;
+import { useW, isMob } from '../hooks/useResponsive';
 
 interface ContextProfile {
   id: number;

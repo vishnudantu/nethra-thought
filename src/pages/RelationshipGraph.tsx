@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Network, Plus, Phone, Calendar, Zap, Loader2, User, Star, TrendingDown, Minus } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Relationship { id: string; entity_name: string; entity_type: string; relationship_type: string; influence_score?: number; alignment: string; last_contact_at?: string; notes?: string; }
 

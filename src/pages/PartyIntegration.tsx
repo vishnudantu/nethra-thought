@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Users2, Plus, RefreshCw, Zap, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Stat, Loading, Empty, Modal, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, Empty, Modal, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 interface Integration { id: string; party_name: string; integration_type: string; status: string; last_sync_at?: string; notes?: string; }
 

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Cpu, Sparkles, Play, Loader2, X, Users, TrendingUp, AlertTriangle } from 'lucide-react';
-import { T, AIPanel, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 const SCENARIOS = [
   { id: 'policy', label: 'Policy Announcement', placeholder: 'e.g. Free electricity up to 200 units for farmers' },

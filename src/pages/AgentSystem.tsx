@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, Play, Activity, CheckCircle, Loader2, Zap, Clock } from 'lucide-react';
 import { api } from '../lib/api';
-import { T, AIPanel, Stat, Loading, getToken, useW, isMob } from '../components/ui/ModuleLayout';
+import { T, AIPanel, Stat, Loading, getToken } from '../components/ui/ModuleLayout';;
+import { useW, isMob } from '../../hooks/useResponsive';
 
 export default function AgentSystem() {
   const w = useW();
